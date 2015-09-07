@@ -1,0 +1,21 @@
+name:                ombra
+version:             0.1.0.0
+synopsis:            Render engine with shader DSL
+-- description:         
+homepage:            https://github.com/ziocroc/Ombra
+license:             BSD3
+license-file:        LICENSE
+author:              Luca "ziocroc" Prezzavento
+maintainer:          ziocroc@gmail.com
+copyright:           
+category:            Graphics
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     Graphics.Rendering.Ombra.Generic, Graphics.Rendering.Ombra.Shader, Graphics.Rendering.Ombra.Transformation, Graphics.Rendering.Ombra.Draw, Graphics.Rendering.Ombra.D2, Graphics.Rendering.Ombra.Geometry, Graphics.Rendering.Ombra.D3, Graphics.Rendering.Ombra.Types, Graphics.Rendering.Ombra.Texture, Graphics.Rendering.Ombra.Color, Graphics.Rendering.Ombra.Backend, Graphics.Rendering.Ombra.Shapes, Graphics.Rendering.Ombra.Internal.GL, Graphics.Rendering.Ombra.Shader.Shader, Graphics.Rendering.Ombra.Shader.GLSL, Graphics.Rendering.Ombra.Shader.Stages, Graphics.Rendering.Ombra.Shader.Program, Graphics.Rendering.Ombra.Shader.CPU, Graphics.Rendering.Ombra.Shader.Default3D, Graphics.Rendering.Ombra.Shader.Default2D, Graphics.Rendering.Ombra.Shader.Language.Types, Graphics.Rendering.Ombra.Shader.Language.Functions
+  other-modules:       Graphics.Rendering.Ombra.Internal.STVectorLen, Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList
+  other-extensions:    TypeOperators, DataKinds, ConstraintKinds, MultiParamTypeClasses, TypeFamilies, FlexibleContexts, FlexibleInstances, OverlappingInstances, RankNTypes, GADTs, TypeSynonymInstances, KindSignatures, UndecidableInstances, ExistentialQuantification, GeneralizedNewtypeDeriving, NullaryTypeClasses, PolyKinds, ScopedTypeVariables, FunctionalDependencies, DeriveDataTypeable, ImpredicativeTypes, RebindableSyntax
+  build-depends:       base <4.9, vect <0.5, hashable <1.3, unordered-containers <0.3, vector <0.11, transformers <0.5
+  default-language:    Haskell2010

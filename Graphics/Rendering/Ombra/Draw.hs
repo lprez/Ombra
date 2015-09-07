@@ -4,9 +4,7 @@
 module Graphics.Rendering.Ombra.Draw (
         Draw,
         DrawState,
-        runDraw,
-        execDraw,
-        drawInit,
+        draw,
         drawBegin,
         drawLayer,
         drawGroup,
@@ -19,6 +17,10 @@ module Graphics.Rendering.Ombra.Draw (
         textureSize,
         setProgram,
         resizeViewport,
+        runDraw,
+        execDraw,
+        evalDraw,
+        drawInit,
         gl,
         renderLayer,
         layerToTexture,
@@ -51,6 +53,15 @@ import Control.Monad (when)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
+
+-- | Run a 'Draw' action with a context.
+draw :: GLES
+     => Ctx             -- ^ Context
+     -> Int             -- ^ Viewport width
+     -> Int             -- ^ Viewport height
+     -> Draw a          -- ^ Draw action
+     -> IO a
+draw ctx w h act = evalGL ctx . runDraw act $ drawInit w h
 
 -- | Create a 'DrawState'.
 drawInit :: GLES

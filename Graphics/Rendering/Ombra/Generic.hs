@@ -68,7 +68,6 @@ import Data.Typeable
 import Data.Type.Equality
 import Data.Vect.Float
 import Data.Word (Word8)
-import FRP.Yampa
 import Graphics.Rendering.Ombra.Backend (GLES)
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
