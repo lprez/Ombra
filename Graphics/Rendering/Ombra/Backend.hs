@@ -79,8 +79,6 @@ class ( Integral GLEnum
         encodeUShorts :: [Word16] -> IO Array
         encodeColors :: [Color] -> IO Array
 
-        safeFork :: Ctx -> (IO () -> IO ThreadId) -> IO () -> IO ThreadId
-
         newByteArray :: Int -> IO Array
         fromFloat32Array :: Float32Array -> Array
         fromInt32Array :: Int32Array -> Array
