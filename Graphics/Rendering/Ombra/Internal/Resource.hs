@@ -1,10 +1,11 @@
 {-# LANGUAGE ExistentialQuantification, MultiParamTypeClasses,
-             FunctionalDependencies #-}
+             FunctionalDependencies, ScopedTypeVariables #-}
 
 module Graphics.Rendering.Ombra.Internal.Resource (
         ResMap,
         ResStatus(..),
         Resource(..),
+        EmbedIO(..),
         newResMap,
         addResource,
         getResource,
@@ -14,60 +15,93 @@ module Graphics.Rendering.Ombra.Internal.Resource (
 
 import Control.Applicative
 import Control.Monad.IO.Class
+import qualified Data.HashTable.IO as H
 import Data.IORef
 import Data.Functor
-import qualified Data.HashMap.Strict as H
 import Data.Hashable
+import System.Mem.Weak
 
 data ResMap i r = forall m. (Resource i r m, Hashable i) =>
-                            ResMap (H.HashMap i (IORef (ResStatus r)))
+                            ResMap (H.BasicHashTable Int (ResStatus r))
 
-data ResStatus r = Loaded r | Unloaded | Loading | Error String
+data ResStatus r = Loaded r
+                 | Unloaded
+                 | forall i m . Resource i r m =>
+                         Loading (i, IORef (Either String r -> m ()))
+                 | Error String
 
-class (Eq i, Applicative m, MonadIO m) =>
+class (Eq i, Applicative m, EmbedIO m) =>
       Resource i r m | i r -> m where
         loadResource :: i -> (Either String r -> m ()) -> m ()
         unloadResource :: Maybe i -> r -> m ()
 
-newResMap :: Hashable i => Resource i r m => ResMap i r
-newResMap = ResMap H.empty
+class MonadIO m => EmbedIO m where
+        embedIO :: (IO a -> IO b) -> m a -> m b
 
-addResource :: (Resource i r m, Hashable i) => i -> ResMap i r -> m (ResMap i r)
-addResource i m = snd <$> getResource i m
+newResMap :: (Hashable i, MonadIO io) => Resource i r m => io (ResMap i r)
+newResMap = ResMap <$> liftIO H.new
+
+addResource :: (Resource i r m, Hashable i) => i -> ResMap i r -> m ()
+addResource i m = () <$ getResource i m
 
 checkResource :: (Resource i r m, Hashable i)
               => i -> ResMap i r -> m (ResStatus r)
-checkResource i (ResMap map) = case H.lookup i map of
-                                        Just ref -> liftIO $ readIORef ref
-                                        Nothing -> return $ Unloaded
+checkResource i = checkResource' $ hash i
+
+checkResource' :: (Resource i r m, Hashable i)
+               => Int -> ResMap i r -> m (ResStatus r)
+checkResource' i (ResMap map) = do m <- liftIO $ H.lookup map i
+                                   case m of
+                                         Just status -> return status
+                                         Nothing -> return $ Unloaded
 
 getResource :: (Resource i r m, Hashable i)
-            => i -> ResMap i r -> m (ResStatus r, ResMap i r)
+            => i -> ResMap i r -> m (ResStatus r)
 getResource i r = getResource' i r $ const (return ())
 
 getResource' :: (Resource i r m, Hashable i)
              => i -> ResMap i r
              -> (Either String r -> m ())
-             -> m (ResStatus r, ResMap i r)
+             -> m (ResStatus r)
 getResource' i rmap@(ResMap map) f =
         do status <- checkResource i rmap
            case status of
                    Unloaded ->
-                        do ref <- liftIO $ newIORef Loading
-                           loadResource i $ \e -> f e >> case e of
-                                 Left s -> liftIO . writeIORef ref $ Error s
-                                 Right r -> liftIO . writeIORef ref $ Loaded r
-                           status' <- liftIO $ readIORef ref
-                           return (status', ResMap $ H.insert i ref map)
-                   Loaded r -> f (Right r) >> return (status, rmap)
-                   _ -> return (status, rmap)
+                        do loadCbRef <- liftIO . newIORef $
+                                \e -> (>> f e) . liftIO $ case e of
+                                    Left s -> H.insert map ihash $ Error s
+                                    Right r -> H.insert map ihash $ Loaded r
 
-removeResource :: (Resource i r m, Hashable i)
-               => i -> ResMap i r -> m (Bool, ResMap i r)
-removeResource i rmap@(ResMap map) = 
-        do status <- checkResource i rmap
-           res <- case status of
-                       Loaded r -> unloadResource (Just i) r >> return True
-                       Loading -> return False
-                       _ -> return True
-           return (res, ResMap $ H.delete i map)
+                           liftIO . H.insert map (hash i) $
+                                   Loading (i, loadCbRef)
+
+                           loadResource i $
+                                   \r -> do f <- liftIO $ readIORef loadCbRef
+                                            f r
+
+                           embedIO (addFinalizer i) $ removeResource' ihash rmap
+                           Just status' <- liftIO . H.lookup map $ hash i
+                           return status'
+                   Loaded r -> f (Right r) >> return status
+                   _ -> return status
+        where ihash = hash i
+
+removeResource :: (Resource i r m, Hashable i) => i -> ResMap i r -> m ()
+removeResource i = removeResource' $ hash i
+
+removeResource' :: (Resource i r m, Hashable i) => Int -> ResMap i r -> m ()
+removeResource' i rmap@(ResMap map :: ResMap i r) = 
+        do status <- checkResource' i rmap
+           case status of
+                Loaded r -> unloadResource (Nothing :: Maybe i) r
+                Loading (ir, loadCbRef) ->
+                        liftIO . modifyIORef loadCbRef $
+                                \cbRef e ->
+                                        do cbRef e
+                                           case e of
+                                                Right r ->
+                                                        unloadResource
+                                                          (Just ir) r
+                                                Left _ -> return ()
+                _ -> return ()
+           liftIO $ H.delete map i

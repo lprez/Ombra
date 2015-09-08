@@ -2,6 +2,7 @@
 
 module Graphics.Rendering.Ombra.Internal.GL (
         GL,
+        SafeFork,
         ActiveTexture(..),
         module Graphics.Rendering.Ombra.Backend,
         liftIO,
@@ -137,428 +138,449 @@ module Graphics.Rendering.Ombra.Internal.GL (
 import Control.Applicative
 import Control.Concurrent
 import Control.Monad.IO.Class
-import Control.Monad.Trans.State
+import Control.Monad.Trans.Reader
 import Data.Int (Int32)
 import Data.Word
+
 import Graphics.Rendering.Ombra.Backend
+import Graphics.Rendering.Ombra.Internal.Resource (EmbedIO(..))
         
--- TODO: context loss
-newtype GL a = GL (StateT Ctx IO a)
+newtype GL a = GL (ReaderT (Ctx, Maybe SafeFork) IO a)
         deriving (Functor, Applicative, Monad, MonadIO)
 
 newtype ActiveTexture = ActiveTexture Word
 
-evalGL :: GL a -> Ctx -> IO a
-evalGL (GL m) = evalStateT m
+type SafeFork = Ctx -> (IO () -> IO ThreadId) -> IO () -> IO ThreadId
+
+instance EmbedIO GL where
+        embedIO f a = GL ask >>= \(c, s) -> liftIO . f $ evalGL a s c
+
+evalGL :: GL a
+       -> Maybe SafeFork        -- ^ This should help forking in the GL monad
+                                -- without losing the context. If 'Nothing',
+                                -- 'forkGL' won't actually fork, and 'asyncGL'
+                                -- will be synchronous (in the 'Draw' monad
+                                -- this means that all the resources will be
+                                -- loaded synchrounously).
+       -> Ctx
+       -> IO a
+evalGL (GL m) fork ctx = runReaderT m (ctx, fork)
 
 forkGL :: GLES => GL () -> GL ThreadId
-forkGL a = getCtx >>= \ctx ->
-        liftIO . safeFork ctx forkIO $ evalGL a ctx
+forkGL a = GL ask >>= \(ctx, sf) -> safeFork forkIO $ evalGL a sf ctx
 
 asyncGL :: GLES => GL a -> (a -> GL ()) -> GL ()
 asyncGL r f = forkGL (r >>= f) >> return ()
 
 getCtx :: GLES => GL Ctx
-getCtx = GL get
+getCtx = fst <$> GL ask
+
+safeFork :: (IO () -> IO ThreadId) -> IO () -> GL ThreadId
+safeFork fork thread = GL ask >>= \(ctx, mSafeFork) ->
+        case mSafeFork of
+                Just safeFork -> liftIO $ safeFork ctx fork thread
+                Nothing -> do tid <- liftIO $ myThreadId
+                              liftIO $ thread
+                              return tid
 
 activeTexture :: GLES => GLEnum -> GL ()
-activeTexture a = GL get >>= \ctx -> liftIO $ glActiveTexture ctx a
+activeTexture a = getCtx >>= \ctx -> liftIO $ glActiveTexture ctx a
 
 attachShader :: GLES => Program -> Shader -> GL ()
-attachShader a b = GL get >>= \ctx -> liftIO $ glAttachShader ctx a b
+attachShader a b = getCtx >>= \ctx -> liftIO $ glAttachShader ctx a b
 
 bindAttribLocation :: GLES => Program -> GLUInt -> GLString -> GL ()
-bindAttribLocation a b c = GL get >>= \ctx -> liftIO $ glBindAttribLocation ctx a b c
+bindAttribLocation a b c = getCtx >>= \ctx -> liftIO $ glBindAttribLocation ctx a b c
 
 bindBuffer :: GLES => GLEnum -> Buffer -> GL ()
-bindBuffer a b = GL get >>= \ctx -> liftIO $ glBindBuffer ctx a b
+bindBuffer a b = getCtx >>= \ctx -> liftIO $ glBindBuffer ctx a b
 
 bindFramebuffer :: GLES => GLEnum -> FrameBuffer -> GL ()
-bindFramebuffer a b = GL get >>= \ctx -> liftIO $ glBindFramebuffer ctx a b
+bindFramebuffer a b = getCtx >>= \ctx -> liftIO $ glBindFramebuffer ctx a b
 
 bindRenderbuffer :: GLES => GLEnum -> RenderBuffer -> GL ()
-bindRenderbuffer a b = GL get >>= \ctx -> liftIO $ glBindRenderbuffer ctx a b
+bindRenderbuffer a b = getCtx >>= \ctx -> liftIO $ glBindRenderbuffer ctx a b
 
 bindTexture :: GLES => GLEnum -> Texture -> GL ()
-bindTexture a b = GL get >>= \ctx -> liftIO $ glBindTexture ctx a b
+bindTexture a b = getCtx >>= \ctx -> liftIO $ glBindTexture ctx a b
 
 bindVertexArray :: GLES => VertexArrayObject -> GL ()
-bindVertexArray a = GL get >>= \ctx -> liftIO $ glBindVertexArray ctx a
+bindVertexArray a = getCtx >>= \ctx -> liftIO $ glBindVertexArray ctx a
 
 blendColor :: GLES => Float -> Float -> Float -> Float -> GL ()
-blendColor a b c d = GL get >>= \ctx -> liftIO $ glBlendColor ctx a b c d
+blendColor a b c d = getCtx >>= \ctx -> liftIO $ glBlendColor ctx a b c d
 
 blendEquation :: GLES => GLEnum -> GL ()
-blendEquation a = GL get >>= \ctx -> liftIO $ glBlendEquation ctx a
+blendEquation a = getCtx >>= \ctx -> liftIO $ glBlendEquation ctx a
 
 blendEquationSeparate :: GLES => GLEnum -> GLEnum -> GL ()
-blendEquationSeparate a b = GL get >>= \ctx -> liftIO $ glBlendEquationSeparate ctx a b
+blendEquationSeparate a b = getCtx >>= \ctx -> liftIO $ glBlendEquationSeparate ctx a b
 
 blendFunc :: GLES => GLEnum -> GLEnum -> GL ()
-blendFunc a b = GL get >>= \ctx -> liftIO $ glBlendFunc ctx a b
+blendFunc a b = getCtx >>= \ctx -> liftIO $ glBlendFunc ctx a b
 
 blendFuncSeparate :: GLES => GLEnum -> GLEnum -> GLEnum -> GLEnum -> GL ()
-blendFuncSeparate a b c d = GL get >>= \ctx -> liftIO $ glBlendFuncSeparate ctx a b c d
+blendFuncSeparate a b c d = getCtx >>= \ctx -> liftIO $ glBlendFuncSeparate ctx a b c d
 
 bufferData :: GLES => GLEnum -> Array -> GLEnum -> GL ()
-bufferData a b c = GL get >>= \ctx -> liftIO $ glBufferData ctx a b c
+bufferData a b c = getCtx >>= \ctx -> liftIO $ glBufferData ctx a b c
 
 bufferSubData :: GLES => GLEnum -> GLPtrDiff -> Array -> GL ()
-bufferSubData a b c = GL get >>= \ctx -> liftIO $ glBufferSubData ctx a b c
+bufferSubData a b c = getCtx >>= \ctx -> liftIO $ glBufferSubData ctx a b c
 
 checkFramebufferStatus :: GLES => GLEnum -> GL GLEnum
-checkFramebufferStatus a = GL get >>= \ctx -> liftIO $ glCheckFramebufferStatus ctx a
+checkFramebufferStatus a = getCtx >>= \ctx -> liftIO $ glCheckFramebufferStatus ctx a
 
 clear :: GLES => GLEnum -> GL ()
-clear a = GL get >>= \ctx -> liftIO $ glClear ctx a
+clear a = getCtx >>= \ctx -> liftIO $ glClear ctx a
 
 clearColor :: GLES => Float -> Float -> Float -> Float -> GL ()
-clearColor a b c d = GL get >>= \ctx -> liftIO $ glClearColor ctx a b c d
+clearColor a b c d = getCtx >>= \ctx -> liftIO $ glClearColor ctx a b c d
 
 clearDepth :: GLES => Float -> GL ()
-clearDepth a = GL get >>= \ctx -> liftIO $ glClearDepth ctx a
+clearDepth a = getCtx >>= \ctx -> liftIO $ glClearDepth ctx a
 
 clearStencil :: GLES => GLInt -> GL ()
-clearStencil a = GL get >>= \ctx -> liftIO $ glClearStencil ctx a
+clearStencil a = getCtx >>= \ctx -> liftIO $ glClearStencil ctx a
 
 colorMask :: GLES => GLBool -> GLBool -> GLBool -> GLBool -> GL ()
-colorMask a b c d = GL get >>= \ctx -> liftIO $ glColorMask ctx a b c d
+colorMask a b c d = getCtx >>= \ctx -> liftIO $ glColorMask ctx a b c d
 
 compileShader :: GLES => Shader -> GL ()
-compileShader a = GL get >>= \ctx -> liftIO $ glCompileShader ctx a
+compileShader a = getCtx >>= \ctx -> liftIO $ glCompileShader ctx a
 
 compressedTexImage2D :: GLES => GLEnum -> GLInt -> GLEnum -> GLSize -> GLSize -> GLInt -> Array -> GL ()
-compressedTexImage2D a b c d e f g = GL get >>= \ctx -> liftIO $ glCompressedTexImage2D ctx a b c d e f g
+compressedTexImage2D a b c d e f g = getCtx >>= \ctx -> liftIO $ glCompressedTexImage2D ctx a b c d e f g
 
 compressedTexSubImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> Array -> GL ()
-compressedTexSubImage2D a b c d e f g h = GL get >>= \ctx -> liftIO $ glCompressedTexSubImage2D ctx a b c d e f g h
+compressedTexSubImage2D a b c d e f g h = getCtx >>= \ctx -> liftIO $ glCompressedTexSubImage2D ctx a b c d e f g h
 
 copyTexImage2D :: GLES => GLEnum -> GLInt -> GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GL ()
-copyTexImage2D a b c d e f g h = GL get >>= \ctx -> liftIO $ glCopyTexImage2D ctx a b c d e f g h
+copyTexImage2D a b c d e f g h = getCtx >>= \ctx -> liftIO $ glCopyTexImage2D ctx a b c d e f g h
 
 copyTexSubImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GL ()
-copyTexSubImage2D a b c d e f g h = GL get >>= \ctx -> liftIO $ glCopyTexSubImage2D ctx a b c d e f g h
+copyTexSubImage2D a b c d e f g h = getCtx >>= \ctx -> liftIO $ glCopyTexSubImage2D ctx a b c d e f g h
 
 createBuffer :: GLES => GL Buffer
-createBuffer = GL get >>= liftIO . glCreateBuffer
+createBuffer = getCtx >>= liftIO . glCreateBuffer
 
 createFramebuffer :: GLES => GL FrameBuffer
-createFramebuffer = GL get >>= liftIO . glCreateFramebuffer
+createFramebuffer = getCtx >>= liftIO . glCreateFramebuffer
 
 createProgram :: GLES => GL Program
-createProgram = GL get >>= liftIO . glCreateProgram
+createProgram = getCtx >>= liftIO . glCreateProgram
 
 createRenderbuffer :: GLES => GL RenderBuffer
-createRenderbuffer = GL get >>= liftIO . glCreateRenderbuffer
+createRenderbuffer = getCtx >>= liftIO . glCreateRenderbuffer
 
 createShader :: GLES => GLEnum -> GL Shader
-createShader a = GL get >>= \ctx -> liftIO $ glCreateShader ctx a
+createShader a = getCtx >>= \ctx -> liftIO $ glCreateShader ctx a
 
 createTexture :: GLES => GL Texture
-createTexture = GL get >>= liftIO . glCreateTexture
+createTexture = getCtx >>= liftIO . glCreateTexture
 
 createVertexArray :: GLES => GL VertexArrayObject
-createVertexArray = GL get >>= liftIO . glCreateVertexArray
+createVertexArray = getCtx >>= liftIO . glCreateVertexArray
 
 cullFace :: GLES => GLEnum -> GL ()
-cullFace a = GL get >>= \ctx -> liftIO $ glCullFace ctx a
+cullFace a = getCtx >>= \ctx -> liftIO $ glCullFace ctx a
 
 deleteBuffer :: GLES => Buffer -> GL ()
-deleteBuffer a = GL get >>= \ctx -> liftIO $ glDeleteBuffer ctx a
+deleteBuffer a = getCtx >>= \ctx -> liftIO $ glDeleteBuffer ctx a
 
 deleteFramebuffer :: GLES => FrameBuffer -> GL ()
-deleteFramebuffer a = GL get >>= \ctx -> liftIO $ glDeleteFramebuffer ctx a
+deleteFramebuffer a = getCtx >>= \ctx -> liftIO $ glDeleteFramebuffer ctx a
 
 deleteProgram :: GLES => Program -> GL ()
-deleteProgram a = GL get >>= \ctx -> liftIO $ glDeleteProgram ctx a
+deleteProgram a = getCtx >>= \ctx -> liftIO $ glDeleteProgram ctx a
 
 deleteRenderbuffer :: GLES => RenderBuffer -> GL ()
-deleteRenderbuffer a = GL get >>= \ctx -> liftIO $ glDeleteRenderbuffer ctx a
+deleteRenderbuffer a = getCtx >>= \ctx -> liftIO $ glDeleteRenderbuffer ctx a
 
 deleteShader :: GLES => Shader -> GL ()
-deleteShader a = GL get >>= \ctx -> liftIO $ glDeleteShader ctx a
+deleteShader a = getCtx >>= \ctx -> liftIO $ glDeleteShader ctx a
 
 deleteVertexArray :: GLES => VertexArrayObject -> GL ()
-deleteVertexArray a = GL get >>= \ctx -> liftIO $ glDeleteVertexArray ctx a
+deleteVertexArray a = getCtx >>= \ctx -> liftIO $ glDeleteVertexArray ctx a
 
 deleteTexture :: GLES => Texture -> GL ()
-deleteTexture a = GL get >>= \ctx -> liftIO $ glDeleteTexture ctx a
+deleteTexture a = getCtx >>= \ctx -> liftIO $ glDeleteTexture ctx a
 
 depthFunc :: GLES => GLEnum -> GL ()
-depthFunc a = GL get >>= \ctx -> liftIO $ glDepthFunc ctx a
+depthFunc a = getCtx >>= \ctx -> liftIO $ glDepthFunc ctx a
 
 depthMask :: GLES => GLBool -> GL ()
-depthMask a = GL get >>= \ctx -> liftIO $ glDepthMask ctx a
+depthMask a = getCtx >>= \ctx -> liftIO $ glDepthMask ctx a
 
 depthRange :: GLES => Float -> Float -> GL ()
-depthRange a b = GL get >>= \ctx -> liftIO $ glDepthRange ctx a b
+depthRange a b = getCtx >>= \ctx -> liftIO $ glDepthRange ctx a b
 
 detachShader :: GLES => Program -> Shader -> GL ()
-detachShader a b = GL get >>= \ctx -> liftIO $ glDetachShader ctx a b
+detachShader a b = getCtx >>= \ctx -> liftIO $ glDetachShader ctx a b
 
 disable :: GLES => GLEnum -> GL ()
-disable a = GL get >>= \ctx -> liftIO $ glDisable ctx a
+disable a = getCtx >>= \ctx -> liftIO $ glDisable ctx a
 
 disableVertexAttribArray :: GLES => GLUInt -> GL ()
-disableVertexAttribArray a = GL get >>= \ctx -> liftIO $ glDisableVertexAttribArray ctx a
+disableVertexAttribArray a = getCtx >>= \ctx -> liftIO $ glDisableVertexAttribArray ctx a
 
 drawArrays :: GLES => GLEnum -> GLInt -> GLSize -> GL ()
-drawArrays a b c = GL get >>= \ctx -> liftIO $ glDrawArrays ctx a b c
+drawArrays a b c = getCtx >>= \ctx -> liftIO $ glDrawArrays ctx a b c
 
 drawElements :: GLES => GLEnum -> GLSize -> GLEnum -> GLPtr -> GL ()
-drawElements a b c d = GL get >>= \ctx -> liftIO $ glDrawElements ctx a b c d
+drawElements a b c d = getCtx >>= \ctx -> liftIO $ glDrawElements ctx a b c d
 
 enable :: GLES => GLEnum -> GL ()
-enable a = GL get >>= \ctx -> liftIO $ glEnable ctx a
+enable a = getCtx >>= \ctx -> liftIO $ glEnable ctx a
 
 enableVertexAttribArray :: GLES => GLUInt -> GL ()
-enableVertexAttribArray a = GL get >>= \ctx -> liftIO $ glEnableVertexAttribArray ctx a
+enableVertexAttribArray a = getCtx >>= \ctx -> liftIO $ glEnableVertexAttribArray ctx a
 
 finish :: GLES => GL ()
-finish = GL get >>= liftIO . glFinish
+finish = getCtx >>= liftIO . glFinish
 
 flush :: GLES => GL ()
-flush = GL get >>= liftIO . glFlush
+flush = getCtx >>= liftIO . glFlush
 
 framebufferRenderbuffer :: GLES => GLEnum -> GLEnum -> GLEnum -> RenderBuffer -> GL ()
-framebufferRenderbuffer a b c d = GL get >>= \ctx -> liftIO $ glFramebufferRenderbuffer ctx a b c d
+framebufferRenderbuffer a b c d = getCtx >>= \ctx -> liftIO $ glFramebufferRenderbuffer ctx a b c d
 
 framebufferTexture2D :: GLES => GLEnum -> GLEnum -> GLEnum -> Texture -> GLInt -> GL ()
-framebufferTexture2D a b c d e = GL get >>= \ctx -> liftIO $ glFramebufferTexture2D ctx a b c d e
+framebufferTexture2D a b c d e = getCtx >>= \ctx -> liftIO $ glFramebufferTexture2D ctx a b c d e
 
 frontFace :: GLES => GLEnum -> GL ()
-frontFace a = GL get >>= \ctx -> liftIO $ glFrontFace ctx a
+frontFace a = getCtx >>= \ctx -> liftIO $ glFrontFace ctx a
 
 generateMipmap :: GLES => GLEnum -> GL ()
-generateMipmap a = GL get >>= \ctx -> liftIO $ glGenerateMipmap ctx a
+generateMipmap a = getCtx >>= \ctx -> liftIO $ glGenerateMipmap ctx a
 
 -- glGetActiveAttrib :: GLES => Program -> GLEnum -> GL ActiveInfo
--- getActiveAttrib a b = GL get >>= \ctx -> liftIO $ glGetActiveAttrib ctx a b
+-- getActiveAttrib a b = getCtx >>= \ctx -> liftIO $ glGetActiveAttrib ctx a b
 
 -- glGetActiveUniform :: GLES => Program -> GLEnum -> GL ActiveInfo
--- getActiveUniform a b = GL get >>= \ctx -> liftIO $ glGetActiveUniform ctx a b
+-- getActiveUniform a b = getCtx >>= \ctx -> liftIO $ glGetActiveUniform ctx a b
 
 getAttribLocation :: GLES => Program -> GLString -> GL GLInt
-getAttribLocation a b = GL get >>= \ctx -> liftIO $ glGetAttribLocation ctx a b
+getAttribLocation a b = getCtx >>= \ctx -> liftIO $ glGetAttribLocation ctx a b
 
 -- glGetBufferParameter :: GLES => Word -> Word -> GL (JSRef a)
--- getBufferParameter a b = GL get >>= \ctx -> liftIO $ glGetBufferParameter ctx a b
+-- getBufferParameter a b = getCtx >>= \ctx -> liftIO $ glGetBufferParameter ctx a b
 
 -- glGetParameter :: GLES => Word -> GL (JSRef a)
--- getParameter a = GL get >>= \ctx -> liftIO $ glGetParameter ctx a
+-- getParameter a = getCtx >>= \ctx -> liftIO $ glGetParameter ctx a
 
 getError :: GLES => GL GLEnum
-getError = GL get >>= liftIO . glGetError
+getError = getCtx >>= liftIO . glGetError
 
 -- glGetFramebufferAttachmentParameter :: GLES => GLEnum -> GLEnum -> GL Word
--- getFramebufferAttachmentParameter a b = GL get >>= \ctx -> liftIO $ glGetFramebufferAttachmentParameter ctx a b
+-- getFramebufferAttachmentParameter a b = getCtx >>= \ctx -> liftIO $ glGetFramebufferAttachmentParameter ctx a b
 
 getProgramInfoLog :: GLES => Program -> GL GLString
-getProgramInfoLog a = GL get >>= \ctx -> liftIO $ glGetProgramInfoLog ctx a
+getProgramInfoLog a = getCtx >>= \ctx -> liftIO $ glGetProgramInfoLog ctx a
 
 -- glGetRenderbufferParameter :: GLES => Word -> Word -> GL (JSRef a)
--- getRenderbufferParameter a b = GL get >>= \ctx -> liftIO $ glGetRenderbufferParameter ctx a b
+-- getRenderbufferParameter a b = getCtx >>= \ctx -> liftIO $ glGetRenderbufferParameter ctx a b
 
 -- glGetShaderParameter :: GLES => Shader -> Word -> GL (JSRef a)
--- getShaderParameter a b = GL get >>= \ctx -> liftIO $ glGetShaderParameter ctx a b
+-- getShaderParameter a b = getCtx >>= \ctx -> liftIO $ glGetShaderParameter ctx a b
 
 -- getShaderPrecisionFormat :: GLES => GLEnum -> GLEnum -> GL ShaderPrecisionFormat
--- getShaderPrecisionFormat a b = GL get >>= \ctx -> liftIO $ glGetShaderPrecisionFormat ctx a b
+-- getShaderPrecisionFormat a b = getCtx >>= \ctx -> liftIO $ glGetShaderPrecisionFormat ctx a b
 
 getShaderInfoLog :: GLES => Shader -> GL GLString
-getShaderInfoLog a = GL get >>= \ctx -> liftIO $ glGetShaderInfoLog ctx a
+getShaderInfoLog a = getCtx >>= \ctx -> liftIO $ glGetShaderInfoLog ctx a
 
 getShaderSource :: GLES => Shader -> GL GLString
-getShaderSource a = GL get >>= \ctx -> liftIO $ glGetShaderSource ctx a
+getShaderSource a = getCtx >>= \ctx -> liftIO $ glGetShaderSource ctx a
 
 -- glGetTexParameter :: GLES => Word -> Word -> GL (JSRef a)
--- getTexParameter a b = GL get >>= \ctx -> liftIO $ glGetTexParameter ctx a b
+-- getTexParameter a b = getCtx >>= \ctx -> liftIO $ glGetTexParameter ctx a b
 
 -- glGetUniform :: GLES => Program -> UniformLocation -> GL (JSRef a)
--- getUniform a b = GL get >>= \ctx -> liftIO $ glGetUniform ctx a b
+-- getUniform a b = getCtx >>= \ctx -> liftIO $ glGetUniform ctx a b
 
 getUniformLocation :: GLES => Program -> GLString -> GL UniformLocation
-getUniformLocation a b = GL get >>= \ctx -> liftIO $ glGetUniformLocation ctx a b
+getUniformLocation a b = getCtx >>= \ctx -> liftIO $ glGetUniformLocation ctx a b
 
 -- glGetVertexAttrib :: GLES => Word -> Word -> GL (JSRef a)
--- getVertexAttrib a b = GL get >>= \ctx -> liftIO $ glGetVertexAttrib ctx a b
+-- getVertexAttrib a b = getCtx >>= \ctx -> liftIO $ glGetVertexAttrib ctx a b
 
 -- glGetVertexAttribOffset :: GLES => Word -> GLEnum -> GL Word
--- getVertexAttribOffset a b = GL get >>= \ctx -> liftIO $ glGetVertexAttribOffset ctx a b
+-- getVertexAttribOffset a b = getCtx >>= \ctx -> liftIO $ glGetVertexAttribOffset ctx a b
 
 hint :: GLES => GLEnum -> GLEnum -> GL ()
-hint a b = GL get >>= \ctx -> liftIO $ glHint ctx a b
+hint a b = getCtx >>= \ctx -> liftIO $ glHint ctx a b
 
 isBuffer :: GLES => Buffer -> GL GLBool
-isBuffer a = GL get >>= \ctx -> liftIO $ glIsBuffer ctx a
+isBuffer a = getCtx >>= \ctx -> liftIO $ glIsBuffer ctx a
 
 isEnabled :: GLES => GLEnum -> GL GLBool
-isEnabled a = GL get >>= \ctx -> liftIO $ glIsEnabled ctx a
+isEnabled a = getCtx >>= \ctx -> liftIO $ glIsEnabled ctx a
 
 isFramebuffer :: GLES => FrameBuffer -> GL GLBool
-isFramebuffer a = GL get >>= \ctx -> liftIO $ glIsFramebuffer ctx a
+isFramebuffer a = getCtx >>= \ctx -> liftIO $ glIsFramebuffer ctx a
 
 isProgram :: GLES => Program -> GL GLBool
-isProgram a = GL get >>= \ctx -> liftIO $ glIsProgram ctx a
+isProgram a = getCtx >>= \ctx -> liftIO $ glIsProgram ctx a
 
 isRenderbuffer :: GLES => RenderBuffer -> GL GLBool
-isRenderbuffer a = GL get >>= \ctx -> liftIO $ glIsRenderbuffer ctx a
+isRenderbuffer a = getCtx >>= \ctx -> liftIO $ glIsRenderbuffer ctx a
 
 isShader :: GLES => Shader -> GL GLBool
-isShader a = GL get >>= \ctx -> liftIO $ glIsShader ctx a
+isShader a = getCtx >>= \ctx -> liftIO $ glIsShader ctx a
 
 isTexture :: GLES => Texture -> GL GLBool
-isTexture a = GL get >>= \ctx -> liftIO $ glIsTexture ctx a
+isTexture a = getCtx >>= \ctx -> liftIO $ glIsTexture ctx a
 
 isVertexArray :: GLES => VertexArrayObject -> GL GLBool
-isVertexArray a = GL get >>= \ctx -> liftIO $ glIsVertexArray ctx a
+isVertexArray a = getCtx >>= \ctx -> liftIO $ glIsVertexArray ctx a
 
 lineWidth :: GLES => Float -> GL ()
-lineWidth a = GL get >>= \ctx -> liftIO $ glLineWidth ctx a
+lineWidth a = getCtx >>= \ctx -> liftIO $ glLineWidth ctx a
 
 linkProgram :: GLES => Program -> GL ()
-linkProgram a = GL get >>= \ctx -> liftIO $ glLinkProgram ctx a
+linkProgram a = getCtx >>= \ctx -> liftIO $ glLinkProgram ctx a
 
 pixelStorei :: GLES => GLEnum -> GLInt -> GL ()
-pixelStorei a b = GL get >>= \ctx -> liftIO $ glPixelStorei ctx a b
+pixelStorei a b = getCtx >>= \ctx -> liftIO $ glPixelStorei ctx a b
 
 polygonOffset :: GLES => Float -> Float -> GL ()
-polygonOffset a b = GL get >>= \ctx -> liftIO $ glPolygonOffset ctx a b
+polygonOffset a b = getCtx >>= \ctx -> liftIO $ glPolygonOffset ctx a b
 
 readPixels :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> Array -> GL ()
-readPixels a b c d e f g = GL get >>= \ctx -> liftIO $ glReadPixels ctx a b c d e f g
+readPixels a b c d e f g = getCtx >>= \ctx -> liftIO $ glReadPixels ctx a b c d e f g
 
 renderbufferStorage :: GLES => GLEnum -> GLEnum -> GLSize -> GLSize -> GL ()
-renderbufferStorage a b c d = GL get >>= \ctx -> liftIO $ glRenderbufferStorage ctx a b c d
+renderbufferStorage a b c d = getCtx >>= \ctx -> liftIO $ glRenderbufferStorage ctx a b c d
 
 sampleCoverage :: GLES => Float -> GLBool -> GL ()
-sampleCoverage a b = GL get >>= \ctx -> liftIO $ glSampleCoverage ctx a b
+sampleCoverage a b = getCtx >>= \ctx -> liftIO $ glSampleCoverage ctx a b
 
 scissor :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GL ()
-scissor a b c d = GL get >>= \ctx -> liftIO $ glScissor ctx a b c d
+scissor a b c d = getCtx >>= \ctx -> liftIO $ glScissor ctx a b c d
 
 shaderSource :: GLES => Shader -> GLString -> GL ()
-shaderSource a b = GL get >>= \ctx -> liftIO $ glShaderSource ctx a b
+shaderSource a b = getCtx >>= \ctx -> liftIO $ glShaderSource ctx a b
 
 stencilFunc :: GLES => GLEnum -> GLInt -> GLUInt -> GL ()
-stencilFunc a b c = GL get >>= \ctx -> liftIO $ glStencilFunc ctx a b c
+stencilFunc a b c = getCtx >>= \ctx -> liftIO $ glStencilFunc ctx a b c
 
 stencilFuncSeparate :: GLES => GLEnum -> GLEnum -> GLInt -> GLUInt -> GL ()
-stencilFuncSeparate a b c d = GL get >>= \ctx -> liftIO $ glStencilFuncSeparate ctx a b c d
+stencilFuncSeparate a b c d = getCtx >>= \ctx -> liftIO $ glStencilFuncSeparate ctx a b c d
 
 stencilMask :: GLES => GLUInt -> GL ()
-stencilMask a = GL get >>= \ctx -> liftIO $ glStencilMask ctx a
+stencilMask a = getCtx >>= \ctx -> liftIO $ glStencilMask ctx a
 
 stencilMaskSeparate :: GLES => GLEnum -> GLUInt -> GL ()
-stencilMaskSeparate a b = GL get >>= \ctx -> liftIO $ glStencilMaskSeparate ctx a b
+stencilMaskSeparate a b = getCtx >>= \ctx -> liftIO $ glStencilMaskSeparate ctx a b
 
 stencilOp :: GLES => GLEnum -> GLEnum -> GLEnum -> GL ()
-stencilOp a b c = GL get >>= \ctx -> liftIO $ glStencilOp ctx a b c
+stencilOp a b c = getCtx >>= \ctx -> liftIO $ glStencilOp ctx a b c
 
 stencilOpSeparate :: GLES => GLEnum -> GLEnum -> GLEnum -> GLEnum -> GL ()
-stencilOpSeparate a b c d = GL get >>= \ctx -> liftIO $ glStencilOpSeparate ctx a b c d
+stencilOpSeparate a b c d = getCtx >>= \ctx -> liftIO $ glStencilOpSeparate ctx a b c d
 
 texImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> Array -> GL ()
-texImage2D a b c d e f g h i = GL get >>= \ctx -> liftIO $ glTexImage2D ctx a b c d e f g h i
+texImage2D a b c d e f g h i = getCtx >>= \ctx -> liftIO $ glTexImage2D ctx a b c d e f g h i
 
 texParameterf :: GLES => GLEnum -> GLEnum -> Float -> GL ()
-texParameterf a b c = GL get >>= \ctx -> liftIO $ glTexParameterf ctx a b c
+texParameterf a b c = getCtx >>= \ctx -> liftIO $ glTexParameterf ctx a b c
 
 texParameteri :: GLES => GLEnum -> GLEnum -> GLInt -> GL ()
-texParameteri a b c = GL get >>= \ctx -> liftIO $ glTexParameteri ctx a b c
+texParameteri a b c = getCtx >>= \ctx -> liftIO $ glTexParameteri ctx a b c
 
 texSubImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> Array -> GL ()
-texSubImage2D a b c d e f g h i = GL get >>= \ctx -> liftIO $ glTexSubImage2D ctx a b c d e f g h i
+texSubImage2D a b c d e f g h i = getCtx >>= \ctx -> liftIO $ glTexSubImage2D ctx a b c d e f g h i
 
 uniform1f :: GLES => UniformLocation -> Float -> GL ()
-uniform1f a b = GL get >>= \ctx -> liftIO $ glUniform1f ctx a b
+uniform1f a b = getCtx >>= \ctx -> liftIO $ glUniform1f ctx a b
 
 uniform1fv :: GLES => UniformLocation -> Float32Array -> GL ()
-uniform1fv a b = GL get >>= \ctx -> liftIO $ glUniform1fv ctx a b
+uniform1fv a b = getCtx >>= \ctx -> liftIO $ glUniform1fv ctx a b
 
 uniform1i :: GLES => UniformLocation -> Int32 -> GL ()
-uniform1i a b = GL get >>= \ctx -> liftIO $ glUniform1i ctx a b
+uniform1i a b = getCtx >>= \ctx -> liftIO $ glUniform1i ctx a b
 
 uniform1iv :: GLES => UniformLocation -> Int32Array -> GL ()
-uniform1iv a b = GL get >>= \ctx -> liftIO $ glUniform1iv ctx a b
+uniform1iv a b = getCtx >>= \ctx -> liftIO $ glUniform1iv ctx a b
 
 uniform2f :: GLES => UniformLocation -> Float -> Float -> GL ()
-uniform2f a b c = GL get >>= \ctx -> liftIO $ glUniform2f ctx a b c
+uniform2f a b c = getCtx >>= \ctx -> liftIO $ glUniform2f ctx a b c
 
 uniform2fv :: GLES => UniformLocation -> Float32Array -> GL ()
-uniform2fv a b = GL get >>= \ctx -> liftIO $ glUniform2fv ctx a b
+uniform2fv a b = getCtx >>= \ctx -> liftIO $ glUniform2fv ctx a b
 
 uniform2i :: GLES => UniformLocation -> Int32 -> Int32 -> GL ()
-uniform2i a b c = GL get >>= \ctx -> liftIO $ glUniform2i ctx a b c
+uniform2i a b c = getCtx >>= \ctx -> liftIO $ glUniform2i ctx a b c
 
 uniform2iv :: GLES => UniformLocation -> Int32Array -> GL ()
-uniform2iv a b = GL get >>= \ctx -> liftIO $ glUniform2iv ctx a b
+uniform2iv a b = getCtx >>= \ctx -> liftIO $ glUniform2iv ctx a b
 
 uniform3f :: GLES => UniformLocation -> Float -> Float -> Float -> GL ()
-uniform3f a b c d = GL get >>= \ctx -> liftIO $ glUniform3f ctx a b c d
+uniform3f a b c d = getCtx >>= \ctx -> liftIO $ glUniform3f ctx a b c d
 
 uniform3fv :: GLES => UniformLocation -> Float32Array -> GL ()
-uniform3fv a b = GL get >>= \ctx -> liftIO $ glUniform3fv ctx a b
+uniform3fv a b = getCtx >>= \ctx -> liftIO $ glUniform3fv ctx a b
 
 uniform3i :: GLES => UniformLocation -> Int32 -> Int32 -> Int32 -> GL ()
-uniform3i a b c d = GL get >>= \ctx -> liftIO $ glUniform3i ctx a b c d
+uniform3i a b c d = getCtx >>= \ctx -> liftIO $ glUniform3i ctx a b c d
 
 uniform3iv :: GLES => UniformLocation -> Int32Array -> GL ()
-uniform3iv a b = GL get >>= \ctx -> liftIO $ glUniform3iv ctx a b
+uniform3iv a b = getCtx >>= \ctx -> liftIO $ glUniform3iv ctx a b
 
 uniform4f :: GLES => UniformLocation -> Float -> Float -> Float -> Float -> GL ()
-uniform4f a b c d e = GL get >>= \ctx -> liftIO $ glUniform4f ctx a b c d e
+uniform4f a b c d e = getCtx >>= \ctx -> liftIO $ glUniform4f ctx a b c d e
 
 uniform4fv :: GLES => UniformLocation -> Float32Array -> GL ()
-uniform4fv a b = GL get >>= \ctx -> liftIO $ glUniform4fv ctx a b
+uniform4fv a b = getCtx >>= \ctx -> liftIO $ glUniform4fv ctx a b
 
 uniform4i :: GLES => UniformLocation -> Int32 -> Int32 -> Int32 -> Int32 -> GL ()
-uniform4i a b c d e = GL get >>= \ctx -> liftIO $ glUniform4i ctx a b c d e
+uniform4i a b c d e = getCtx >>= \ctx -> liftIO $ glUniform4i ctx a b c d e
 
 uniform4iv :: GLES => UniformLocation -> Int32Array -> GL ()
-uniform4iv a b = GL get >>= \ctx -> liftIO $ glUniform4iv ctx a b
+uniform4iv a b = getCtx >>= \ctx -> liftIO $ glUniform4iv ctx a b
 
 uniformMatrix2fv :: GLES => UniformLocation -> GLBool -> Float32Array -> GL ()
-uniformMatrix2fv a b c = GL get >>= \ctx -> liftIO $ glUniformMatrix2fv ctx a b c
+uniformMatrix2fv a b c = getCtx >>= \ctx -> liftIO $ glUniformMatrix2fv ctx a b c
 
 uniformMatrix3fv :: GLES => UniformLocation -> GLBool -> Float32Array -> GL ()
-uniformMatrix3fv a b c = GL get >>= \ctx -> liftIO $ glUniformMatrix3fv ctx a b c
+uniformMatrix3fv a b c = getCtx >>= \ctx -> liftIO $ glUniformMatrix3fv ctx a b c
 
 uniformMatrix4fv :: GLES => UniformLocation -> GLBool -> Float32Array -> GL ()
-uniformMatrix4fv a b c = GL get >>= \ctx -> liftIO $ glUniformMatrix4fv ctx a b c
+uniformMatrix4fv a b c = getCtx >>= \ctx -> liftIO $ glUniformMatrix4fv ctx a b c
 
 useProgram :: GLES => Program -> GL ()
-useProgram a = GL get >>= \ctx -> liftIO $ glUseProgram ctx a
+useProgram a = getCtx >>= \ctx -> liftIO $ glUseProgram ctx a
 
 validateProgram :: GLES => Program -> GL ()
-validateProgram a = GL get >>= \ctx -> liftIO $ glValidateProgram ctx a
+validateProgram a = getCtx >>= \ctx -> liftIO $ glValidateProgram ctx a
 
 vertexAttrib1f :: GLES => GLUInt -> Float -> GL ()
-vertexAttrib1f a b = GL get >>= \ctx -> liftIO $ glVertexAttrib1f ctx a b
+vertexAttrib1f a b = getCtx >>= \ctx -> liftIO $ glVertexAttrib1f ctx a b
 
 vertexAttrib1fv :: GLES => GLUInt -> Float32Array -> GL ()
-vertexAttrib1fv a b = GL get >>= \ctx -> liftIO $ glVertexAttrib1fv ctx a b
+vertexAttrib1fv a b = getCtx >>= \ctx -> liftIO $ glVertexAttrib1fv ctx a b
 
 vertexAttrib2f :: GLES => GLUInt -> Float -> Float -> GL ()
-vertexAttrib2f a b c = GL get >>= \ctx -> liftIO $ glVertexAttrib2f ctx a b c
+vertexAttrib2f a b c = getCtx >>= \ctx -> liftIO $ glVertexAttrib2f ctx a b c
 
 vertexAttrib2fv :: GLES => GLUInt -> Float32Array -> GL ()
-vertexAttrib2fv a b = GL get >>= \ctx -> liftIO $ glVertexAttrib2fv ctx a b
+vertexAttrib2fv a b = getCtx >>= \ctx -> liftIO $ glVertexAttrib2fv ctx a b
 
 vertexAttrib3f :: GLES => GLUInt -> Float -> Float -> Float -> GL ()
-vertexAttrib3f a b c d = GL get >>= \ctx -> liftIO $ glVertexAttrib3f ctx a b c d
+vertexAttrib3f a b c d = getCtx >>= \ctx -> liftIO $ glVertexAttrib3f ctx a b c d
 
 vertexAttrib3fv :: GLES => GLUInt -> Float32Array -> GL ()
-vertexAttrib3fv a b = GL get >>= \ctx -> liftIO $ glVertexAttrib3fv ctx a b
+vertexAttrib3fv a b = getCtx >>= \ctx -> liftIO $ glVertexAttrib3fv ctx a b
 
 vertexAttrib4f :: GLES => GLUInt -> Float -> Float -> Float -> Float -> GL ()
-vertexAttrib4f a b c d e = GL get >>= \ctx -> liftIO $ glVertexAttrib4f ctx a b c d e
+vertexAttrib4f a b c d e = getCtx >>= \ctx -> liftIO $ glVertexAttrib4f ctx a b c d e
 
 vertexAttrib4fv :: GLES => GLUInt -> Float32Array -> GL ()
-vertexAttrib4fv a b = GL get >>= \ctx -> liftIO $ glVertexAttrib4fv ctx a b
+vertexAttrib4fv a b = getCtx >>= \ctx -> liftIO $ glVertexAttrib4fv ctx a b
 
 vertexAttribPointer :: GLES => GLUInt -> GLInt -> GLEnum -> GLBool -> GLSize -> GLPtr -> GL ()
-vertexAttribPointer a b c d e f = GL get >>= \ctx -> liftIO $ glVertexAttribPointer ctx a b c d e f
+vertexAttribPointer a b c d e f = getCtx >>= \ctx -> liftIO $ glVertexAttribPointer ctx a b c d e f
 
 viewport :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GL ()
-viewport a b c d = GL get >>= \ctx -> liftIO $ glViewport ctx a b c d
+viewport a b c d = getCtx >>= \ctx -> liftIO $ glViewport ctx a b c d

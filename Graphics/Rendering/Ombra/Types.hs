@@ -19,6 +19,7 @@ module Graphics.Rendering.Ombra.Types (
 
 import Control.Applicative
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State
 import Data.Hashable
 import Data.Vect.Float hiding (Vector)
@@ -52,6 +53,9 @@ data DrawState = DrawState {
 -- | A state monad on top of 'GL'.
 newtype Draw a = Draw { unDraw :: StateT DrawState GL a }
         deriving (Functor, Applicative, Monad, MonadIO)
+
+instance EmbedIO Draw where
+        embedIO f (Draw a) = Draw get >>= Draw . lift . embedIO f . evalStateT a
 
 -- | A texture.
 data Texture = TextureImage TextureImage
