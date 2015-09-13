@@ -57,8 +57,6 @@ instance GLES where
         type Float32Array = JS.Float32Array
         type Int32Array = JS.Int32Array
 
-        drawTo _ a = a
-
         true = True
         false = False
         nullGLPtr = 0

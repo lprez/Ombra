@@ -56,8 +56,6 @@ class ( Integral GLEnum
         type Float32Array
         type Int32Array
 
-        drawTo :: Ctx -> IO a -> IO a
-
         true :: GLBool
         false :: GLBool
         nullGLPtr :: GLPtr

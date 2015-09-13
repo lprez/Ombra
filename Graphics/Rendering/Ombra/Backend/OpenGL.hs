@@ -14,8 +14,8 @@ import qualified Graphics.GL.Ext.ARB.VertexArrayObject as GL
 import qualified Graphics.GL.Ext.EXT.BlendColor as GL
 import Graphics.GL.Types as GL
 
-makeContext :: IO Ctx
-makeContext = newMVar ()
+makeContext :: IO ()
+makeContext = return ()
 
 genToCreate :: Storable a => (GLsizei -> Ptr a -> IO ()) -> ctx -> IO a
 genToCreate gen _ = do ptr <- malloc
@@ -87,12 +87,6 @@ instance GLES where
         type Array = (GLsizei, ForeignPtr ())
         type Float32Array = (GLsizei, ForeignPtr GLfloat)
         type Int32Array = (GLsizei, ForeignPtr GLint)
-
-        drawTo ctx act  =
-                do () <- takeMVar ctx
-                   r <- act
-                   putMVar ctx ()
-                   return r
 
         true = 1
         false = 0
