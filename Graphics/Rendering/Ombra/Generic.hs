@@ -161,7 +161,7 @@ globalTexSize g t fc = g := (fc <$> textureSize t)
 globalFramebufferSize :: (Typeable g, UniformCPU c g) => (a -> g)
                       -> (Vec2 -> c) -> Global g
 globalFramebufferSize g fc = g := (fc . tupleToVec <$>
-                                            (viewportSize <$> drawState))
+                                            (viewportSize <$> drawGet))
         where tupleToVec (x, y) = Vec2 (fromIntegral x) (fromIntegral y)
 
 -- | Create a 'Group' from a list of 'Object's.

@@ -145,29 +145,28 @@ import Data.Word
 import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Internal.Resource (EmbedIO(..))
         
-newtype GL a = GL (ReaderT (Ctx, Maybe SafeFork) IO a)
+newtype GL a = GL (ReaderT (Ctx, Maybe SafeForkFun) IO a)
         deriving (Functor, Applicative, Monad, MonadIO)
 
 newtype ActiveTexture = ActiveTexture Word
 
-type SafeFork = Ctx -> (IO () -> IO ThreadId) -> IO () -> IO ThreadId
-
 instance EmbedIO GL where
-        embedIO f a = GL ask >>= \(c, s) -> liftIO . f $ evalGL a s c
+        embedIO f a = GL ask >>= \(c, s) -> liftIO . f $ evalGLSF a c s
 
-evalGL :: GL a
-       -> Maybe SafeFork        -- ^ This should help forking in the GL monad
-                                -- without losing the context. If 'Nothing',
-                                -- 'forkGL' won't actually fork, and 'asyncGL'
-                                -- will be synchronous (in the 'Draw' monad
-                                -- this means that all the resources will be
-                                -- loaded synchrounously).
+evalGL :: SafeFork
+       => GL a
        -> Ctx
        -> IO a
-evalGL (GL m) fork ctx = runReaderT m (ctx, fork)
+evalGL act ctx = evalGLSF act ctx safeFork
+
+evalGLSF :: GL a
+         -> Ctx
+         -> Maybe SafeForkFun
+         -> IO a
+evalGLSF (GL m) ctx sf = runReaderT m (ctx, sf)
 
 forkGL :: GLES => GL () -> GL ThreadId
-forkGL a = GL ask >>= \(ctx, sf) -> safeFork forkIO $ evalGL a sf ctx
+forkGL a = GL ask >>= \(ctx, sf) -> safeForkGL forkIO $ evalGLSF a ctx sf
 
 asyncGL :: GLES => GL a -> (a -> GL ()) -> GL ()
 asyncGL r f = forkGL (r >>= f) >> return ()
@@ -175,8 +174,8 @@ asyncGL r f = forkGL (r >>= f) >> return ()
 getCtx :: GLES => GL Ctx
 getCtx = fst <$> GL ask
 
-safeFork :: (IO () -> IO ThreadId) -> IO () -> GL ThreadId
-safeFork fork thread = GL ask >>= \(ctx, mSafeFork) ->
+safeForkGL :: (IO () -> IO ThreadId) -> IO () -> GL ThreadId
+safeForkGL fork thread = GL ask >>= \(ctx, mSafeFork) ->
         case mSafeFork of
                 Just safeFork -> liftIO $ safeFork ctx fork thread
                 Nothing -> do tid <- liftIO $ myThreadId

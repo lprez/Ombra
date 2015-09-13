@@ -19,27 +19,29 @@ source-repository head
   location:  https://github.com/ziocroc/Ombra
         
 flag opengl
-  description: Enable the OpenGL backend.
+  description: Enable the OpenGL backend. Main module: Graphics.Rendering.Ombra.Backend.OpenGL
 
 flag glfw
-  description: Enable the GLFW backend. It is based on the OpenGL backend, but uses GLFW contexts to provide asynchronous GL.
+  description: Enable the GLFW backend. It is identical to the OpenGL backend (and it requires it), but uses GLFW contexts to provide asynchronous GL. Main module: Graphics.Rendering.Ombra.Backend.GLFW
 
 flag webgl
-  description: Enable the GHCJS/WebGL backend, if compiled with GHCJS.
+  description: Enable the GHCJS/WebGL backend, if compiled with GHCJS. Main module: Graphics.Rendering.Ombra.Backend.WebGL
 
 library
-  exposed-modules:     Graphics.Rendering.Ombra.Generic, Graphics.Rendering.Ombra.Shader, Graphics.Rendering.Ombra.Transformation, Graphics.Rendering.Ombra.Draw, Graphics.Rendering.Ombra.D2, Graphics.Rendering.Ombra.Geometry, Graphics.Rendering.Ombra.D3, Graphics.Rendering.Ombra.Types, Graphics.Rendering.Ombra.Texture, Graphics.Rendering.Ombra.Color, Graphics.Rendering.Ombra.Backend, Graphics.Rendering.Ombra.Shapes, Graphics.Rendering.Ombra.Internal.GL, Graphics.Rendering.Ombra.Shader.Shader, Graphics.Rendering.Ombra.Shader.GLSL, Graphics.Rendering.Ombra.Shader.Stages, Graphics.Rendering.Ombra.Shader.Program, Graphics.Rendering.Ombra.Shader.CPU, Graphics.Rendering.Ombra.Shader.Default3D, Graphics.Rendering.Ombra.Shader.Default2D, Graphics.Rendering.Ombra.Shader.Language.Types, Graphics.Rendering.Ombra.Shader.Language.Functions
+  exposed-modules:     Graphics.Rendering.Ombra.Generic, Graphics.Rendering.Ombra.Shader, Graphics.Rendering.Ombra.Transformation, Graphics.Rendering.Ombra.Draw, Graphics.Rendering.Ombra.Draw.Internal, Graphics.Rendering.Ombra.D2, Graphics.Rendering.Ombra.Geometry, Graphics.Rendering.Ombra.D3, Graphics.Rendering.Ombra.Types, Graphics.Rendering.Ombra.Texture, Graphics.Rendering.Ombra.Color, Graphics.Rendering.Ombra.Backend, Graphics.Rendering.Ombra.Shapes, Graphics.Rendering.Ombra.Internal.GL, Graphics.Rendering.Ombra.Shader.Shader, Graphics.Rendering.Ombra.Shader.GLSL, Graphics.Rendering.Ombra.Shader.Stages, Graphics.Rendering.Ombra.Shader.Program, Graphics.Rendering.Ombra.Shader.CPU, Graphics.Rendering.Ombra.Shader.Default3D, Graphics.Rendering.Ombra.Shader.Default2D, Graphics.Rendering.Ombra.Shader.Language.Types, Graphics.Rendering.Ombra.Shader.Language.Functions
+  other-modules:       Graphics.Rendering.Ombra.Internal.STVectorLen, Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList
 
   if flag(webgl) && impl(ghcjs)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.WebGL
+    other-modules:     Graphics.Rendering.Ombra.Backend.WebGL.Raw, Graphics.Rendering.Ombra.Backend.WebGL.Types, Graphics.Rendering.Ombra.Backend.WebGL.Const
 
   if flag(opengl) && !impl(ghcjs)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.OpenGL
+    other-modules:     Graphics.Rendering.Ombra.Backend.OpenGL.GLES
 
   if flag(glfw) && flag(opengl) && !impl(ghcjs)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.GLFW
 
-  other-modules:       Graphics.Rendering.Ombra.Internal.STVectorLen, Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList
   other-extensions:    TypeOperators, DataKinds, ConstraintKinds, MultiParamTypeClasses, TypeFamilies, FlexibleContexts, FlexibleInstances, OverlappingInstances, RankNTypes, GADTs, TypeSynonymInstances, KindSignatures, UndecidableInstances, ExistentialQuantification, GeneralizedNewtypeDeriving, NullaryTypeClasses, PolyKinds, ScopedTypeVariables, FunctionalDependencies, DeriveDataTypeable, ImpredicativeTypes, RebindableSyntax
 
   build-depends:       base <4.9, vect <0.5, hashable <1.3, unordered-containers <0.3, vector <0.11, transformers <0.5, hashtables <1.3

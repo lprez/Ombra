@@ -16,6 +16,15 @@ data IVec2 = IVec2 !Int32 !Int32
 data IVec3 = IVec3 !Int32 !Int32 !Int32
 data IVec4 = IVec4 !Int32 !Int32 !Int32 !Int32
 
+type SafeForkFun = Ctx -> (IO () -> IO ThreadId) -> IO () -> IO ThreadId
+
+class SafeFork where
+        -- | This helps forking in the GL monad without losing the context.
+        -- Without a SafeFork function, 'forkGL' won't actually fork, and
+        -- 'asyncGL' will be synchronous (in the 'Draw' monad this means that
+        -- all the resources will be loaded synchrounously).
+        safeFork :: Maybe SafeForkFun
+
 -- | Mixed OpenGL ES 2.0/WebGL 1.0/OpenGL 2.0 API, with VAOs and FBOs.
 class ( Integral GLEnum
       , Integral GLUInt
@@ -55,6 +64,8 @@ class ( Integral GLEnum
         type Array
         type Float32Array
         type Int32Array
+
+        drawTo :: Ctx -> IO a -> IO a
 
         true :: GLBool
         false :: GLBool
