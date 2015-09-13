@@ -200,44 +200,39 @@ setProgram p = do current <- currentProgram <$> Draw get
                                    }
                                    gl $ useProgram glp
 
-withRes_ :: Draw (ResStatus a) -> (a -> Draw ()) -> Draw ()
+withRes_ :: Draw (Either String a) -> (a -> Draw ()) -> Draw ()
 withRes_ drs = withRes drs $ return ()
 
-withRes :: Draw (ResStatus a) -> Draw b -> (a -> Draw b) -> Draw b
+withRes :: Draw (Either String a) -> Draw b -> (a -> Draw b) -> Draw b
 withRes drs u l = drs >>= \rs -> case rs of
-                                        Loaded r -> l r
+                                        Right r -> l r
                                         _ -> u
 
-getUniform :: (Typeable a, GLES) => a -> Draw (ResStatus UniformLocation)
+getUniform :: (Typeable a, GLES) => a -> Draw (Either String UniformLocation)
 getUniform g = do mprg <- loadedProgram <$> Draw get
                   case mprg of
                           Just prg ->
                                   getDrawResource gl uniforms
                                                   (prg, globalName g)
-                          Nothing -> return $ Error "No loaded program."
+                          Nothing -> return $ Left "No loaded program."
 
-getGPUVAOGeometry :: GLES => Geometry '[] -> Draw (ResStatus GPUVAOGeometry)
+getGPUVAOGeometry :: GLES => Geometry '[] -> Draw (Either String GPUVAOGeometry)
 getGPUVAOGeometry = getDrawResource id gpuVAOs
 
-getGPUBufferGeometry :: GLES => Geometry '[] -> Draw (ResStatus GPUBufferGeometry)
+getGPUBufferGeometry :: GLES => Geometry '[]
+                     -> Draw (Either String GPUBufferGeometry)
 getGPUBufferGeometry = getDrawResource gl gpuBuffers
 
-getGPUBufferGeometry' :: GLES
-                      => Geometry '[]
-                      -> (Either String GPUBufferGeometry -> GL ())
-                      -> Draw (ResStatus GPUBufferGeometry)
-getGPUBufferGeometry' = getDrawResource' gl gpuBuffers
-
-getTexture :: GLES => Texture -> Draw (ResStatus LoadedTexture)
-getTexture (TextureLoaded l) = return $ Loaded l
+getTexture :: GLES => Texture -> Draw (Either String LoadedTexture)
+getTexture (TextureLoaded l) = return $ Right l
 getTexture (TextureImage t) = getTextureImage t
 
 getTextureImage :: GLES => TextureImage
-                -> Draw (ResStatus LoadedTexture)
+                -> Draw (Either String LoadedTexture)
 getTextureImage = getDrawResource gl textureImages
 
 getProgram :: GLES
-           => Program '[] '[] -> Draw (ResStatus LoadedProgram)
+           => Program '[] '[] -> Draw (Either String LoadedProgram)
 getProgram = getDrawResource gl programs
 
 freeActiveTextures :: GLES => Draw ()
@@ -363,21 +358,13 @@ renderToTexture infos w h act = do
         return (ts, ret)
 
 getDrawResource :: (Resource i r m, Hashable i)
-                => (m (ResStatus r) -> Draw (ResStatus r))
-                 -> (DrawState -> ResMap i r)
+                => (m (Either String r) -> Draw (Either String r))
+                -> (DrawState -> ResMap i r)
                 -> i
-                -> Draw (ResStatus r)
-getDrawResource lft mg i = getDrawResource' lft mg i $ const (return ())
-
-getDrawResource' :: (Resource i r m, Hashable i)
-                => (m (ResStatus r) -> Draw (ResStatus r))
-                 -> (DrawState -> ResMap i r)
-                 -> i
-                 -> (Either String r -> m ())
-                 -> Draw (ResStatus r)
-getDrawResource' lft mg i f = do
+                -> Draw (Either String r)
+getDrawResource lft mg i = do
         map <- mg <$> Draw get
-        lft $ getResource' i map f
+        lft $ getResource i map
 
 removeDrawResource :: (Resource i r m, Hashable i)
                    => (m () -> Draw ())
@@ -400,19 +387,18 @@ drawGPUVAOGeometry (GPUVAOGeometry _ ec vao) = currentProgram <$> Draw get >>=
                      Nothing -> return ()
 
 instance GLES => Resource (LoadedProgram, String) UniformLocation GL where
-        loadResource (LoadedProgram prg _ _, g) f =
+        loadResource (LoadedProgram prg _ _, g) =
                 do loc <- getUniformLocation prg $ toGLString g
-                   f . Right $ UniformLocation loc
+                   return . Right $ UniformLocation loc
         unloadResource _ _ = return ()
 
 instance GLES => Resource (Geometry '[]) GPUVAOGeometry Draw where
-        loadResource g f = (>> return ()) . getGPUBufferGeometry' g $
-                \ge -> case ge of
-                           Left err -> drawInGL . f $ Left err
-                           Right buf -> loadResource buf $ drawInGL . f
+        loadResource g =
+                do ge <- getGPUBufferGeometry g
+                   case ge of
+                        Left err -> return $ Left err
+                        Right buf -> gl $ loadResource buf
 
-                where drawInGL = flip evalDraw $
-                                error "drawInGL: can't access draw state"
         unloadResource _ =
                 gl . unloadResource (Nothing :: Maybe GPUBufferGeometry)
 

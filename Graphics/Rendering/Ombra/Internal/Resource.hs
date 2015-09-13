@@ -9,7 +9,6 @@ module Graphics.Rendering.Ombra.Internal.Resource (
         newResMap,
         addResource,
         getResource,
-        getResource',
         removeResource
 ) where
 
@@ -22,17 +21,15 @@ import Data.Hashable
 import System.Mem.Weak
 
 data ResMap i r = forall m. (Resource i r m, Hashable i) =>
-                            ResMap (H.BasicHashTable Int (ResStatus r))
+                            ResMap (H.BasicHashTable Int (Either String r))
 
 data ResStatus r = Loaded r
                  | Unloaded
-                 | forall i m . Resource i r m =>
-                         Loading (i, IORef (Either String r -> m ()))
                  | Error String
 
 class (Eq i, Applicative m, EmbedIO m) =>
       Resource i r m | i r -> m where
-        loadResource :: i -> (Either String r -> m ()) -> m ()
+        loadResource :: i -> m (Either String r)
         unloadResource :: Maybe i -> r -> m ()
 
 class MonadIO m => EmbedIO m where
@@ -51,40 +48,32 @@ checkResource i = checkResource' $ hash i
 checkResource' :: (Resource i r m, Hashable i)
                => Int -> ResMap i r -> m (ResStatus r)
 checkResource' i (ResMap map) = do m <- liftIO $ H.lookup map i
-                                   case m of
-                                         Just status -> return status
-                                         Nothing -> return $ Unloaded
+                                   return $ case m of
+                                                 Just (Right r) -> Loaded r
+                                                 Just (Left e) -> Error e
+                                                 Nothing ->Unloaded
 
 getResource :: (Resource i r m, Hashable i)
-            => i -> ResMap i r -> m (ResStatus r)
-getResource i r = getResource' i r $ const (return ())
-
-getResource' :: (Resource i r m, Hashable i)
-             => i -> ResMap i r
-             -> (Either String r -> m ())
-             -> m (ResStatus r)
-getResource' i rmap@(ResMap map) f =
+            => i -> ResMap i r
+            -> m (Either String r)
+getResource i rmap@(ResMap map) =
         do status <- checkResource i rmap
            case status of
                    Unloaded ->
-                        do loadCbRef <- liftIO . newIORef $
-                                \e -> (>> f e) . liftIO $ case e of
-                                    Left s -> H.insert map ihash $ Error s
-                                    Right r -> H.insert map ihash $ Loaded r
+                        do r <- loadResource i
 
-                           liftIO . H.insert map (hash i) $
-                                   Loading (i, loadCbRef)
-
-                           loadResource i $
-                                   \r -> do f <- liftIO $ readIORef loadCbRef
-                                            f r
+                           liftIO $ case r of
+                                         Left s -> H.insert map ihash $ Left s
+                                         Right r -> H.insert map ihash $ Right r
 
                            embedIO (addFinalizer i) $ removeResource' ihash rmap
-                           Just status' <- liftIO . H.lookup map $ hash i
-                           return status'
-                   Loaded r -> f (Right r) >> return status
-                   _ -> return status
+                           Just eRes <- liftIO . H.lookup map $ hash i
+                           return eRes
+                   Error s -> return $ Left s
+                   Loaded r -> return $ Right r
         where ihash = hash i
+
+-- reloadResource
 
 removeResource :: (Resource i r m, Hashable i) => i -> ResMap i r -> m ()
 removeResource i = removeResource' $ hash i
@@ -94,14 +83,5 @@ removeResource' i rmap@(ResMap map :: ResMap i r) =
         do status <- checkResource' i rmap
            case status of
                 Loaded r -> unloadResource (Nothing :: Maybe i) r
-                Loading (ir, loadCbRef) ->
-                        liftIO . modifyIORef loadCbRef $
-                                \cbRef e ->
-                                        do cbRef e
-                                           case e of
-                                                Right r ->
-                                                        unloadResource
-                                                          (Just ir) r
-                                                Left _ -> return ()
                 _ -> return ()
            liftIO $ H.delete map i

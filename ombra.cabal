@@ -1,7 +1,7 @@
 name:                ombra
 version:             0.1.0.0
 synopsis:            Render engine.
-description:         Render engine.
+description:         Ombra is a render engine written in Haskell. It provides a purely functional interface for advanced graphics programming, including a type safe embedded DSL for GPU programming. You are not required to know or use OpenGL directly to work with Ombra, you just need a basic knowledge of what vertex/fragment shaders, uniforms and attributes are (if you are going to make a more advanced use of it). Ombra supports both OpenGL and WebGL.
 homepage:            https://github.com/ziocroc/Ombra
 bug-reports:         https://github.com/ziocroc/Ombra/issues
 license:             BSD3
@@ -21,9 +21,6 @@ source-repository head
 flag opengl
   description: Enable the OpenGL backend. Main module: Graphics.Rendering.Ombra.Backend.OpenGL
 
-flag glfw
-  description: Enable the GLFW backend. It is identical to the OpenGL backend (and it requires it), but uses GLFW contexts to provide asynchronous GL. Main module: Graphics.Rendering.Ombra.Backend.GLFW
-
 flag webgl
   description: Enable the GHCJS/WebGL backend, if compiled with GHCJS. Main module: Graphics.Rendering.Ombra.Backend.WebGL
 
@@ -37,10 +34,6 @@ library
 
   if flag(opengl) && !impl(ghcjs)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.OpenGL
-    other-modules:     Graphics.Rendering.Ombra.Backend.OpenGL.GLES
-
-  if flag(glfw) && flag(opengl) && !impl(ghcjs)
-    exposed-modules:   Graphics.Rendering.Ombra.Backend.GLFW
 
   other-extensions:    TypeOperators, DataKinds, ConstraintKinds, MultiParamTypeClasses, TypeFamilies, FlexibleContexts, FlexibleInstances, OverlappingInstances, RankNTypes, GADTs, TypeSynonymInstances, KindSignatures, UndecidableInstances, ExistentialQuantification, GeneralizedNewtypeDeriving, NullaryTypeClasses, PolyKinds, ScopedTypeVariables, FunctionalDependencies, DeriveDataTypeable, ImpredicativeTypes, RebindableSyntax
 
@@ -48,9 +41,6 @@ library
 
   if flag(opengl) && !impl(ghcjs)
     build-depends:     gl <0.8
-
-  if flag(glfw) && flag(opengl) && !impl(ghcjs)
-    build-depends:     GLFW-b <1.5
 
   if flag(webgl) && impl(ghcjs)
     build-depends:     ghcjs-base

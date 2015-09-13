@@ -2,13 +2,10 @@
 
 module Graphics.Rendering.Ombra.Internal.GL (
         GL,
-        SafeFork,
         ActiveTexture(..),
         module Graphics.Rendering.Ombra.Backend,
         liftIO,
         evalGL,
-        forkGL,
-        asyncGL,
         getCtx,
         activeTexture,
         attachShader,
@@ -145,42 +142,19 @@ import Data.Word
 import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Internal.Resource (EmbedIO(..))
         
-newtype GL a = GL (ReaderT (Ctx, Maybe SafeForkFun) IO a)
+newtype GL a = GL (ReaderT Ctx IO a)
         deriving (Functor, Applicative, Monad, MonadIO)
 
 newtype ActiveTexture = ActiveTexture Word
 
 instance EmbedIO GL where
-        embedIO f a = GL ask >>= \(c, s) -> liftIO . f $ evalGLSF a c s
+        embedIO f a = GL ask >>= \c -> liftIO . f $ evalGL a c
 
-evalGL :: SafeFork
-       => GL a
-       -> Ctx
-       -> IO a
-evalGL act ctx = evalGLSF act ctx safeFork
-
-evalGLSF :: GL a
-         -> Ctx
-         -> Maybe SafeForkFun
-         -> IO a
-evalGLSF (GL m) ctx sf = runReaderT m (ctx, sf)
-
-forkGL :: GLES => GL () -> GL ThreadId
-forkGL a = GL ask >>= \(ctx, sf) -> safeForkGL forkIO $ evalGLSF a ctx sf
-
-asyncGL :: GLES => GL a -> (a -> GL ()) -> GL ()
-asyncGL r f = forkGL (r >>= f) >> return ()
+evalGL :: GL a -> Ctx -> IO a
+evalGL (GL m) = runReaderT m
 
 getCtx :: GLES => GL Ctx
-getCtx = fst <$> GL ask
-
-safeForkGL :: (IO () -> IO ThreadId) -> IO () -> GL ThreadId
-safeForkGL fork thread = GL ask >>= \(ctx, mSafeFork) ->
-        case mSafeFork of
-                Just safeFork -> liftIO $ safeFork ctx fork thread
-                Nothing -> do tid <- liftIO $ myThreadId
-                              liftIO $ thread
-                              return tid
+getCtx = GL ask
 
 activeTexture :: GLES => GLEnum -> GL ()
 activeTexture a = getCtx >>= \ctx -> liftIO $ glActiveTexture ctx a

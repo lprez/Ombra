@@ -151,28 +151,26 @@ castGeometry = unsafeCoerce
 
 instance GLES => Resource (Geometry i) GPUBufferGeometry GL where
         -- TODO: err check
-        loadResource i f = loadGeometry i $ f . Right
+        loadResource i = Right <$> loadGeometry i
         unloadResource _ = deleteGPUBufferGeometry
 
 instance GLES => Resource GPUBufferGeometry GPUVAOGeometry GL where
         -- TODO: err check
-        loadResource i f = loadGPUVAOGeometry i $ f . Right
+        loadResource i = Right <$> loadGPUVAOGeometry i
         unloadResource _ = deleteGPUVAOGeometry
 
 loadGPUVAOGeometry :: GLES
-                    => GPUBufferGeometry
-                    -> (GPUVAOGeometry -> GL ())
-                    -> GL ()
-loadGPUVAOGeometry g = asyncGL $
+                   => GPUBufferGeometry
+                   -> GL GPUVAOGeometry
+loadGPUVAOGeometry g =
         do vao <- createVertexArray
            bindVertexArray vao
            (ec, bufs) <- withGPUBufferGeometry g $
                    \ec bufs -> bindVertexArray noVAO >> return (ec, bufs)
            return $ GPUVAOGeometry bufs ec vao
 
-loadGeometry :: GLES 
-             => Geometry i -> (GPUBufferGeometry -> GL ()) -> GL ()
-loadGeometry (Geometry al es h) = asyncGL $
+loadGeometry :: GLES => Geometry i -> GL GPUBufferGeometry
+loadGeometry (Geometry al es h) =
         GPUBufferGeometry <$> loadAttrList al
                           <*> (liftIO (encodeUShorts es) >>=
                                   loadBuffer gl_ELEMENT_ARRAY_BUFFER)

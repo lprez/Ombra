@@ -64,8 +64,8 @@ instance Eq LoadedProgram where
         (LoadedProgram _ _ h) == (LoadedProgram _ _ h') = h == h'
 
 instance GLES => Resource (Program g i) LoadedProgram GL where
-        -- TODO: err check
-        loadResource i f = loadProgram i $ f . Right
+        -- TODO: err check!
+        loadResource i = Right <$> loadProgram i
         unloadResource _ (LoadedProgram p _ _) = deleteProgram p
 
 castProgram :: Program gs is -> Program gs' is'
@@ -87,25 +87,25 @@ defaultProgram3D = program Default3D.vertexShader Default3D.fragmentShader
 defaultProgram2D :: Program DefaultUniforms2D DefaultAttributes2D
 defaultProgram2D = program Default2D.vertexShader Default2D.fragmentShader
 
-loadProgram :: GLES => Program g i -> (LoadedProgram -> GL ()) -> GL ()
-loadProgram (Program (vss, attrs) fss h) = asyncGL $ do
-        glp <- createProgram
-
-        vs <- loadSource gl_VERTEX_SHADER vss
-        fs <- loadSource gl_FRAGMENT_SHADER fss
-        attachShader glp vs
-        attachShader glp fs
-
-        locs <- bindAttribs glp 0 attrs []
-        linkProgram glp
-
-        -- TODO: ??
-        {-
-        detachShader glp vs
-        detachShader glp fs
-        -}
-
-        return $ LoadedProgram glp (H.fromList locs) h
+loadProgram :: GLES => Program g i -> GL LoadedProgram
+loadProgram (Program (vss, attrs) fss h) =
+        do glp <- createProgram
+  
+           vs <- loadSource gl_VERTEX_SHADER vss
+           fs <- loadSource gl_FRAGMENT_SHADER fss
+           attachShader glp vs
+           attachShader glp fs
+  
+           locs <- bindAttribs glp 0 attrs []
+           linkProgram glp
+  
+           -- TODO: ??
+           {-
+           detachShader glp vs
+           detachShader glp fs
+           -}
+  
+           return $ LoadedProgram glp (H.fromList locs) h
 
         where bindAttribs _ _ [] r = return r
               bindAttribs glp i ((nm, sz) : xs) r =

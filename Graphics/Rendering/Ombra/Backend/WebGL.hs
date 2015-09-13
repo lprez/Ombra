@@ -24,9 +24,6 @@ import GHCJS.Foreign
 import GHCJS.Types
 import GHCJS.Marshal
 
-instance SafeFork where
-        safeFork = Just $ const ($)
-
 makeContext :: JSRef a -- ^ Canvas element.
             -> IO JS.Ctx
 makeContext element = do ctx <- JS.getCtx element

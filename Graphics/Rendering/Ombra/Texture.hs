@@ -26,12 +26,11 @@ mkTexture w h ps = TextureImage . TexturePixels ps (fromIntegral w)
                         $ hash (w, h, ps)
 
 instance GLES => Resource TextureImage LoadedTexture GL where
-        loadResource i f = loadTextureImage i $ f . Right -- TODO: err check
+        loadResource i = Right <$> loadTextureImage i -- TODO: err check
         unloadResource _ (LoadedTexture _ _ t) = deleteTexture t
 
-loadTextureImage :: GLES => TextureImage
-                 -> (LoadedTexture -> GL ()) -> GL ()
-loadTextureImage (TexturePixels ps w h _) f = (>>= f) $
+loadTextureImage :: GLES => TextureImage -> GL LoadedTexture
+loadTextureImage (TexturePixels ps w h _) =
         do t <- emptyTexture
            arr <- liftIO $ encodeColors ps
            texImage2D gl_TEXTURE_2D 0
@@ -41,8 +40,8 @@ loadTextureImage (TexturePixels ps w h _) f = (>>= f) $
                       gl_UNSIGNED_BYTE
                       arr
            return $ LoadedTexture (fromIntegral w)
-                                   (fromIntegral h)
-                                   t
+                                  (fromIntegral h)
+                                  t
 
 emptyTexture :: GLES => GL GL.Texture
 emptyTexture = do t <- createTexture
