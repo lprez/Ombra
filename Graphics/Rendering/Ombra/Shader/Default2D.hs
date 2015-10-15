@@ -1,5 +1,4 @@
-{-# LANGUAGE DataKinds, RebindableSyntax, DeriveDataTypeable,
-             GeneralizedNewtypeDeriving, GADTs #-}
+{-# LANGUAGE DataKinds, RebindableSyntax, DeriveGeneric, GADTs #-}
 
 module Graphics.Rendering.Ombra.Shader.Default2D where
 
@@ -9,27 +8,20 @@ type Uniforms = '[View2, Image, Depth, Transform2]
 type Attributes = '[Position2, UV]
 
 -- | An uniform that represents the texture used in the default 2D shader.
-newtype Image = Image Sampler2D
-        deriving (Typeable, ShaderType, UniformCPU CSampler2D)
+data Image = Image Sampler2D deriving Generic
 
 -- | An uniform that represents the depth used in the default 2D shader.
-newtype Depth = Depth Float
-        deriving (Typeable, ShaderType, UniformCPU CFloat)
+data Depth = Depth Float deriving Generic
 
 -- | An uniform that represents the transformation matrix used in the default
 -- 2D shader.
-newtype Transform2 = Transform2 Mat3
-        deriving (Typeable, ShaderType, UniformCPU CMat3)
-
+data Transform2 = Transform2 Mat3 deriving Generic
 -- | An uniform that represents the view matrix used in the default 2D shader.
-newtype View2 = View2 Mat3
-        deriving (Typeable, ShaderType, UniformCPU CMat3)
+data View2 = View2 Mat3 deriving Generic
 
-newtype Position2 = Position2 Vec2
-        deriving (Typeable, ShaderType, AttributeCPU CVec2)
+data Position2 = Position2 Vec2 deriving Generic
 
-newtype UV = UV Vec2
-        deriving (Typeable, ShaderType, AttributeCPU CVec2)
+data UV = UV Vec2 deriving Generic
 
 vertexShader :: VertexShader '[Transform2, View2, Depth]
                              '[Position2, UV] '[UV]

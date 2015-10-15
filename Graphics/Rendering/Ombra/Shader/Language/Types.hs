@@ -26,62 +26,62 @@ data Action = Store String Expr | If Expr String Expr Expr
 data ContextVarType = LoopIteration | LoopValue deriving Eq
 
 -- | A GPU boolean.
-newtype Bool = Bool Expr deriving Typeable
+newtype Bool = Bool Expr 
 
 -- | A GPU float.
-newtype Float = Float Expr deriving Typeable
+newtype Float = Float Expr 
 
 -- | A GPU integer.
-newtype Int = Int Expr deriving Typeable
+newtype Int = Int Expr 
 
 -- | A GPU 2D texture handle.
-newtype Sampler2D = Sampler2D Expr deriving Typeable
+newtype Sampler2D = Sampler2D Expr 
 
 -- | A GPU cube texture handler.
-newtype SamplerCube = SamplerCube Expr deriving Typeable
+newtype SamplerCube = SamplerCube Expr 
 
 -- | The type of a generic expression.
 newtype Unknown = Unknown Expr
 
 -- | A GPU 2D float vector.
 -- NB: This is a different type from Data.Vect.Float.'Data.Vect.Float.Vec2'.
-data Vec2 = Vec2 Float Float deriving Typeable
+data Vec2 = Vec2 Float Float 
 
 -- | A GPU 3D float vector.
-data Vec3 = Vec3 Float Float Float deriving Typeable
+data Vec3 = Vec3 Float Float Float 
 
 -- | A GPU 4D float vector.
-data Vec4 = Vec4 Float Float Float Float deriving Typeable
+data Vec4 = Vec4 Float Float Float Float 
 
 -- | A GPU 2D integer vector.
-data IVec2 = IVec2 Int Int deriving Typeable
+data IVec2 = IVec2 Int Int 
 
 -- | A GPU 3D integer vector.
-data IVec3 = IVec3 Int Int Int deriving Typeable
+data IVec3 = IVec3 Int Int Int 
 
 -- | A GPU 4D integer vector.
-data IVec4 = IVec4 Int Int Int Int deriving Typeable
+data IVec4 = IVec4 Int Int Int Int 
 
 -- | A GPU 2D boolean vector.
-data BVec2 = BVec2 Bool Bool deriving Typeable
+data BVec2 = BVec2 Bool Bool 
 
 -- | A GPU 3D boolean vector.
-data BVec3 = BVec3 Bool Bool Bool deriving Typeable
+data BVec3 = BVec3 Bool Bool Bool 
 
 -- | A GPU 4D boolean vector.
-data BVec4 = BVec4 Bool Bool Bool Bool deriving Typeable
+data BVec4 = BVec4 Bool Bool Bool Bool 
 
 -- | A GPU 2x2 float matrix.
-data Mat2 = Mat2 Vec2 Vec2 deriving Typeable
+data Mat2 = Mat2 Vec2 Vec2 
 
 -- | A GPU 3x3 float matrix.
-data Mat3 = Mat3 Vec3 Vec3 Vec3 deriving Typeable
+data Mat3 = Mat3 Vec3 Vec3 Vec3 
 
 -- | A GPU 4x4 float matrix.
-data Mat4 = Mat4 Vec4 Vec4 Vec4 Vec4 deriving Typeable
+data Mat4 = Mat4 Vec4 Vec4 Vec4 Vec4 
 
 -- | A GPU array.
-data Array (n :: Nat) t = Array Expr deriving Typeable
+data Array (n :: Nat) t = Array Expr 
 
 -- | A type in the GPU.
 class ShaderType t where

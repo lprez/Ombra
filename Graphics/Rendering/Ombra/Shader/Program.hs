@@ -24,7 +24,7 @@ import Data.Word (Word)
 import qualified Graphics.Rendering.Ombra.Shader.Default2D as Default2D
 import qualified Graphics.Rendering.Ombra.Shader.Default3D as Default3D
 import Graphics.Rendering.Ombra.Shader.GLSL
-import Graphics.Rendering.Ombra.Shader.Shader (Valid)
+import Graphics.Rendering.Ombra.Shader.ShaderVar (Valid)
 import Graphics.Rendering.Ombra.Shader.Stages
 import Graphics.Rendering.Ombra.Internal.GL hiding (Program)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL

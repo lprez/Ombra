@@ -1,8 +1,6 @@
 {-# LANGUAGE NullaryTypeClasses, TypeFamilies, UndecidableInstances #-}
 
-{-| The GHCJS/WebGL backend. This just exports the instance for 'GLES'.
-           
-    'createCanvas' doesn't really create new canvases, but uses the first <canvas> that it finds. Use createCanvas' to choose another <canvas>. -}
+{-| The GHCJS/WebGL backend. This just exports the instance for 'GLES'. -}
 module Graphics.Rendering.Ombra.Backend.WebGL (
         makeContext
 ) where

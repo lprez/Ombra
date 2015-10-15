@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds, KindSignatures, MultiParamTypeClasses, TypeFamilies,
              TypeOperators, UndecidableInstances, FlexibleContexts,
-             FlexibleInstances, ConstraintKinds, PolyKinds #-}
+             FlexibleInstances, ConstraintKinds, PolyKinds,
+             ScopedTypeVariables #-}
 
 module Graphics.Rendering.Ombra.Internal.TList (
         Empty,

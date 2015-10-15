@@ -77,6 +77,7 @@ import Graphics.Rendering.Ombra.Internal.GL (GLES, ActiveTexture)
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Program
+import Graphics.Rendering.Ombra.Shader.ShaderVar
 import Graphics.Rendering.Ombra.Texture
 import Unsafe.Coerce
 
@@ -85,7 +86,7 @@ emptyGroup :: Group is gs
 emptyGroup = Empty
 
 -- | Set a global uniform for a 'Group'.
-globalGroup :: UniformCPU c g => Global g -> Group gs is -> Group (g ': gs) is
+globalGroup :: Global g -> Group gs is -> Group (g ': gs) is
 globalGroup = Global
 
 -- | An empty object.
@@ -98,24 +99,19 @@ geom = Mesh
 
 class MemberGlobal g gs where
         -- | Modify the global of an 'Object'.
-        (~~>) :: (UniformCPU c g)
-              => (Draw c -> Global g)   -- ^ Changing function
+        (~~>) :: (Uniform 'S g)
+              => (Draw (CPU 'S g) -> Global g)  -- ^ Changing function
               -> Object gs is
               -> Object gs is
 
 instance MemberGlobal g (g ': gs) where
-        f ~~> (g := c :~> o) = f (uniformCastCPU (g undefined) c) :~> o
+        f ~~> (g := c :~> o) = f c :~> o
 
 instance ((g == g1) ~ False, MemberGlobal g gs) =>
          MemberGlobal g (g1 ': gs) where
         f ~~> (g :~> o) = g :~> (f ~~> o)
 
--- I could avoid unsafeCoerce by replacing the functional dependency in
--- UniformCPU with a type family, but in that case it wouldn't be possible to
--- automatically derive the instance for the shader variables, that are
--- newtypes.
-uniformCastCPU :: (UniformCPU c g, UniformCPU c' g) => g -> k c -> k c'
-uniformCastCPU _ = unsafeCoerce
+-- uniformCastCPU :: (UniformCPU c g, UniformCPU c' g) => g -> k c -> k c'
 
 infixr 2 ~~>
 
@@ -141,25 +137,25 @@ modifyGeometry fg (Mesh g) = Mesh $ fg g
 
 -- | Create a 'Global' from a pure value. The first argument is ignored,
 -- it just provides the type (you can use the constructor of the GPU type).
-(-=) :: (Typeable g, UniformCPU c g) => (a -> g) -> c -> Global g
+(-=) :: (ShaderVar g, Uniform 'S g) => (a -> g) -> CPU 'S g -> Global g
 g -= c = g := return c
 
 infixr 4 -=
 
 -- | Create a 'Global' of CPU type 'ActiveTexture' using a 'Texture'.
-globalTexture :: (Typeable g, UniformCPU ActiveTexture g, GLES)
+globalTexture :: (Uniform 'S g, CPU 'S g ~ ActiveTexture, ShaderVar g, GLES)
               => (a -> g) -> Texture -> Global g
 globalTexture g c = g := textureUniform c
 
 -- | Create a 'Global' using the size of a 'Texture'.
-globalTexSize :: (Typeable g, UniformCPU c g, GLES)
+globalTexSize :: (ShaderVar g, Uniform 'S g, GLES)
               => (a -> g) -> Texture
-              -> ((Int, Int) -> c) -> Global g
+              -> ((Int, Int) -> CPU 'S g) -> Global g
 globalTexSize g t fc = g := (fc <$> textureSize t)
 
 -- | Create a 'Global' using the size of the framebuffer.
-globalFramebufferSize :: (Typeable g, UniformCPU c g) => (a -> g)
-                      -> (Vec2 -> c) -> Global g
+globalFramebufferSize :: (ShaderVar g, Uniform 'S g) => (a -> g)
+                      -> (Vec2 -> CPU 'S g) -> Global g
 globalFramebufferSize g fc = g := (fc . tupleToVec <$>
                                             (viewportSize <$> drawGet))
         where tupleToVec (x, y) = Vec2 (fromIntegral x) (fromIntegral y)

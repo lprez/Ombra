@@ -6,29 +6,32 @@ module Graphics.Rendering.Ombra.Shader.GLSL (
         vertexToGLSL,
         fragmentToGLSL,
         shaderToGLSL,
-        globalName,
-        attributeName
+        uniformName
 ) where
 
 import Control.Monad
-import Data.Hashable (hash)
+import Data.Hashable (hash) -- TODO: use ST hashtables
 import qualified Data.HashMap.Strict as H
 import Data.Typeable
-import Graphics.Rendering.Ombra.Shader.Shader
+import Graphics.Rendering.Ombra.Shader.ShaderVar
 import Graphics.Rendering.Ombra.Shader.Language.Types hiding (Int, Bool)
 import Graphics.Rendering.Ombra.Shader.Stages (VertexShader, FragmentShader, ValidVertex)
 import Text.Printf
 
-type ShaderVars = ( [(String, String)]
-                  , [(String, String, Int)]
-                  , [(String, String, Expr)])
+data VarPrefix = Global | Varying | Attribute
+
+data ShaderVars = ShaderVars {
+        uniformVars :: [(String, String)],
+        inputVars :: [(String, String, Int)],
+        outputVars :: [(String, String, Expr)]
+}
 
 vertexToGLSLAttr :: ValidVertex g i o => VertexShader g i o
                  -> (String, [(String, Int)])
 vertexToGLSLAttr v =
-        let r@(_, is, _) = vars False v
+        let r@(ShaderVars _ is _) = vars False v
         in ( shaderToGLSL "#version 100\n" "attribute" "varying"
-                          r [("hvVertexShaderOutput", "gl_Position")]
+                          r [("hvVertexShaderOutput0", "gl_Position")]
            , map (\(t, n, s) -> (n, s)) is)
 
 vertexToGLSL :: ValidVertex g i o => VertexShader g i o -> String
@@ -41,7 +44,7 @@ fragmentToGLSL v = shaderToGLSL "#version 100\nprecision mediump float;"
                                 [("hvFragmentShaderOutput", "gl_FragColor")]
 
 shaderToGLSL :: String -> String -> String -> ShaderVars -> [(String, String)] -> String
-shaderToGLSL header ins outs (gs, is, os) predec = concat
+shaderToGLSL header ins outs (ShaderVars gs is os) predec = concat
         [ header
         , concatMap (var "uniform") gs
         , concatMap (\(t, n, _) -> var ins (t, n)) is
@@ -64,28 +67,34 @@ shaderToGLSL header ins outs (gs, is, os) predec = concat
 
 vars :: Valid gs is os => Bool -> Shader gs is os -> ShaderVars
 vars isFragment (shader :: Shader gs is os) =
-        ( staticList (undefined :: Proxy gs) globalTypeAndName
-        , staticList (undefined :: Proxy is) inputVar
-        , stFold (\acc x -> outputVar x : acc) [] outputs)
-        where outputs = shader (staticSTList (undefined :: Proxy gs) globalExpr)
-                               (staticSTList (undefined :: Proxy is) inputExpr)
+        ShaderVars (svToList globalVar globals)
+                   (svToList inputVar inputs)
+                   (svToList outputVar outputs)
+        where globals = staticSVList (Proxy :: Proxy gs) $ varExpr Global
+              inputs = staticSVList (Proxy :: Proxy is) $ varExpr inputPrefix
+              outputs = shader globals inputs
 
-              globalExpr, inputExpr :: (Typeable x, ShaderType y) => x -> y
-              globalExpr x = fromExpr . Read $ globalName x
-              inputExpr x = fromExpr . Read $ if isFragment then varyingName x
-                                               else attributeName x
+              inputPrefix = if isFragment then Varying else Attribute
 
-              inputVar :: (Typeable x, ShaderType x)
-                       => x -> (String, String, Int)
-              inputVar x = let (ty, nm) = if isFragment
-                                                then varyingTypeAndName x
-                                                else attributeTypeAndName x
-                           in (ty, nm, size x)
+              globalVar :: ShaderVar v => v -> [(String, String)]
+              globalVar var = varToList
+                                (\n x -> (typeName x, varName Global var n))
+                                var
 
-              outputVar :: (Typeable x, ShaderType x)
-                        => x -> (String, String, Expr)
-              outputVar x = let (ty, nm) = varyingTypeAndName x
-                            in (ty, nm, toExpr x)
+              inputVar :: ShaderVar v => v -> [(String, String, Int)]
+              inputVar var = varToList (\n x -> ( typeName x
+                                                , varName inputPrefix var n
+                                                , size x )) var
+
+              outputVar :: ShaderVar v => v -> [(String, String, Expr)]
+              outputVar var = varToList (\n x -> ( typeName x
+                                                 , varName Varying var n
+                                                 , toExpr x )) var
+
+              varExpr :: ShaderVar v => VarPrefix -> Proxy v -> v
+              varExpr p (pvar :: Proxy v) =
+                      varBuild (\n -> fromExpr . Read $ varName p var n) pvar
+                where var = undefined :: v
 
 type ActionID = Int
 type ActionMap = H.HashMap ActionID Action
@@ -276,23 +285,11 @@ contextVarName LoopValue = actionName
 hashName :: ActionID -> String
 hashName = printf "%x"
 
-globalTypeAndName :: (Typeable t, ShaderType t) => t -> (String, String)
-globalTypeAndName t = (typeName t, globalName t)
+uniformName :: ShaderVar v => v -> Int -> String
+uniformName = varName Global
 
-varyingTypeAndName :: (Typeable t, ShaderType t) => t -> (String, String)
-varyingTypeAndName t = (typeName t, varyingName t)
-
-attributeTypeAndName :: (Typeable t, ShaderType t) => t -> (String, String)
-attributeTypeAndName t = (typeName t, attributeName t)
-
-variableName :: Typeable t => t -> String
-variableName = tyConName . typeRepTyCon . typeOf
-
-globalName :: Typeable t => t -> String
-globalName = ("hg" ++) . variableName
-
-varyingName :: Typeable t => t -> String
-varyingName = ("hv" ++) . variableName
-
-attributeName :: Typeable t => t -> String
-attributeName = ("ha" ++) . variableName
+varName :: ShaderVar v => VarPrefix -> v -> Int -> String
+varName prefix var n = prefixName prefix ++ varPreName var ++ show n
+        where prefixName Global = "hg"
+              prefixName Varying = "hv"
+              prefixName Attribute = "ha"

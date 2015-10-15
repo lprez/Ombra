@@ -1,5 +1,4 @@
-{-# LANGUAGE DataKinds, RebindableSyntax, DeriveDataTypeable,
-             GeneralizedNewtypeDeriving, GADTs #-}
+{-# LANGUAGE DataKinds, RebindableSyntax, DeriveGeneric, GADTs #-}
 
 module Graphics.Rendering.Ombra.Shader.Default3D where
 
@@ -8,23 +7,17 @@ import Graphics.Rendering.Ombra.Shader
 type Uniforms = '[View3, Transform3, Texture2]
 type Attributes = '[Position3, UV, Normal3]
 
-newtype Texture2 = Texture2 Sampler2D
-        deriving (Typeable, ShaderType, UniformCPU CSampler2D)
+data Texture2 = Texture2 Sampler2D deriving Generic
 
-newtype Transform3 = Transform3 Mat4
-        deriving (Typeable, ShaderType, UniformCPU CMat4)
+data Transform3 = Transform3 Mat4 deriving Generic
 
-newtype View3 = View3 Mat4
-        deriving (Typeable, ShaderType, UniformCPU CMat4)
+data View3 = View3 Mat4 deriving Generic
 
-newtype Position3 = Position3 Vec3
-        deriving (Typeable, ShaderType, AttributeCPU CVec3)
+data Position3 = Position3 Vec3 deriving Generic
 
-newtype Normal3 = Normal3 Vec3
-        deriving (Typeable, ShaderType, AttributeCPU CVec3)
+data Normal3 = Normal3 Vec3 deriving Generic
 
-newtype UV = UV Vec2
-        deriving (Typeable, ShaderType, AttributeCPU CVec2)
+data UV = UV Vec2 deriving Generic
 
 vertexShader :: VertexShader '[ Transform3, View3 ]
                              '[ Position3, UV, Normal3 ]

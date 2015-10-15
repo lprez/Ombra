@@ -1,5 +1,6 @@
-{-# LANGUAGE GADTs, TypeOperators, KindSignatures, DataKinds,
-             MultiParamTypeClasses, FlexibleInstances, OverlappingInstances #-}
+{-# LANGUAGE GADTs, TypeOperators, KindSignatures, DataKinds, FlexibleContexts,
+             MultiParamTypeClasses, FlexibleInstances, OverlappingInstances,
+             ScopedTypeVariables #-}
 
 module Graphics.Rendering.Ombra.Geometry (
         AttrList(..),
@@ -14,22 +15,18 @@ module Graphics.Rendering.Ombra.Geometry (
         mkGeometry,
         mkGeometry2D,
         mkGeometry3D,
-        castGeometry,
-        facesToArrays,
-        arraysToElements,
-        triangulate
+        castGeometry
 ) where
 
 import Control.Applicative
-import Control.Monad.ST
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.State
 import qualified Data.Hashable as H
 import qualified Data.HashMap.Strict as H
-import Data.Foldable (Foldable, forM_)
-import Data.STRef
+import Data.Typeable
 import qualified Data.Vector.Storable as V
 import Data.Vect.Float hiding (Normal3)
-import Data.Vect.Float.Instances ()
-import Data.Word (Word16, Word)
+import Data.Word (Word16)
 import Unsafe.Coerce
 
 import Graphics.Rendering.Ombra.Internal.GL
@@ -46,9 +43,9 @@ import Graphics.Rendering.Ombra.Transformation
 -- | A heterogeneous list of attributes.
 data AttrList (is :: [*]) where
         AttrListNil :: AttrList '[]
-        AttrListCons :: (H.Hashable c, AttributeCPU c i, ShaderType i)
+        AttrListCons :: (H.Hashable (CPU S i), Attribute S i)
                      => (a -> i)
-                     -> [c]
+                     -> [CPU S i]
                      -> AttrList is
                      -> AttrList (i ': is)
 
@@ -116,10 +113,10 @@ mkGeometry2D v u = mkGeometry (AttrListCons D2.Position2 v $
 
 
 -- | Add an attribute to a geometry.
-extend :: (AttributeCPU c i, H.Hashable c, ShaderType i, GLES)
+extend :: (Attribute 'S i, H.Hashable (CPU 'S i), ShaderType i, GLES)
        => (a -> i)              -- ^ Attribute constructor (or any other
                                 -- function with that type).
-       -> [c]                   -- ^ List of values
+       -> [CPU 'S i]            -- ^ List of values
        -> Geometry is
        -> Geometry (i ': is)
 extend g c (Geometry al es _) = mkGeometry (AttrListCons g c al) es
@@ -182,14 +179,19 @@ loadAttrList = loadFrom 0
         where loadFrom :: GLUInt -> AttrList is
                        -> GL [(Buffer, GLUInt, GLUInt -> GL ())]
               loadFrom _ AttrListNil = return []
-              loadFrom i (AttrListCons g c al) =
-                      (:) <$> loadAttribute i (g undefined) c
-                          <*> loadFrom (i + fromIntegral (size $ g undefined))
-                                       al
+              loadFrom idx (AttrListCons g c al) =
+                      do (newIdx, attrInfo) <- loadAttribute idx (g undefined) c
+                         (attrInfo ++) <$> loadFrom newIdx al
          
-              loadAttribute i g c = do arr <- encodeAttribute g c
-                                       buf <- loadBuffer gl_ARRAY_BUFFER arr
-                                       return (buf, i, setAttribute g)
+              loadAttribute :: Attribute 'S g => GLUInt -> g -> [CPU 'S g]
+                            -> GL (GLUInt, [(Buffer, GLUInt, GLUInt -> GL ())])
+              loadAttribute ii g c = flip execStateT (ii, []) $
+                withAttributes (Proxy :: Proxy 'S) g c $ \_ (g :: Proxy g) c ->
+                        do (i, infos) <- get
+                           arr <- lift $ encodeAttribute g c
+                           buf <- lift $ loadBuffer gl_ARRAY_BUFFER arr
+                           put ( i + fromIntegral (size (undefined :: g))
+                               , (buf, i, setAttribute g) : infos )
 
 withGPUBufferGeometry :: GLES
                       => GPUBufferGeometry -> (Int -> [Buffer] -> GL a) -> GL a
@@ -228,50 +230,6 @@ loadBuffer ty bufData =
            bufferData ty bufData gl_STATIC_DRAW
            bindBuffer ty noBuffer
            return buffer
-
-
-arraysToElements :: Foldable f
-                 => f (Vec3, Vec2, Vec3)
-                 -> ([Vec3], [Vec2], [Vec3], [Word16])
-arraysToElements arrays = runST $
-        do vs <- newSTRef []
-           us <- newSTRef []
-           ns <- newSTRef []
-           es <- newSTRef []
-           triples <- newSTRef H.empty
-           len <- newSTRef 0
-
-           forM_ arrays $ \ t@(v, u, n) -> readSTRef triples >>= \ ts ->
-                   case H.lookup t ts of
-                           Just idx -> modifySTRef es (idx :)
-                           Nothing -> do idx <- readSTRef len
-                                         writeSTRef len $ idx + 1
-                                         writeSTRef triples $ H.insert t idx ts
-                                         modifySTRef vs (v :)
-                                         modifySTRef us (u :)
-                                         modifySTRef ns (n :)
-                                         modifySTRef es (idx :)
-
-           (,,,) <$> (reverse <$> readSTRef vs)
-                 <*> (reverse <$> readSTRef us)
-                 <*> (reverse <$> readSTRef ns)
-                 <*> (reverse <$> readSTRef es)
-
-facesToArrays :: V.Vector Vec3 -> V.Vector Vec2 -> V.Vector Vec3
-              -> [[(Int, Int, Int)]] -> [(Vec3, Vec2, Vec3)]
-facesToArrays ovs ous ons = (>>= toIndex . triangulate)
-        where toIndex = (>>= \(v1, v2, v3) -> [ getVertex v1
-                                              , getVertex v2
-                                              , getVertex v3 ])
-              getVertex (v, u, n) = (ovs V.! v, ous V.! u, ons V.! n)
-
-triangulate :: [a] -> [(a, a, a)]
-triangulate [] = error "triangulate: empty face"
-triangulate (_ : []) = error "triangulate: can't triangulate a point"
-triangulate (_ : _ : []) = error "triangulate: can't triangulate an edge"
-triangulate (x : y : z : []) = [(x, y, z)]
-triangulate (x : y : z : w : []) = [(x, y, z), (x, z, w)]
-triangulate _ = error "triangulate: can't triangulate >4 faces"
 
 instance H.Hashable Vec2 where
         hashWithSalt s (Vec2 x y) = H.hashWithSalt s (x, y)

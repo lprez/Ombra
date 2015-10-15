@@ -4,13 +4,7 @@
 An example of shader variable:
 
 @
-        newtype Transform2 = Transform2 Mat3
-                deriving (Typeable,
-                          ShaderType, -- This is a type in the GPU (3x3 matrix).
-                          UniformCPU CMat3) -- This can be used as an uniform
-                                            -- and you can set it using a CPU
-                                            -- 3x3 matrix
-                                            -- (Graphics.Rendering.Ombra.Vector.'Graphics.Rendering.Ombra.Vector.Mat3')
+        data Transform2 = Transform2 Mat3 deriving Generic
 @
 
 An example of vertex shader:
@@ -51,12 +45,10 @@ module Graphics.Rendering.Ombra.Shader (
         FragmentShader,
         VertexShaderOutput(Vertex),
         FragmentShaderOutput(Fragment),
-        Typeable,
-        AllTypeable,
-        ShaderType,
-        UniformCPU,
-        AttributeCPU,
-        STList((:-), N),
+        Uniform,
+        Attribute,
+        Generic,
+        SVList((:-), N),
         -- ** GPU types
         Bool,
         Float,
@@ -76,26 +68,6 @@ module Graphics.Rendering.Ombra.Shader (
         Mat3(..),
         Mat4(..),
         Array,
-        -- ** CPU types
-        CInt,
-        CBool,
-        CFloat,
-        CSampler2D,
-        CSamplerCube,
-        CVec2,
-        CVec3,
-        CVec4,
-        CIVec2,
-        CIVec3,
-        CIVec4,
-        CBVec2,
-        CBVec3,
-        CBVec4,
-        CMat2,
-        CMat3,
-        CMat4,
-        CArray,
-        toGPUBool,
         -- * Functions
         loop,
         store,
@@ -233,66 +205,13 @@ module Graphics.Rendering.Ombra.Shader (
 import qualified Data.Int as CPU
 import Data.Typeable (Typeable)
 import qualified Data.Vect.Float as CPU
+import GHC.Generics (Generic)
 import qualified Graphics.Rendering.Ombra.Internal.GL as CPU
 import qualified Graphics.Rendering.Ombra.Backend as CPU
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Shader.Language.Functions
-import Graphics.Rendering.Ombra.Shader.Shader
+import Graphics.Rendering.Ombra.Shader.ShaderVar
 import Graphics.Rendering.Ombra.Shader.Stages
 import Prelude ((.), id, const, flip, ($))
 import qualified Prelude as CPU
-
--- | Arrays in the CPU.
-type CArray a = [a]
-
--- | 32-bit integers in the CPU.
-type CInt = CPU.Int32
-
--- | Booleans in the CPU.
-type CBool = CPU.Int32
-
--- | Floats in the CPU.
-type CFloat = CPU.Float
-
--- | Samplers in the CPU.
-type CSampler2D = CPU.ActiveTexture
-
--- | Samplers in the CPU.
-type CSamplerCube = CPU.ActiveTexture
-
--- | 2D vectors in the CPU.
-type CVec2 = CPU.Vec2
-
--- | 3D vectors in the CPU.
-type CVec3 = CPU.Vec3
-
--- | 4D vectors in the CPU.
-type CVec4 = CPU.Vec4
-
--- | 2D integer vectors in the CPU.
-type CIVec2 = CPU.IVec2
-
--- | 3D integer vectors in the CPU.
-type CIVec3 = CPU.IVec3
-
--- | 4D integer vectors in the CPU.
-type CIVec4 = CPU.IVec4
-
--- | 2D boolean vectors in the CPU.
-type CBVec2 = CPU.IVec2
-
--- | 3D boolean vectors in the CPU.
-type CBVec3 = CPU.IVec3
-
--- | 4D boolean vectors in the CPU.
-type CBVec4 = CPU.IVec4
-
--- | 2x2 matrices in the CPU.
-type CMat2 = CPU.Mat2
-
--- | 3x3 matrices in the CPU.
-type CMat3 = CPU.Mat3
-
--- | 4x4 matrices in the CPU.
-type CMat4 = CPU.Mat4

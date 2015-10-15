@@ -1,4 +1,5 @@
 module Graphics.Rendering.Ombra.Draw (
+        refDrawCtx,
         runDrawCtx,
         execDrawCtx,
         evalDrawCtx,
@@ -13,10 +14,20 @@ module Graphics.Rendering.Ombra.Draw (
         textureUniform,
         textureSize,
         resizeViewport,
+        renderLayer,
+        gl
 ) where
 
+import Data.IORef
 import Graphics.Rendering.Ombra.Draw.Internal
 import Graphics.Rendering.Ombra.Internal.GL
+
+-- | Run a Draw action using an IORef and a context.
+refDrawCtx :: GLES => Ctx -> Draw a -> IORef DrawState -> IO a
+refDrawCtx ctx d ref = do state <- readIORef ref
+                          (ret, state') <- runDrawCtx ctx d state
+                          writeIORef ref state'
+                          return ret
 
 runDrawCtx :: GLES
            => Ctx               -- ^ Context (use the appropriate backend

@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, DataKinds, KindSignatures, TypeOperators,
+{-# LANGUAGE GADTs, DataKinds, KindSignatures, TypeOperators, FlexibleContexts,
              ExistentialQuantification, GeneralizedNewtypeDeriving #-}
 
 module Graphics.Rendering.Ombra.Types (
@@ -34,6 +34,7 @@ import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Program
+import Graphics.Rendering.Ombra.Shader.ShaderVar
 
 newtype UniformLocation = UniformLocation GL.UniformLocation
 
@@ -83,8 +84,8 @@ infixr 2 :~>
 
 -- | The value of a GPU uniform.
 data Global g where
-        (:=) :: (Typeable g, UniformCPU c g)
-             => (a -> g) -> Draw c -> Global g
+        (:=) :: (ShaderVar g, Uniform 'S g)
+             => (a -> g) -> Draw (CPU 'S g) -> Global g
 
 infix 3 :=
 

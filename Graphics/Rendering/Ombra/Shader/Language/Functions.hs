@@ -343,8 +343,8 @@ instance Matrix Mat4
 matrixCompMult :: (Matrix a, Matrix b, Matrix c) => a -> b -> c
 matrixCompMult = fun2 "matrixCompMult"
 
--- | Avoid executing this expression more than one time. Conditionals and loops
--- imply it.
+-- | Avoid evaluating the expression of the argument more than one time.
+-- Conditionals and loops imply it.
 store :: ShaderType a => a -> a
 store x = fromExpr . Action $ Store (typeName x) (toExpr x)
 

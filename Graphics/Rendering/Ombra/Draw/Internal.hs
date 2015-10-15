@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs, DataKinds, FlexibleContexts, TypeSynonymInstances,
-             FlexibleInstances, MultiParamTypeClasses #-}
+             FlexibleInstances, MultiParamTypeClasses, KindSignatures #-}
 
 module Graphics.Rendering.Ombra.Draw.Internal (
         Draw,
@@ -40,6 +40,7 @@ import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.GLSL
 import Graphics.Rendering.Ombra.Shader.Program
+import Graphics.Rendering.Ombra.Shader.ShaderVar
 
 import Data.Bits ((.|.))
 import Data.Hashable (Hashable)
@@ -129,20 +130,21 @@ drawBegin = do freeActiveTextures
 drawEnd :: GLES => Draw ()
 drawEnd = return ()
 
--- | Delete a 'Geometry' from the GPU (this is automatically done when the
--- 'Geometry' becomes unreachable).
+-- | Manually delete a 'Geometry' from the GPU (this is automatically done when
+-- the 'Geometry' becomes unreachable). Note that if you try to draw it, it will
+-- be allocated again.
 removeGeometry :: GLES => Geometry is -> Draw ()
 removeGeometry gi = let g = castGeometry gi in
         do removeDrawResource gl gpuBuffers g
            removeDrawResource id gpuVAOs g
 
--- | Delete a 'Texture' from the GPU (automatic).
+-- | Manually delete a 'Texture' from the GPU.
 removeTexture :: GLES => Texture -> Draw ()
 removeTexture (TextureImage i) = removeDrawResource gl textureImages i
 removeTexture (TextureLoaded l) = gl $ unloadResource
                                         (Nothing :: Maybe TextureImage) l
 
--- | Delete a 'Program' from the GPU (automatic).
+-- | Manually delete a 'Program' from the GPU.
 removeProgram :: GLES => Program gs is -> Draw ()
 removeProgram = removeDrawResource gl programs . castProgram
 
@@ -159,7 +161,8 @@ drawLayer (MultiLayer layers) = mapM_ drawLayer layers
 drawGroup :: GLES => Group gs is -> Draw ()
 drawGroup Empty = return ()
 drawGroup (Object o) = drawObject o
-drawGroup (Global (g := c) o) = c >>= uniform g >> drawGroup o
+drawGroup (Global (g := c) o) = c >>= uniform single (g undefined)
+                                  >>  drawGroup o
 drawGroup (Append g g') = drawGroup g >> drawGroup g'
 
 -- | Draw an 'Object'.
@@ -167,12 +170,14 @@ drawObject :: GLES => Object gs is -> Draw ()
 drawObject NoMesh = return ()
 drawObject (Mesh g) = withRes_ (getGPUVAOGeometry $ castGeometry g)
                                  drawGPUVAOGeometry
-drawObject ((g := c) :~> o) = c >>= uniform g >> drawObject o
+drawObject ((g := c) :~> o) = c >>= uniform single (g undefined) >> drawObject o
 
-uniform :: (GLES, Typeable g, UniformCPU c g) => (a -> g) -> c -> Draw ()
-uniform g c = withRes_ (getUniform $ g undefined)
-                       $ \(UniformLocation l) -> gl $ setUniform l
-                                                                 (g undefined) c
+uniform :: (GLES, ShaderVar g, Uniform s g)
+        => proxy (s :: CPUSetterType *) -> g -> CPU s g -> Draw ()
+uniform p g c = withUniforms p g c $
+                        \n ug uc -> withRes_ (getUniform $ uniformName g n) $
+                                \(UniformLocation l) -> gl $ setUniform l ug uc
+                                                                
 
 -- | This helps you set the uniforms of type 'Graphics.Rendering.Ombra.Shader.Sampler2D'.
 textureUniform :: GLES  => Texture -> Draw ActiveTexture
@@ -205,15 +210,13 @@ withRes_ drs = withRes drs $ return ()
 
 withRes :: Draw (Either String a) -> Draw b -> (a -> Draw b) -> Draw b
 withRes drs u l = drs >>= \rs -> case rs of
-                                        Right r -> l r
-                                        _ -> u
+                                      Right r -> l r
+                                      _ -> u
 
-getUniform :: (Typeable a, GLES) => a -> Draw (Either String UniformLocation)
-getUniform g = do mprg <- loadedProgram <$> Draw get
-                  case mprg of
-                          Just prg ->
-                                  getDrawResource gl uniforms
-                                                  (prg, globalName g)
+getUniform :: GLES => String -> Draw (Either String UniformLocation)
+getUniform name = do mprg <- loadedProgram <$> Draw get
+                     case mprg of
+                          Just prg -> getDrawResource gl uniforms (prg, name)
                           Nothing -> return $ Left "No loaded program."
 
 getGPUVAOGeometry :: GLES => Geometry '[] -> Draw (Either String GPUVAOGeometry)
