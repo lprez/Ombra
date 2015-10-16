@@ -41,7 +41,7 @@ fragmentToGLSL :: Valid g i '[] => FragmentShader g i -> String
 fragmentToGLSL v = shaderToGLSL "#version 100\nprecision mediump float;"
                                 "varying" ""
                                 (vars True v)
-                                [("hvFragmentShaderOutput", "gl_FragColor")]
+                                [("hvFragmentShaderOutput0", "gl_FragColor")]
 
 shaderToGLSL :: String -> String -> String -> ShaderVars -> [(String, String)] -> String
 shaderToGLSL header ins outs (ShaderVars gs is os) predec = concat

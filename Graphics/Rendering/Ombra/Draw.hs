@@ -4,6 +4,7 @@ module Graphics.Rendering.Ombra.Draw (
         execDrawCtx,
         evalDrawCtx,
         drawInit,
+        drawState,
         drawBegin,
         drawLayer,
         drawEnd,

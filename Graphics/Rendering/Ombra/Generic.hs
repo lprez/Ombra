@@ -111,8 +111,6 @@ instance ((g == g1) ~ False, MemberGlobal g gs) =>
          MemberGlobal g (g1 ': gs) where
         f ~~> (g :~> o) = g :~> (f ~~> o)
 
--- uniformCastCPU :: (UniformCPU c g, UniformCPU c' g) => g -> k c -> k c'
-
 infixr 2 ~~>
 
 class RemoveGlobal g gs gs' where

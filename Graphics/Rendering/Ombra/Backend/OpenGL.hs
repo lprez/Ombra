@@ -2,7 +2,6 @@
 
 module Graphics.Rendering.Ombra.Backend.OpenGL (makeContext) where
         
-import Control.Concurrent
 import Data.Word
 import Data.Vect.Float
 import Foreign
@@ -66,7 +65,7 @@ mkArray xs = do arr <- mallocForeignPtrArray len
               size = len * sizeOf (head xs)
 
 instance GLES where
-        type Ctx = MVar ()
+        type Ctx = ()
         type GLEnum = GLenum
         type GLUInt = GLuint
         type GLInt = GLint
