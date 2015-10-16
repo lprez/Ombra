@@ -44,6 +44,9 @@ type family CPU (s :: CPUSetterType *) g where
 type family CPUBase g
 type family CPUMirror g
 
+-- type family CPUAutoSetter (g :: * -> *) :: CPUSetterType
+-- type CPUAuto g = CPU (CPUAutoSetter g) g
+
 -- | CPU types convertible to GPU types (as uniforms).
 class BaseUniform g where
         setUniform :: UniformLocation -> proxy g -> CPUBase g -> GL ()

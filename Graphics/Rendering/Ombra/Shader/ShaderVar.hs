@@ -122,7 +122,7 @@ svFold _ acc N = acc
 svFold f acc (x :- xs) = svFold f (f acc x) xs
 
 svToList :: (forall x. ShaderVar x => x -> [y]) -> SVList xs -> [y]
-svToList f = svFold (\acc x -> f x ++ acc) []
+svToList f = svFold (\acc x -> acc ++ f x) []
 
 class StaticSVList (xs :: [*]) where
         -- | Create a 'SVList' with a function.
