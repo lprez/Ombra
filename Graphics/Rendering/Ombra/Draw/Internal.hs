@@ -124,7 +124,7 @@ resizeViewport w h = do gl $ viewport 0 0 (fromIntegral w) (fromIntegral h)
 
 -- | Clear the buffers.
 drawBegin :: GLES => Draw ()
-drawBegin = do freeActiveTextures
+drawBegin = do freeActiveTextures -- ?
                gl . clear $ gl_COLOR_BUFFER_BIT .|. gl_DEPTH_BUFFER_BIT
 
 drawEnd :: GLES => Draw ()
@@ -264,8 +264,9 @@ makeActive t = do ats <- activeTextures <$> Draw get
 -- | Realize a 'RenderLayer'. It returns the list of allocated 'Texture's so
 -- that you can free them if you want.
 renderLayer :: GLES => RenderLayer a -> Draw (a, [Texture])
-renderLayer (RenderLayer stypes w' h' rx ry rw rh inspCol inspDepth layer f) =
-        do (ts, mcol, mdepth) <- layerToTexture stypes w h layer
+renderLayer (RenderLayer drawBufs stypes w' h' rx ry rw rh
+                         inspCol inspDepth layer f) =
+        do (ts, mcol, mdepth) <- layerToTexture drawBufs stypes w h layer
                                                 (mayInspect inspCol)
                                                 (mayInspect inspDepth)
            return (f ts mcol mdepth, ts)
@@ -280,7 +281,8 @@ renderLayer (RenderLayer stypes w' h' rx ry rw rh inspCol inspDepth layer f) =
 
 -- | Draw a 'Layer' on some textures.
 layerToTexture :: (GLES, Integral a)
-               => [LayerType]                           -- ^ Textures contents.
+               => Bool                                  -- ^ Draw buffers
+               -> [LayerType]                           -- ^ Textures contents
                -> a                                     -- ^ Width
                -> a                                     -- ^ Height
                -> Layer                                 -- ^ Layer to draw
@@ -293,8 +295,9 @@ layerToTexture :: (GLES, Integral a)
                            , Int, Int, Int, Int)        -- ^ Depth inspecting,
                                                         -- function, etc.
                -> Draw ([Texture], b ,c)
-layerToTexture stypes wp hp layer einspc einspd = do
-        (ts, (colRes, depthRes)) <- renderToTexture (map arguments stypes) w h $
+layerToTexture drawBufs stypes wp hp layer einspc einspd = do
+        (ts, (colRes, depthRes)) <- renderToTexture drawBufs (map arguments
+                                                    stypes) w h $
                         do drawLayer layer
                            colRes <- inspect einspc gl_RGBA wordsToColors 4
                            depthRes <- inspect einspd gl_DEPTH_COMPONENT id 1
@@ -313,6 +316,11 @@ layerToTexture stypes wp hp layer einspc einspd = do
                                             , gl_DEPTH_COMPONENT
                                             , gl_UNSIGNED_SHORT
                                             , gl_DEPTH_ATTACHMENT )
+                              BufferLayer n -> ( fromIntegral gl_RGBA
+                                               , gl_RGB
+                                               , gl_FLOAT
+                                               , gl_COLOR_ATTACHMENT0 + 
+                                                 fromIntegral n )
 
               inspect :: Either c (a -> Draw c, Int, Int, Int, Int) -> GLEnum
                       -> ([Word8] -> a) -> Int -> Draw c
@@ -331,13 +339,13 @@ layerToTexture stypes wp hp layer einspc einspd = do
               wordsToColors _ = []
 
 renderToTexture :: GLES
-                => [(GLInt, GLEnum, GLEnum, GLEnum)]
+                => Bool -> [(GLInt, GLEnum, GLEnum, GLEnum)]
                 -> GLSize -> GLSize -> Draw a -> Draw ([GL.Texture], a)
-renderToTexture infos w h act = do
+renderToTexture drawBufs infos w h act = do
         fb <- gl createFramebuffer 
         gl $ bindFramebuffer gl_FRAMEBUFFER fb
 
-        ts <- gl . flip mapM infos $
+        (ts, as) <- fmap unzip . gl . flip mapM infos $
                 \(internalFormat, format, pixelType, attachment) ->
                         do t <- emptyTexture
                            arr <- liftIO $ noArray
@@ -346,7 +354,9 @@ renderToTexture infos w h act = do
                                       h 0 format pixelType arr
                            framebufferTexture2D gl_FRAMEBUFFER attachment
                                                 gl_TEXTURE_2D t 0
-                           return t
+                           return (t, fromIntegral attachment)
+
+        when drawBufs $ liftIO (encodeInts as) >>= gl . drawBuffers
 
         (sw, sh) <- viewportSize <$> Draw get
         resizeViewport (fromIntegral w) (fromIntegral h)

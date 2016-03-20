@@ -96,13 +96,13 @@ data Layer = forall oi pi og pg. (Subset pi oi, Subset pg og)
            | MultiLayer [Layer]
 
 -- | Represents a 'Layer' drawn on a 'Texture'.
-data RenderLayer a = RenderLayer [LayerType] Int Int
+data RenderLayer a = RenderLayer Bool [LayerType] Int Int
                                  Int Int Int Int
                                  Bool Bool Layer
                                  ([Texture] -> Maybe [Color] ->
                                   Maybe [Word8] -> a)
 
-data LayerType = ColorLayer | DepthLayer deriving Eq
+data LayerType = ColorLayer | DepthLayer | BufferLayer Int deriving Eq
 
 instance Hashable TextureImage where
         hashWithSalt salt tex = hashWithSalt salt $ textureHash tex

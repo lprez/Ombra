@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, MultiParamTypeClasses, FunctionalDependencies,
              KindSignatures, TypeOperators, TypeFamilies, GADTs,
-             FlexibleInstances, UndecidableInstances, OverlappingInstances,
+             FlexibleInstances, UndecidableInstances, 
              ConstraintKinds, FlexibleContexts #-}
 module Graphics.Rendering.Ombra.Shader.Language.Functions where
 
@@ -76,7 +76,8 @@ instance Mul Float Float Mat4 Vec4 Vec4
 instance Mul Float Float Vec2 Mat2 Vec2
 instance Mul Float Float Vec3 Mat3 Vec3
 instance Mul Float Float Vec4 Mat4 Vec4
-instance Arithmetic aBase bBase a b result => Mul aBase bBase a b result
+instance {-# OVERLAPPABLE #-} Arithmetic aBase bBase a b result =>
+         Mul aBase bBase a b result
 
 class (ShaderType a, Base a Float) => FloatVec a
 instance FloatVec Vec2
@@ -413,9 +414,9 @@ textureCubeLod = fun3 "textureCubeLod"
 position :: Vec4
 position = fromExpr $ Read "gl_Position"
 
--- | The color of the fragment (only works in the fragment shader).
-fragColor :: Vec4
-fragColor = fromExpr $ Read "gl_FragColor"
+-- | The data of the fragment (only works in the fragment shader).
+fragData :: Array 16 Vec4
+fragData = fromExpr $ Read "gl_FragData"
 
 -- | The coordinates of the fragment (only works in the fragment shader).
 fragCoord :: Vec4

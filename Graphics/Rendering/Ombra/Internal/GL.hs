@@ -55,6 +55,7 @@ module Graphics.Rendering.Ombra.Internal.GL (
         disable,
         disableVertexAttribArray,
         drawArrays,
+        drawBuffers,
         drawElements,
         enable,
         enableVertexAttribArray,
@@ -302,6 +303,9 @@ drawArrays a b c = getCtx >>= \ctx -> liftIO $ glDrawArrays ctx a b c
 
 drawElements :: GLES => GLEnum -> GLSize -> GLEnum -> GLPtr -> GL ()
 drawElements a b c d = getCtx >>= \ctx -> liftIO $ glDrawElements ctx a b c d
+
+drawBuffers :: GLES => Int32Array -> GL ()
+drawBuffers a = getCtx >>= \ctx -> liftIO $ glDrawBuffers ctx a
 
 enable :: GLES => GLEnum -> GL ()
 enable a = getCtx >>= \ctx -> liftIO $ glEnable ctx a

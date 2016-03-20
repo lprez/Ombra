@@ -1,6 +1,5 @@
 {-# LANGUAGE TypeOperators, DataKinds, ConstraintKinds, MultiParamTypeClasses,
-             TypeFamilies, FlexibleContexts, FlexibleInstances,
-             OverlappingInstances #-}
+             TypeFamilies, FlexibleContexts, FlexibleInstances #-}
 
 module Graphics.Rendering.Ombra.Generic (
         -- * Objects
@@ -35,6 +34,7 @@ module Graphics.Rendering.Ombra.Generic (
         renderColorInspect,
         renderDepthInspect,
         renderColorDepthInspect,
+        renderBuffers,
 
         -- * Shaders
         Program,
@@ -104,10 +104,10 @@ class MemberGlobal g gs where
               -> Object gs is
               -> Object gs is
 
-instance MemberGlobal g (g ': gs) where
+instance {-# OVERLAPPING #-} MemberGlobal g (g ': gs) where
         f ~~> (g := c :~> o) = f c :~> o
 
-instance ((g == g1) ~ False, MemberGlobal g gs) =>
+instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, MemberGlobal g gs) =>
          MemberGlobal g (g1 ': gs) where
         f ~~> (g :~> o) = g :~> (f ~~> o)
 
@@ -117,10 +117,10 @@ class RemoveGlobal g gs gs' where
         -- | Remove a global from an 'Object'.
         (*~>) :: (a -> g) -> Object gs is -> Object gs' is
 
-instance RemoveGlobal g (g ': gs) gs where
+instance {-# OVERLAPPING #-} RemoveGlobal g (g ': gs) gs where
         _ *~> (_ :~> o) = o
 
-instance ((g == g1) ~ False, RemoveGlobal g gs gs') =>
+instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, RemoveGlobal g gs gs') =>
          RemoveGlobal g (g1 ': gs) (g1 ': gs') where
         r *~> (g :~> o) = g :~> (r *~> o)
 
@@ -203,6 +203,8 @@ depthSubLayer :: Int                         -- ^ Texture width.
               -> Layer
 depthSubLayer w h l = subRenderLayer . renderDepth w h l
 
+-- TODO: buffersSubLayer
+
 -- | Generalized version of 'subLayer' and 'depthSubLayer'.
 subRenderLayer :: RenderLayer [Layer] -> Layer
 subRenderLayer = SubLayer
@@ -213,7 +215,7 @@ renderColor :: Int                         -- ^ Texture width.
             -> Layer                       -- ^ Layer to draw on a 'Texture'.
             -> (Texture -> a)              -- ^ Function using the texture.
             -> RenderLayer a
-renderColor w h l f = RenderLayer [ColorLayer, DepthLayer] w h 0 0 0 0
+renderColor w h l f = RenderLayer False [ColorLayer, DepthLayer] w h 0 0 0 0
                                   False False l $ \[t, _] _ _ -> f t
 
 -- | Render a 'Layer' in a depth 'Texture'
@@ -222,8 +224,9 @@ renderDepth :: Int              -- ^ Texture width.
             -> Layer            -- ^ Layer to draw on a depth 'Texture'.
             -> (Texture -> a)   -- ^ Function using the texture.
             -> RenderLayer a
-renderDepth w h l f = RenderLayer [DepthLayer] w h 0 0 0 0 False False l $
-                                  \[t] _ _ -> f t
+renderDepth w h l f =
+        RenderLayer False [DepthLayer] w h 0 0 0 0 False False l $
+                \[t] _ _ -> f t
 
 -- | Combination of 'renderColor' and 'renderDepth'.
 renderColorDepth :: Int                         -- ^ Texture width.
@@ -232,7 +235,7 @@ renderColorDepth :: Int                         -- ^ Texture width.
                  -> (Texture -> Texture -> a)   -- ^ Color, depth.
                  -> RenderLayer a
 renderColorDepth w h l f =
-        RenderLayer [ColorLayer, DepthLayer] w h 0 0 0 0 False False l $
+        RenderLayer False [ColorLayer, DepthLayer] w h 0 0 0 0 False False l $
                     \[ct, dt] _ _ -> f ct dt
 
 -- | Render a 'Layer' in a 'Texture', reading the content of the texture.
@@ -247,7 +250,8 @@ renderColorInspect
         -> (Texture -> [Color] -> a)    -- ^ Function using the texture.
         -> RenderLayer a
 renderColorInspect w h l rx ry rw rh f =
-        RenderLayer [ColorLayer, DepthLayer] w h rx ry rw rh True False l $
+        RenderLayer False [ColorLayer, DepthLayer] w h rx ry
+                    rw rh True False l $
                     \[t, _] (Just c) _ -> f t c
 
 -- | Render a 'Layer' in a depth 'Texture', reading the content of the texture.
@@ -263,7 +267,7 @@ renderDepthInspect
         -> (Texture -> [Word8] -> a)    -- ^ Layers using the texture.
         -> RenderLayer a
 renderDepthInspect w h l rx ry rw rh f =
-        RenderLayer [DepthLayer] w h rx ry rw rh False True l $
+        RenderLayer False [DepthLayer] w h rx ry rw rh False True l $
                     \[t] _ (Just d) -> f t d
 
 -- | Combination of 'renderColorInspect' and 'renderDepthInspect'. Not supported
@@ -280,5 +284,19 @@ renderColorDepthInspect
                                                             -- the texture.
         -> RenderLayer a
 renderColorDepthInspect w h l rx ry rw rh f =
-        RenderLayer [ColorLayer, DepthLayer] w h rx ry rw rh True True l $
+        RenderLayer False [ColorLayer, DepthLayer] w h rx ry rw rh True True l $
                     \[ct, dt] (Just c) (Just d) -> f ct dt c d
+
+-- | Render a 'Layer' with multiple floating point colors
+-- (use 'Fragment2', 'Fragment3', etc.) in some 'Texture's.
+renderBuffers :: Int                           -- ^ Textures width.
+              -> Int                           -- ^ Textures height.
+              -> Int                           -- ^ Number of colors.
+              -> Layer                         -- ^ Layer to draw.
+              -> ([Texture] -> a)              -- ^ Function using the texture.
+              -> RenderLayer a
+renderBuffers w h n l f =
+        RenderLayer True (map BufferLayer [0 .. n - 1]) w h
+                    0 0 0 0 False False l $ \ts _ _ -> f ts
+
+-- TODO: renderBuffersDepth

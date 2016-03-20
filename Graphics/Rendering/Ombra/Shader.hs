@@ -197,7 +197,7 @@ module Graphics.Rendering.Ombra.Shader (
         CPU.snd,
         -- * Variables
         position,
-        fragColor,
+        fragData,
         fragCoord,
         fragFrontFacing
 ) where

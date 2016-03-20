@@ -1,5 +1,4 @@
-{-# LANGUAGE NullaryTypeClasses, TypeFamilies, MultiParamTypeClasses,
-             FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies, MultiParamTypeClasses, FlexibleContexts #-}
 
 module Graphics.Rendering.Ombra.Backend where
 
@@ -132,6 +131,7 @@ class ( Integral GLEnum
         glDisable :: Ctx -> GLEnum -> IO ()
         glDisableVertexAttribArray :: Ctx -> GLUInt -> IO ()
         glDrawArrays :: Ctx -> GLEnum -> GLInt -> GLSize -> IO ()
+        glDrawBuffers :: Ctx -> Int32Array -> IO ()
         glDrawElements :: Ctx -> GLEnum -> GLSize -> GLEnum -> GLPtr-> IO ()
         glEnable :: Ctx -> GLEnum -> IO ()
         glEnableVertexAttribArray :: Ctx -> GLUInt -> IO ()
@@ -493,7 +493,40 @@ class ( Integral GLEnum
         gl_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME :: GLEnum
         gl_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL :: GLEnum
         gl_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE :: GLEnum
+        gl_MAX_DRAW_BUFFERS :: GLEnum
+        gl_DRAW_BUFFER0 :: GLEnum
+        gl_DRAW_BUFFER1 :: GLEnum
+        gl_DRAW_BUFFER2 :: GLEnum
+        gl_DRAW_BUFFER3 :: GLEnum
+        gl_DRAW_BUFFER4 :: GLEnum
+        gl_DRAW_BUFFER5 :: GLEnum
+        gl_DRAW_BUFFER6 :: GLEnum
+        gl_DRAW_BUFFER7 :: GLEnum
+        gl_DRAW_BUFFER8 :: GLEnum
+        gl_DRAW_BUFFER9 :: GLEnum
+        gl_DRAW_BUFFER10 :: GLEnum
+        gl_DRAW_BUFFER11 :: GLEnum
+        gl_DRAW_BUFFER12 :: GLEnum
+        gl_DRAW_BUFFER13 :: GLEnum
+        gl_DRAW_BUFFER14 :: GLEnum
+        gl_DRAW_BUFFER15 :: GLEnum
+        gl_MAX_COLOR_ATTACHMENTS :: GLEnum
         gl_COLOR_ATTACHMENT0 :: GLEnum
+        gl_COLOR_ATTACHMENT1 :: GLEnum
+        gl_COLOR_ATTACHMENT2 :: GLEnum
+        gl_COLOR_ATTACHMENT3 :: GLEnum
+        gl_COLOR_ATTACHMENT4 :: GLEnum
+        gl_COLOR_ATTACHMENT5 :: GLEnum
+        gl_COLOR_ATTACHMENT6 :: GLEnum
+        gl_COLOR_ATTACHMENT7 :: GLEnum
+        gl_COLOR_ATTACHMENT8 :: GLEnum
+        gl_COLOR_ATTACHMENT9 :: GLEnum
+        gl_COLOR_ATTACHMENT10 :: GLEnum
+        gl_COLOR_ATTACHMENT11 :: GLEnum
+        gl_COLOR_ATTACHMENT12 :: GLEnum
+        gl_COLOR_ATTACHMENT13 :: GLEnum
+        gl_COLOR_ATTACHMENT14 :: GLEnum
+        gl_COLOR_ATTACHMENT15 :: GLEnum
         gl_DEPTH_ATTACHMENT :: GLEnum
         gl_STENCIL_ATTACHMENT :: GLEnum
         gl_NONE :: GLEnum

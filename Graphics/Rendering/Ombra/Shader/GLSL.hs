@@ -38,10 +38,25 @@ vertexToGLSL :: ValidVertex g i o => VertexShader g i o -> String
 vertexToGLSL = fst . vertexToGLSLAttr
 
 fragmentToGLSL :: Valid g i '[] => FragmentShader g i -> String
-fragmentToGLSL v = shaderToGLSL "#version 100\nprecision mediump float;"
-                                "varying" ""
-                                (vars True v)
-                                [("hvFragmentShaderOutput0", "gl_FragColor")]
+fragmentToGLSL v =
+        shaderToGLSL "#version 100\nprecision mediump float;"
+                     "varying" "" (vars True v)
+                      [ ("hvFragmentShaderOutput0", "gl_FragData[0]")
+                      , ("hvFragmentShaderOutput1", "gl_FragData[1]")
+                      , ("hvFragmentShaderOutput2", "gl_FragData[2]")
+                      , ("hvFragmentShaderOutput3", "gl_FragData[3]")
+                      , ("hvFragmentShaderOutput4", "gl_FragData[4]")
+                      , ("hvFragmentShaderOutput5", "gl_FragData[5]")
+                      , ("hvFragmentShaderOutput6", "gl_FragData[6]")
+                      , ("hvFragmentShaderOutput7", "gl_FragData[7]")
+                      , ("hvFragmentShaderOutput8", "gl_FragData[8]")
+                      , ("hvFragmentShaderOutput9", "gl_FragData[9]")
+                      , ("hvFragmentShaderOutput10", "gl_FragData[10]")
+                      , ("hvFragmentShaderOutput11", "gl_FragData[11]")
+                      , ("hvFragmentShaderOutput12", "gl_FragData[12]")
+                      , ("hvFragmentShaderOutput13", "gl_FragData[13]")
+                      , ("hvFragmentShaderOutput14", "gl_FragData[14]")
+                      , ("hvFragmentShaderOutput15", "gl_FragData[15]") ]
 
 shaderToGLSL :: String -> String -> String -> ShaderVars -> [(String, String)] -> String
 shaderToGLSL header ins outs (ShaderVars gs is os) predec = concat

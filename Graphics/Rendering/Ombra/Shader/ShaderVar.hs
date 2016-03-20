@@ -95,27 +95,24 @@ instance GShaderVar a => GShaderVar (M1 C c a) where
                 in (M1 x, i') 
         gvarToList i f (M1 x) = gvarToList i f x
 
-instance ShaderType a => GShaderVar (K1 i a) where
+instance {-# OVERLAPPABLE #-} ShaderType a => GShaderVar (K1 i a) where
         type GBaseTypes (K1 i a) = '[a]
         gvarPreName _ = error "gvarPreName: no info in K1"
         gvarBuild i f _ = (K1 $ f i, i + 1)
         gvarToList i f (K1 x) = ([f i x], i + 1)
 
-type ShaderVar g = (GShaderVar (Rep g), Generic g)
+class ShaderVar g where
+        varPreName :: g -> String
+        varBuild :: (forall x. ShaderType x => Int -> x) -> Proxy g -> g
+        varToList :: (forall x. ShaderType x => Int -> x -> t) -> g -> [t]
 
 type BaseTypes g = GBaseTypes (Rep g)
 
-varPreName :: ShaderVar g => g -> String
-varPreName = gvarPreName . from
-
-varBuild :: ShaderVar g => (forall x. ShaderType x => Int -> x) -> Proxy g -> g
-varBuild f (_ :: Proxy g) = to . fst $ gvarBuild 0 f (Proxy :: Proxy (Rep g))
-
-varToList :: ShaderVar g
-          => (forall x. ShaderType x => Int -> x -> t)
-          -> g
-          -> [t]
-varToList f = fst . gvarToList 0 f . from
+instance (GShaderVar (Rep g), Generic g) => ShaderVar g where
+        varPreName = gvarPreName . from
+        varBuild f (_ :: Proxy g) =
+                to . fst $ gvarBuild 0 f (Proxy :: Proxy (Rep g))
+        varToList f = fst . gvarToList 0 f . from
 
 svFold :: (forall x. ShaderVar x => acc -> x -> acc) -> acc -> SVList xs -> acc
 svFold _ acc N = acc
