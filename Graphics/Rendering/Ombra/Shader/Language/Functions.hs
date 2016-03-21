@@ -86,8 +86,8 @@ instance FloatVec Vec4
 
 -- | Floats or vectors.
 class ShaderType a => GenType a
-instance GenType Float
-instance FloatVec a => GenType a
+instance {-# OVERLAPS #-} GenType Float
+instance {-# OVERLAPPABLE #-} FloatVec a => GenType a
 
 type family GenTypeFloatConstr a b where
         GenTypeFloatConstr a Float = GenType a
@@ -454,109 +454,121 @@ float = fun1 "float"
 class ToVec2 t where
         vec2 :: t -> Vec2
 
-instance ToVec2 Float where
+instance {-# OVERLAPPING #-} ToVec2 Float where
         vec2 = fun1 "vec2"
 
-instance (Components Vec2 <= n, ToCompList t n) => ToVec2 t where
+instance {-# OVERLAPPABLE #-}
+         (Components Vec2 <= n, ToCompList t n) => ToVec2 t where
         vec2 = funCompList "vec2"
 
 class ToVec3 t where
         vec3 :: t -> Vec3
 
-instance ToVec3 Float where
+instance {-# OVERLAPPING #-} ToVec3 Float where
         vec3 = fun1 "vec3"
 
-instance (Components Vec3 <= n, ToCompList t n) => ToVec3 t where
+instance {-# OVERLAPPABLE #-}
+         (Components Vec3 <= n, ToCompList t n) => ToVec3 t where
         vec3 = funCompList "vec3"
 
 class ToVec4 t where
         vec4 :: t -> Vec4
 
-instance ToVec4 Float where
+instance {-# OVERLAPPING #-} ToVec4 Float where
         vec4 = fun1 "vec4"
 
-instance (Components Vec4 <= n, ToCompList t n) => ToVec4 t where
+instance {-# OVERLAPPABLE #-}
+         (Components Vec4 <= n, ToCompList t n) => ToVec4 t where
         vec4 = funCompList "vec4"
 
 class ToIVec2 t where
         ivec2 :: t -> IVec2
 
-instance ToIVec2 Float where
+instance {-# OVERLAPPING #-} ToIVec2 Float where
         ivec2 = fun1 "ivec2"
 
-instance (Components IVec2 <= n, ToCompList t n) => ToIVec2 t where
+instance {-# OVERLAPPABLE #-}
+         (Components IVec2 <= n, ToCompList t n) => ToIVec2 t where
         ivec2 = funCompList "ivec2"
 
 class ToIVec3 t where
         ivec3 :: t -> IVec3
 
-instance ToIVec3 Float where
+instance {-# OVERLAPPING #-} ToIVec3 Float where
         ivec3 = fun1 "ivec3"
 
-instance (Components IVec3 <= n, ToCompList t n) => ToIVec3 t where
+instance {-# OVERLAPPABLE #-}
+         (Components IVec3 <= n, ToCompList t n) => ToIVec3 t where
         ivec3 = funCompList "ivec3"
 
 class ToIVec4 t where
         ivec4 :: t -> IVec4
 
-instance ToIVec4 Float where
+instance {-# OVERLAPPING #-} ToIVec4 Float where
         ivec4 = fun1 "ivec4"
 
-instance (Components IVec4 <= n, ToCompList t n) => ToIVec4 t where
+instance {-# OVERLAPPABLE #-}
+         (Components IVec4 <= n, ToCompList t n) => ToIVec4 t where
         ivec4 = funCompList "ivec4"
 
 class ToBVec2 t where
         bvec2 :: t -> BVec2
 
-instance ToBVec2 Float where
+instance {-# OVERLAPPING #-} ToBVec2 Float where
         bvec2 = fun1 "bvec2"
 
-instance (Components BVec2 <= n, ToCompList t n) => ToBVec2 t where
+instance {-# OVERLAPPABLE #-}
+         (Components BVec2 <= n, ToCompList t n) => ToBVec2 t where
         bvec2 = funCompList "bvec2"
 
 class ToBVec3 t where
         bvec3 :: t -> BVec3
 
-instance ToBVec3 Float where
+instance {-# OVERLAPPING #-} ToBVec3 Float where
         bvec3 = fun1 "bvec3"
 
-instance (Components BVec3 <= n, ToCompList t n) => ToBVec3 t where
+instance {-# OVERLAPPABLE #-}
+         (Components BVec3 <= n, ToCompList t n) => ToBVec3 t where
         bvec3 = funCompList "bvec3"
 
 class ToBVec4 t where
         bvec4 :: t -> BVec4
 
-instance ToBVec4 Float where
+instance {-# OVERLAPPING #-} ToBVec4 Float where
         bvec4 = fun1 "bvec4"
 
-instance (Components BVec4 <= n, ToCompList t n) => ToBVec4 t where
+instance {-# OVERLAPPABLE #-}
+         (Components BVec4 <= n, ToCompList t n) => ToBVec4 t where
         bvec4 = funCompList "bvec4"
 
 class ToMat2 t where
         mat2 :: t -> Mat2
 
-instance ToMat2 Float where
+instance {-# OVERLAPPING #-} ToMat2 Float where
         mat2 = fun1 "mat2"
 
-instance (Components Mat2 <= n, ToCompList t n) => ToMat2 t where
+instance {-# OVERLAPPABLE #-}
+         (Components Mat2 <= n, ToCompList t n) => ToMat2 t where
         mat2 = funCompList "mat2"
 
 class ToMat3 t where
         mat3 :: t -> Mat3
 
-instance ToMat3 Float where
+instance {-# OVERLAPPING #-} ToMat3 Float where
         mat3 = fun1 "mat3"
 
-instance (Components Mat3 <= n, ToCompList t n) => ToMat3 t where
+instance {-# OVERLAPPABLE #-}
+         (Components Mat3 <= n, ToCompList t n) => ToMat3 t where
         mat3 = funCompList "mat3"
 
 class ToMat4 t where
         mat4 :: t -> Mat4
 
-instance ToMat4 Float where
+instance {-# OVERLAPPING #-} ToMat4 Float where
         mat4 = fun1 "mat4"
 
-instance (Components Mat4 <= n, ToCompList t n) => ToMat4 t where
+instance {-# OVERLAPPABLE #-}
+         (Components Mat4 <= n, ToCompList t n) => ToMat4 t where
         mat4 = funCompList "mat4"
 
 -- | Useful type for constructing vectors and matrices from scalars, vectors and
@@ -568,10 +580,11 @@ data CompList (count :: Nat) where
 class ToCompList x (n :: Nat) | x -> n where
         toCompList :: x -> CompList n
 
-instance ToCompList (CompList n) n where
+instance {-# OVERLAPPING #-} ToCompList (CompList n) n where
         toCompList = Prelude.id
 
-instance (1 <= n, ShaderType t, n ~ (Components t)) => ToCompList t n where
+instance {-# OVERLAPPABLE #-}
+         (1 <= n, ShaderType t, n ~ (Components t)) => ToCompList t n where
         toCompList = CL
 
 -- | You can call \*vec\* and mat\* with a single scalar or with a 'CompList'

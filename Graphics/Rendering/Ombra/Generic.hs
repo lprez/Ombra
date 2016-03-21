@@ -59,6 +59,7 @@ module Graphics.Rendering.Ombra.Generic (
         Color(..),
         colorTex,
 
+        GLES,
         module Data.Vect.Float,
         module Graphics.Rendering.Ombra.Color
 ) where
@@ -296,7 +297,7 @@ renderBuffers :: Int                           -- ^ Textures width.
               -> ([Texture] -> a)              -- ^ Function using the texture.
               -> RenderLayer a
 renderBuffers w h n l f =
-        RenderLayer True (map BufferLayer [0 .. n - 1]) w h
-                    0 0 0 0 False False l $ \ts _ _ -> f ts
+        RenderLayer True (DepthLayer : map BufferLayer [0 .. n - 1]) w h
+                    0 0 0 0 False False l $ \(_ : ts) _ _ -> f ts
 
 -- TODO: renderBuffersDepth

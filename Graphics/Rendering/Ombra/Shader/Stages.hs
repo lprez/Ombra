@@ -7,7 +7,7 @@ module Graphics.Rendering.Ombra.Shader.Stages (
         ValidVertex,
         FragmentShader,
         VertexShaderOutput(Vertex),
-        FragmentShaderOutput(Fragment)
+        FragmentShaderOutput(..)
 ) where
 
 import Data.Typeable

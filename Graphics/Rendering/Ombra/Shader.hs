@@ -44,7 +44,7 @@ module Graphics.Rendering.Ombra.Shader (
         VertexShader,
         FragmentShader,
         VertexShaderOutput(Vertex),
-        FragmentShaderOutput(Fragment),
+        FragmentShaderOutput(..),
         Uniform,
         Attribute,
         Generic,

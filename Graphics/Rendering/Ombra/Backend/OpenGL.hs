@@ -53,9 +53,9 @@ mkArrayLen len = do arr <- mallocForeignPtrArray (fromIntegral len)
                            :: IO (ForeignPtr Word8)
                     return (fromIntegral len, castForeignPtr arr)
 
-arrayToList :: Storable b => (GLsizei, ForeignPtr a) -> IO [b]
-arrayToList (len, fptr) = withForeignPtr (castForeignPtr fptr) $ \ptr ->
-                                peekArray (fromIntegral len) ptr
+arrayToList :: Storable a => (GLsizei, ForeignPtr ()) -> IO [a]
+arrayToList (sz, fptr) = withForeignPtr (castForeignPtr fptr) $ \ptr ->
+                                peekArray (fromIntegral sz) ptr
 
 mkArray :: Storable a => [a] -> IO (GLsizei, ForeignPtr b)
 mkArray xs = do arr <- mallocForeignPtrArray len
@@ -181,7 +181,7 @@ instance GLES where
         glDrawArrays = const GL.glDrawArrays
         glDrawElements = const GL.glDrawElements
         glDrawBuffers _ (l, fp) = withForeignPtr fp $
-                \p -> GL.glDrawBuffers l $ castPtr p
+                \p -> GL.glDrawBuffers (l `quot` 4) $ castPtr p
         glEnable = const GL.glEnable
         glEnableVertexAttribArray = const GL.glEnableVertexAttribArray
         glFinish = const GL.glFinish
