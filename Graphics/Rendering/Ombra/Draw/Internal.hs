@@ -317,7 +317,7 @@ layerToTexture drawBufs stypes wp hp layer einspc einspd = do
                                             , gl_UNSIGNED_SHORT
                                             , gl_DEPTH_ATTACHMENT )
                               BufferLayer n -> ( fromIntegral gl_RGBA
-                                               , gl_RGB
+                                               , gl_RGBA
                                                , gl_FLOAT
                                                , gl_COLOR_ATTACHMENT0 + 
                                                  fromIntegral n )
@@ -356,7 +356,8 @@ renderToTexture drawBufs infos w h act = do
                                                 gl_TEXTURE_2D t 0
                            return (t, fromIntegral attachment)
 
-        when drawBufs $ liftIO (encodeInts as) >>= gl . drawBuffers
+        let buffers = filter (/= fromIntegral gl_DEPTH_ATTACHMENT) as
+        when drawBufs $ liftIO (encodeInts buffers) >>= gl . drawBuffers
 
         (sw, sh) <- viewportSize <$> Draw get
         resizeViewport (fromIntegral w) (fromIntegral h)
