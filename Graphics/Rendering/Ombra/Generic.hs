@@ -21,6 +21,7 @@ module Graphics.Rendering.Ombra.Generic (
         -- * Layers
         Layer,
         layer,
+        layerNoDepth,
         combineLayers,
         -- ** Sublayers
         subLayer,
@@ -35,6 +36,11 @@ module Graphics.Rendering.Ombra.Generic (
         renderDepthInspect,
         renderColorDepthInspect,
         renderBuffers,
+        -- ** Blending
+        layerBlend,
+        layerNoBlend,
+        Blend.transparency,
+        Blend.additive,
 
         -- * Shaders
         Program,
@@ -70,6 +76,7 @@ import Data.Type.Equality
 import Data.Vect.Float
 import Data.Word (Word8)
 import Graphics.Rendering.Ombra.Backend (GLES)
+import qualified Graphics.Rendering.Ombra.Blend as Blend
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Draw
@@ -177,7 +184,26 @@ unsafeJoin = Append
 -- | Associate a group with a program.
 layer :: (Subset progAttr grpAttr, Subset progUni grpUni)
       => Program progUni progAttr -> Group grpUni grpAttr -> Layer
-layer = Layer
+layer = Layer (Just Blend.transparency) True
+
+-- | Associate a group with a program, disabling depth test.
+layerNoDepth :: (Subset progAttr grpAttr, Subset progUni grpUni)
+             => Program progUni progAttr -> Group grpUni grpAttr -> Layer
+layerNoDepth = Layer (Just Blend.transparency) False
+
+-- | Associate a group with a program, using a specific blend mode.
+layerBlend :: (Subset progAttr grpAttr, Subset progUni grpUni)
+           => Blend.Mode        -- ^ Blend mode
+           -> Bool              -- ^ Depth test
+           -> Program progUni progAttr -> Group grpUni grpAttr -> Layer
+layerBlend m = Layer (Just m)
+
+-- | Associate a group with a program, disabling blending (default =
+-- 'transparency').
+layerNoBlend :: (Subset progAttr grpAttr, Subset progUni grpUni)
+             => Bool            -- ^ Depth test
+             -> Program progUni progAttr -> Group grpUni grpAttr -> Layer
+layerNoBlend = Layer Nothing
 
 -- | Combine some layers.
 combineLayers :: [Layer] -> Layer

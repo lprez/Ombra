@@ -26,6 +26,7 @@ import Data.Vect.Float hiding (Vector)
 import Data.Vector (Vector)
 import Data.Typeable
 import Data.Word (Word8)
+import Graphics.Rendering.Ombra.Blend (Mode)
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Internal.GL hiding (Program, Texture, UniformLocation)
@@ -48,7 +49,9 @@ data DrawState = DrawState {
         gpuVAOs :: ResMap (Geometry '[]) GPUVAOGeometry,
         textureImages :: ResMap TextureImage LoadedTexture,
         activeTextures :: Vector (Maybe Texture),
-        viewportSize :: (Int, Int)
+        viewportSize :: (Int, Int),
+        blendMode :: Maybe Mode,
+        depthTest :: Bool
 }
 
 -- | A state monad on top of 'GL'.
@@ -91,16 +94,20 @@ infix 3 :=
 
 -- | A 'Group' associated with a program.
 data Layer = forall oi pi og pg. (Subset pi oi, Subset pg og)
-                              => Layer (Program pg pi) (Group og oi)
+                              => Layer (Maybe Mode) Bool
+                                       (Program pg pi) (Group og oi)
            | SubLayer (RenderLayer [Layer])
            | MultiLayer [Layer]
 
 -- | Represents a 'Layer' drawn on a 'Texture'.
-data RenderLayer a = RenderLayer Bool [LayerType] Int Int
-                                 Int Int Int Int
-                                 Bool Bool Layer
+data RenderLayer a = RenderLayer Bool                   -- Use drawBuffers
+                                 [LayerType]            -- Attachments
+                                 Int Int                -- Width, height
+                                 Int Int Int Int        -- Inspect rectangle
+                                 Bool Bool              -- Inspect color, depth
+                                 Layer                  -- Layer to draw
                                  ([Texture] -> Maybe [Color] ->
-                                  Maybe [Word8] -> a)
+                                  Maybe [Word8] -> a)   -- Accepting function
 
 data LayerType = ColorLayer | DepthLayer | BufferLayer Int deriving Eq
 

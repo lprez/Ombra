@@ -27,6 +27,7 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         drawGet
 ) where
 
+import qualified Graphics.Rendering.Ombra.Blend as Blend
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Shapes
@@ -74,7 +75,9 @@ drawState w h = do programs <- newGLResMap
                                     , textureImages = textureImages
                                     , activeTextures =
                                             V.replicate maxTexs Nothing
-                                    , viewportSize = (w, h) }
+                                    , viewportSize = (w, h)
+                                    , blendMode = Nothing
+                                    , depthTest = False }
 
         where newGLResMap :: (Hashable i, Resource i r GL) => IO (ResMap i r)
               newGLResMap = newResMap
@@ -85,10 +88,7 @@ drawState w h = do programs <- newGLResMap
 
 drawInit :: GLES => Draw ()
 drawInit = viewportSize <$> Draw get >>=
-           \(w, h) -> gl $ do enable gl_DEPTH_TEST
-                              enable gl_BLEND
-                              blendFunc gl_SRC_ALPHA gl_ONE_MINUS_SRC_ALPHA
-                              clearColor 0.0 0.0 0.0 1.0
+           \(w, h) -> gl $ do clearColor 0.0 0.0 0.0 1.0
                               depthFunc gl_LESS
                               viewport 0 0 (fromIntegral w) (fromIntegral h)
 
@@ -150,7 +150,8 @@ removeProgram = removeDrawResource gl programs . castProgram
 
 -- | Draw a 'Layer'.
 drawLayer :: GLES => Layer -> Draw ()
-drawLayer (Layer prg grp) = setProgram prg >> drawGroup grp
+drawLayer (Layer bm d prg grp) = blend bm >> setDepthTest d >>
+                                 setProgram prg >> drawGroup grp
 drawLayer (SubLayer rl) =
         do (layers, textures) <- renderLayer rl
            mapM_ drawLayer layers
@@ -242,7 +243,7 @@ freeActiveTextures :: GLES => Draw ()
 freeActiveTextures = Draw . modify $ \ds ->
         ds { activeTextures = V.replicate maxTexs Nothing }
 
--- pretty expensive
+-- XXX: inefficient
 makeActive :: GLES => Texture -> Draw ActiveTexture
 makeActive t = do ats <- activeTextures <$> Draw get
                   let at@(ActiveTexture atn) =
@@ -370,6 +371,43 @@ renderToTexture drawBufs infos w h act = do
         gl $ deleteFramebuffer fb
 
         return (ts, ret)
+
+blend :: GLES => Maybe Blend.Mode -> Draw ()
+blend Nothing = do m <- blendMode <$> Draw get
+                   case m of
+                        Just _ -> gl $ disable gl_BLEND
+                        Nothing -> return ()
+                   Draw . modify $ \s -> s { blendMode = Nothing }
+blend (Just newMode) =
+        do mOldMode <- blendMode <$> Draw get
+           case mOldMode of
+                Nothing -> do gl $ enable gl_BLEND
+                              changeColor >> changeEquation >> changeFunction
+                Just oldMode ->
+                     do when (Blend.constantColor oldMode /= constantColor)
+                                changeColor
+                        when (Blend.equation oldMode /= equation)
+                                changeEquation
+                        when (Blend.function oldMode /= function)
+                                changeFunction
+           Draw . modify $ \s -> s { blendMode = Just newMode }
+        where constantColor = Blend.constantColor newMode
+              equation@(rgbEq, alphaEq) = Blend.equation newMode
+              function@(rgbs, rgbd, alphas, alphad) = Blend.function newMode
+              changeColor = case constantColor of
+                                 Just (Vec4 r g b a) -> gl $ blendColor r g b a
+                                 Nothing -> return ()
+              changeEquation = gl $ blendEquationSeparate rgbEq alphaEq
+              changeFunction = gl $ blendFuncSeparate rgbs rgbd
+                                                      alphas alphad
+                   
+setDepthTest :: GLES => Bool -> Draw ()
+setDepthTest new = do old <- depthTest <$> Draw get
+                      case (old, new) of
+                              (False, True) -> gl $ enable gl_DEPTH_TEST
+                              (True, False) -> gl $ disable gl_DEPTH_TEST
+                              _ -> return ()
+                      Draw . modify $ \s -> s { depthTest = new }
 
 getDrawResource :: (Resource i r m, Hashable i)
                 => (m (Either String r) -> Draw (Either String r))
