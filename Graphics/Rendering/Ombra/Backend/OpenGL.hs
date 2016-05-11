@@ -9,6 +9,7 @@ import Foreign.C.String
 import Graphics.Rendering.Ombra.Backend
 import qualified Graphics.GL.Standard20 as GL
 import qualified Graphics.GL.Ext.ARB.FramebufferObject as GL
+import qualified Graphics.GL.Ext.ARB.TextureFloat as GL
 import qualified Graphics.GL.Ext.ARB.VertexArrayObject as GL
 import qualified Graphics.GL.Ext.EXT.BlendColor as GL
 import Graphics.GL.Types as GL
@@ -390,6 +391,7 @@ instance GLES where
         gl_ALPHA = GL.GL_ALPHA
         gl_RGB = GL.GL_RGB
         gl_RGBA = GL.GL_RGBA
+        gl_RGBA32F = GL.GL_RGBA32F_ARB
         gl_LUMINANCE = error "GL_LUMINANCE: not present in OpenGL 3.2"
         gl_LUMINANCE_ALPHA = error "GL_LUMINANCE_ALPHA: not present in OpenGL 3.2"
         gl_UNSIGNED_SHORT_4_4_4_4 = GL.GL_UNSIGNED_SHORT_4_4_4_4

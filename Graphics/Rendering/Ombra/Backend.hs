@@ -346,6 +346,7 @@ class ( Integral GLEnum
         gl_ALPHA :: GLEnum
         gl_RGB :: GLEnum
         gl_RGBA :: GLEnum
+        gl_RGBA32F :: GLEnum
         gl_LUMINANCE :: GLEnum
         gl_LUMINANCE_ALPHA :: GLEnum
         gl_UNSIGNED_SHORT_4_4_4_4 :: GLEnum

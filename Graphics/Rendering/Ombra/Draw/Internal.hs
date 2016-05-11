@@ -316,7 +316,7 @@ layerToTexture drawBufs stypes wp hp layer einspc einspd = do
                                             , gl_DEPTH_COMPONENT
                                             , gl_UNSIGNED_SHORT
                                             , gl_DEPTH_ATTACHMENT )
-                              BufferLayer n -> ( fromIntegral gl_RGBA
+                              BufferLayer n -> ( fromIntegral gl_RGBA32F
                                                , gl_RGBA
                                                , gl_FLOAT
                                                , gl_COLOR_ATTACHMENT0 + 
