@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs, TypeOperators, KindSignatures, DataKinds, FlexibleContexts,
-             MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables #-}
+             MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables,
+             PolyKinds #-}
 
 module Graphics.Rendering.Ombra.Geometry (
         AttrList(..),

@@ -76,7 +76,9 @@ instance Mul Float Float Mat4 Vec4 Vec4
 instance Mul Float Float Vec2 Mat2 Vec2
 instance Mul Float Float Vec3 Mat3 Vec3
 instance Mul Float Float Vec4 Mat4 Vec4
-instance {-# OVERLAPPABLE #-} Arithmetic aBase bBase a b result =>
+instance {-# OVERLAPPABLE #-} 
+         ( Arithmetic aBase bBase a b result
+         , Base a aBase, Base b bBase) =>
          Mul aBase bBase a b result
 
 class (ShaderType a, Base a Float) => FloatVec a
@@ -87,7 +89,7 @@ instance FloatVec Vec4
 -- | Floats or vectors.
 class ShaderType a => GenType a
 instance {-# OVERLAPS #-} GenType Float
-instance {-# OVERLAPPABLE #-} FloatVec a => GenType a
+instance {-# OVERLAPPABLE #-} (FloatVec a, ShaderType a) => GenType a
 
 type family GenTypeFloatConstr a b where
         GenTypeFloatConstr a Float = GenType a

@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses, DataKinds, TypeOperators,
-             FunctionalDependencies, FlexibleInstances, RankNTypes,
+             FunctionalDependencies, FlexibleInstances, RankNTypes, PolyKinds,
              FlexibleContexts, UndecidableInstances, ScopedTypeVariables #-}
 
 module Graphics.Rendering.Ombra.Shader.CPU (
@@ -89,8 +89,8 @@ instance ( GUniformMirror (Rep g) (Rep (CPUMirror g))
          => Uniform M g where
         withUniforms _ (g :: g) c f =
                 fst $ gWithUniformMirror
-                        (Proxy :: Proxy ( (TData (Rep (CPUMirror g)))
-                                        , (TCons (Rep (CPUMirror g)))) )
+                        (Proxy :: Proxy (MTuple (TData (Rep (CPUMirror g)))
+                                                (TCons (Rep (CPUMirror g)))) )
                         0 (from g) (from c) f
 
 {-
@@ -106,10 +106,10 @@ instance ( GAttributeMirror (Rep g) (Rep (CPUMirror g))
                         0 (from g) (from c) f
 -}
 
-type family TData (g :: * -> *) where
+type family TData (g :: * -> *) :: Meta where
         TData (M1 D d a) = d
 
-type family TCons (g :: * -> *) where
+type family TCons (g :: * -> *) :: Meta where
         TCons (M1 D d a) = TCons a
         TCons (M1 C c a) = c
 
@@ -128,9 +128,11 @@ type family GCPUMirror (g :: * -> *) d c :: * -> * where
         GCPUMirror (M1 G.S s a) d c = M1 G.S s (GCPUMirror a d c)
         GCPUMirror (K1 i a) d c = K1 i (CPUBase a)
 
-class GUniformMirror (g :: * -> *) (m :: * -> *) d c where
+data MTuple (d :: k) (c :: k)
+
+class GUniformMirror (g :: * -> *) (m :: * -> *) (d :: Meta) (c :: Meta) where
         gWithUniformMirror :: Applicative f
-                           => proxy (d, c)
+                           => proxy (MTuple d c)
                            -> Int
                            -> g a
                            -> m b
@@ -160,7 +162,7 @@ instance (BaseUniform a, m ~ GCPUMirror (K1 i a) d c)
 {-
 class GAttributeMirror (g :: * -> *) (m :: * -> *) d c where
         gWithAttributeMirror :: Applicative f
-                             => proxy (d, c)
+                             => proxy (MTuple d c)
                              -> Int
                              -> g a
                              -> m b
