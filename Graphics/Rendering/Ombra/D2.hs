@@ -101,18 +101,18 @@ sprite :: GLES => Texture -> Object2D
 sprite t = scaleTex t $ rect t
 
 -- | Create a group of objects with a view matrix.
-view :: (IsObject2D gs is, GLES)
+view :: (Set gs, Set is, GLES)
      => Mat3 -> [Object gs is] -> Group (View2 ': gs) is
 view m = viewVP $ const m
 
 -- | Create a group of objects with a view matrix and 'screenMat3'.
-viewScreen :: (IsObject2D gs is, GLES)
+viewScreen :: (Set gs, Set is, GLES)
            => Mat3 -> [Object gs is] -> Group (View2 ': gs) is
 viewScreen m = viewVP $ \s -> screenMat3 s .*. m
 
 -- | Create a group of objects with a view matrix, depending on the size of the
 -- framebuffer.
-viewVP :: (IsObject2D gs is, GLES)
+viewVP :: (Set gs, Set is, GLES)
        => (Vec2 -> Mat3) -> [Object gs is] -> Group (View2 ': gs) is
 viewVP mf = globalGroup (globalFramebufferSize View2 mf) . group
 

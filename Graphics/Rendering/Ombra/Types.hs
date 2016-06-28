@@ -26,7 +26,7 @@ import Data.Vect.Float hiding (Vector)
 import Data.Vector (Vector)
 import Data.Typeable
 import Data.Word (Word8)
-import Graphics.Rendering.Ombra.Blend (Mode)
+import qualified Graphics.Rendering.Ombra.Blend as Blend
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Internal.GL hiding (Program, Texture, UniformLocation)
@@ -50,7 +50,7 @@ data DrawState = DrawState {
         textureImages :: ResMap TextureImage LoadedTexture,
         activeTextures :: Vector (Maybe Texture),
         viewportSize :: (Int, Int),
-        blendMode :: Maybe Mode,
+        blendMode :: Maybe Blend.Mode,
         depthTest :: Bool
 }
 
@@ -76,6 +76,8 @@ data Group (gs :: [*]) (is :: [*]) where
         Object :: Object gs is -> Group gs is
         Global :: Global g -> Group gs is -> Group (g ': gs) is
         Append :: Group gs is -> Group gs' is' -> Group gs'' is''
+        Blend :: Maybe Blend.Mode -> Group gs is -> Group gs is
+        DepthTest :: Bool -> Group gs is -> Group gs is
 
 -- | A geometry associated with some uniforms.
 data Object (gs :: [*]) (is :: [*]) where
@@ -94,8 +96,7 @@ infix 3 :=
 
 -- | A 'Group' associated with a program.
 data Layer = forall oi pi og pg. (Subset pi oi, Subset pg og)
-                              => Layer (Maybe Mode) Bool
-                                       (Program pg pi) (Group og oi)
+                              => Layer (Program pg pi) (Group og oi)
            | SubLayer (RenderLayer [Layer])
            | MultiLayer [Layer]
 

@@ -94,12 +94,12 @@ mesh :: (IsObject3D Uniforms3D is, GLES)
 mesh t g = Transform3 -= idmtx :~> globalTexture Texture2 t :~> geom g
 
 -- | Create a group of objects with a view matrix.
-view :: (IsObject3D gs is, GLES)
+view :: (GLES, Set gs, Set is)
      => Mat4 -> [Object gs is] -> Group (View3 ': gs) is
 view m = viewVP $ const m
 
 -- | Create a group of objects with a view matrix and perspective projection.
-viewPersp :: (IsObject3D gs is, GLES)
+viewPersp :: (GLES, Set gs, Set is)
           => Float      -- ^ Near
           -> Float      -- ^ Far
           -> Float      -- ^ FOV
@@ -108,7 +108,7 @@ viewPersp :: (IsObject3D gs is, GLES)
 viewPersp n f fov m = viewVP $ \s -> m .*. perspectiveMat4Size n f fov s
 
 -- | Create a group of objects with a view matrix and orthographic projection.
-viewOrtho :: (IsObject3D gs is, GLES)
+viewOrtho :: (GLES, Set gs, Set is)
           => Float      -- ^ Near
           -> Float      -- ^ Far
           -> Float      -- ^ Left
@@ -121,7 +121,7 @@ viewOrtho n f l r b t m = view $ m .*. orthoMat4 n f l r b t
 
 -- | Create a group of objects with a view matrix, depending on the size of the
 -- framebuffer.
-viewVP :: (IsObject3D gs is, GLES)
+viewVP :: (GLES, Set gs, Set is)
        => (Vec2 -> Mat4) -> [Object gs is] -> Group (View3 ': gs) is
 viewVP mf = globalGroup (globalFramebufferSize View3 mf) . group
 

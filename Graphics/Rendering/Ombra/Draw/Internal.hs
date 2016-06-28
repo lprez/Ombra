@@ -77,7 +77,7 @@ drawState w h = do programs <- newGLResMap
                                             V.replicate maxTexs Nothing
                                     , viewportSize = (w, h)
                                     , blendMode = Nothing
-                                    , depthTest = False }
+                                    , depthTest = True }
 
         where newGLResMap :: (Hashable i, Resource i r GL) => IO (ResMap i r)
               newGLResMap = newResMap
@@ -89,6 +89,7 @@ drawState w h = do programs <- newGLResMap
 drawInit :: GLES => Draw ()
 drawInit = viewportSize <$> Draw get >>=
            \(w, h) -> gl $ do clearColor 0.0 0.0 0.0 1.0
+                              enable gl_DEPTH_TEST
                               depthFunc gl_LESS
                               viewport 0 0 (fromIntegral w) (fromIntegral h)
 
@@ -150,8 +151,7 @@ removeProgram = removeDrawResource gl programs . castProgram
 
 -- | Draw a 'Layer'.
 drawLayer :: GLES => Layer -> Draw ()
-drawLayer (Layer bm d prg grp) = blend bm >> setDepthTest d >>
-                                 setProgram prg >> drawGroup grp
+drawLayer (Layer prg grp) = setProgram prg >> drawGroup grp
 drawLayer (SubLayer rl) =
         do (layers, textures) <- renderLayer rl
            mapM_ drawLayer layers
@@ -165,6 +165,12 @@ drawGroup (Object o) = drawObject o
 drawGroup (Global (g := c) o) = c >>= uniform single (g undefined)
                                   >>  drawGroup o
 drawGroup (Append g g') = drawGroup g >> drawGroup g'
+drawGroup (Blend m g) = blendMode <$> Draw get >>=
+                        \om -> setBlendMode m >> drawGroup g >> setBlendMode om
+drawGroup (DepthTest d g) = do od <- depthTest <$> Draw get
+                               setDepthTest d
+                               drawGroup g
+                               setDepthTest od
 
 -- | Draw an 'Object'.
 drawObject :: GLES => Object gs is -> Draw ()
@@ -372,13 +378,13 @@ renderToTexture drawBufs infos w h act = do
 
         return (ts, ret)
 
-blend :: GLES => Maybe Blend.Mode -> Draw ()
-blend Nothing = do m <- blendMode <$> Draw get
-                   case m of
-                        Just _ -> gl $ disable gl_BLEND
-                        Nothing -> return ()
-                   Draw . modify $ \s -> s { blendMode = Nothing }
-blend (Just newMode) =
+setBlendMode :: GLES => Maybe Blend.Mode -> Draw ()
+setBlendMode Nothing = do m <- blendMode <$> Draw get
+                          case m of
+                               Just _ -> gl $ disable gl_BLEND
+                               Nothing -> return ()
+                          Draw . modify $ \s -> s { blendMode = Nothing }
+setBlendMode (Just newMode) =
         do mOldMode <- blendMode <$> Draw get
            case mOldMode of
                 Nothing -> do gl $ enable gl_BLEND

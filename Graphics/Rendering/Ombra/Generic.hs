@@ -17,11 +17,17 @@ module Graphics.Rendering.Ombra.Generic (
         unsafeJoin,
         emptyGroup,
         globalGroup,
+        depthTest,
+        -- ** Blending
+        blend,
+        noBlend,
+        Blend.transparency,
+        Blend.additive,
+        -- ** Stencil test
 
         -- * Layers
         Layer,
         layer,
-        layerNoDepth,
         combineLayers,
         -- ** Sublayers
         subLayer,
@@ -36,16 +42,11 @@ module Graphics.Rendering.Ombra.Generic (
         renderDepthInspect,
         renderColorDepthInspect,
         renderBuffers,
-        -- ** Blending
-        layerBlend,
-        layerNoBlend,
-        Blend.transparency,
-        Blend.additive,
 
         -- * Shaders
         Program,
         program,
-        Global((:=)),
+        Global,
         (-=),
         globalTexture,
         globalTexSize,
@@ -80,7 +81,7 @@ import qualified Graphics.Rendering.Ombra.Blend as Blend
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Types hiding (program)
+import Graphics.Rendering.Ombra.Types hiding (program, depthTest)
 import Graphics.Rendering.Ombra.Internal.GL (GLES, ActiveTexture)
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU
@@ -96,6 +97,19 @@ emptyGroup = Empty
 -- | Set a global uniform for a 'Group'.
 globalGroup :: Global g -> Group gs is -> Group (g ': gs) is
 globalGroup = Global
+
+-- | Set the blending mode for a 'Group' of objects.
+blend :: Blend.Mode -> Group gs is -> Group gs is
+blend m = Blend $ Just m
+
+-- | Disable blending for a 'Group'.
+noBlend :: Group gs is -> Group gs is
+noBlend = Blend Nothing
+
+-- | Enable/disable the depth test for a 'Group'.
+depthTest :: Bool -> Group gs is -> Group gs is
+depthTest = DepthTest
+
 
 -- | An empty object.
 nothing :: Object '[] '[]
@@ -148,6 +162,7 @@ g -= c = g := return c
 
 infixr 4 -=
 
+-- TODO: polymorphic -= instead of globalTexture
 -- | Create a 'Global' of CPU type 'ActiveTexture' using a 'Texture'.
 globalTexture :: (Uniform 'S g, CPU 'S g ~ ActiveTexture, ShaderVar g, GLES)
               => (a -> g) -> Texture -> Global g
@@ -184,26 +199,7 @@ unsafeJoin = Append
 -- | Associate a group with a program.
 layer :: (Subset progAttr grpAttr, Subset progUni grpUni)
       => Program progUni progAttr -> Group grpUni grpAttr -> Layer
-layer = Layer (Just Blend.transparency) True
-
--- | Associate a group with a program, disabling depth test.
-layerNoDepth :: (Subset progAttr grpAttr, Subset progUni grpUni)
-             => Program progUni progAttr -> Group grpUni grpAttr -> Layer
-layerNoDepth = Layer (Just Blend.transparency) False
-
--- | Associate a group with a program, using a specific blend mode.
-layerBlend :: (Subset progAttr grpAttr, Subset progUni grpUni)
-           => Blend.Mode        -- ^ Blend mode
-           -> Bool              -- ^ Depth test
-           -> Program progUni progAttr -> Group grpUni grpAttr -> Layer
-layerBlend m = Layer (Just m)
-
--- | Associate a group with a program, disabling blending (default =
--- 'transparency').
-layerNoBlend :: (Subset progAttr grpAttr, Subset progUni grpUni)
-             => Bool            -- ^ Depth test
-             -> Program progUni progAttr -> Group grpUni grpAttr -> Layer
-layerNoBlend = Layer Nothing
+layer = Layer
 
 -- | Combine some layers.
 combineLayers :: [Layer] -> Layer
