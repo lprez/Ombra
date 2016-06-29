@@ -84,9 +84,11 @@ instance GLES where
         type RenderBuffer = GLuint
         type VertexArrayObject = GLuint
         -- type ShaderPrecisionFormat = GLint
-        type Array = (GLsizei, ForeignPtr ())
+        type AnyArray = (GLsizei, ForeignPtr ())
         type Float32Array = (GLsizei, ForeignPtr GLfloat)
         type Int32Array = (GLsizei, ForeignPtr GLint)
+        type UInt16Array = (GLsizei, ForeignPtr GLushort)
+        type UInt8Array = (GLsizei, ForeignPtr GLubyte)
 
         true = 1
         false = 0
@@ -95,7 +97,7 @@ instance GLES where
         noBuffer = 0
         noTexture = 0
         noVAO = 0
-        noArray = fmap ((,) 0) $ newForeignPtr_ nullPtr
+        noUInt8Array = fmap ((,) 0) $ newForeignPtr_ nullPtr
 
         encodeMat2 (Mat2 (Vec2 a1 a2) (Vec2 b1 b2)) = mkArray [ a1, a2, b1, b2 ]
 
@@ -126,7 +128,9 @@ instance GLES where
         newByteArray = mkArrayLen
         fromFloat32Array (size, fptr) = (size, castForeignPtr fptr)
         fromInt32Array (size, fptr) = (size, castForeignPtr fptr)
-        decodeBytes = arrayToList
+        fromUInt16Array (size, fptr) = (size, castForeignPtr fptr)
+        fromUInt8Array (size, fptr) = (size, castForeignPtr fptr)
+        decodeBytes (s, f) = arrayToList (s, castForeignPtr f)
 
         glActiveTexture = const GL.glActiveTexture
         glAttachShader = const GL.glAttachShader
@@ -142,9 +146,9 @@ instance GLES where
         glBlendFunc = const GL.glBlendFunc
         glBlendFuncSeparate = const GL.glBlendFuncSeparate
         glBufferData _ a (l, fp) b = withForeignPtr fp $ \p ->
-                GL.glBufferData a (fromIntegral l) p b
+                GL.glBufferData a (fromIntegral l) (castPtr p) b
         glBufferSubData _ a b (l, fp) = withForeignPtr fp $ \p ->
-                GL.glBufferSubData a b (fromIntegral l) p
+                GL.glBufferSubData a b (fromIntegral l) (castPtr p)
         glCheckFramebufferStatus = const GL.glCheckFramebufferStatus
         glClear = const GL.glClear
         glClearColor = const GL.glClearColor
@@ -153,9 +157,9 @@ instance GLES where
         glColorMask = const GL.glColorMask
         glCompileShader = const GL.glCompileShader
         glCompressedTexImage2D _ a b c d e f (l, fp) = withForeignPtr fp $
-                \p -> GL.glCompressedTexImage2D a b c d e f l p
+                \p -> GL.glCompressedTexImage2D a b c d e f l (castPtr p)
         glCompressedTexSubImage2D _ a b c d e f g (l, fp) = withForeignPtr fp $
-                \p -> GL.glCompressedTexSubImage2D a b c d e f g l p
+                \p -> GL.glCompressedTexSubImage2D a b c d e f g l (castPtr p)
         glCopyTexImage2D = const GL.glCopyTexImage2D
         glCopyTexSubImage2D = const GL.glCopyTexSubImage2D
         glCreateBuffer = genToCreate GL.glGenBuffers
@@ -211,7 +215,7 @@ instance GLES where
         glPixelStorei = const GL.glPixelStorei
         glPolygonOffset = const GL.glPolygonOffset
         glReadPixels _ a b c d e f (_, fp)  = withForeignPtr fp $
-                GL.glReadPixels a b c d e f
+                GL.glReadPixels a b c d e f . castPtr
         glRenderbufferStorage = const GL.glRenderbufferStorage
         glSampleCoverage = const GL.glSampleCoverage
         glScissor = const GL.glScissor
@@ -227,11 +231,11 @@ instance GLES where
         glStencilOp = const GL.glStencilOp
         glStencilOpSeparate = const GL.glStencilOpSeparate
         glTexImage2D _ a b c d e f g h (_, fp) = withForeignPtr fp $
-                GL.glTexImage2D a b c d e f g h
+                GL.glTexImage2D a b c d e f g h . castPtr
         glTexParameterf = const GL.glTexParameterf
         glTexParameteri = const GL.glTexParameteri
         glTexSubImage2D _ a b c d e f g h (_, fp) = withForeignPtr fp $
-                GL.glTexSubImage2D a b c d e f g h
+                GL.glTexSubImage2D a b c d e f g h . castPtr
         glUniform1f = const GL.glUniform1f
         glUniform1fv = uniform GL.glUniform1fv
         glUniform1i = const GL.glUniform1i

@@ -170,7 +170,8 @@ loadGeometry :: GLES => Geometry i -> GL GPUBufferGeometry
 loadGeometry (Geometry al es h) =
         GPUBufferGeometry <$> loadAttrList al
                           <*> (liftIO (encodeUShorts es) >>=
-                                  loadBuffer gl_ELEMENT_ARRAY_BUFFER)
+                                  loadBuffer gl_ELEMENT_ARRAY_BUFFER .
+                                  fromUInt16Array)
                           <*> pure (length es)
                           <*> pure h
 
@@ -223,7 +224,7 @@ deleteGPUBufferGeometry (GPUBufferGeometry abs eb _ _) =
         mapM_ (\(buf, _, _) -> deleteBuffer buf) abs >> deleteBuffer eb
 
 -- TODO: move
-loadBuffer :: GLES => GLEnum -> Array -> GL Buffer
+loadBuffer :: GLES => GLEnum -> AnyArray -> GL Buffer
 loadBuffer ty bufData =
         do buffer <- createBuffer
            bindBuffer ty buffer

@@ -51,9 +51,11 @@ class ( Integral GLEnum
         type VertexArrayObject
         -- type ActiveInfo
         -- type ShaderPrecisionFormat
-        type Array
+        type AnyArray
         type Float32Array
         type Int32Array
+        type UInt8Array
+        type UInt16Array
 
         true :: GLBool
         false :: GLBool
@@ -63,7 +65,7 @@ class ( Integral GLEnum
         noBuffer :: Buffer
         noTexture :: Texture
         noVAO :: VertexArrayObject
-        noArray :: IO Array
+        noUInt8Array :: IO UInt8Array
         encodeMat2 :: Mat2 -> IO Float32Array
         encodeMat3 :: Mat3 -> IO Float32Array
         encodeMat4 :: Mat4 -> IO Float32Array
@@ -75,13 +77,15 @@ class ( Integral GLEnum
         encodeIVec2s :: [IVec2] -> IO Int32Array
         encodeIVec3s :: [IVec3] -> IO Int32Array
         encodeIVec4s :: [IVec4] -> IO Int32Array
-        encodeUShorts :: [Word16] -> IO Array
-        encodeColors :: [Color] -> IO Array
+        encodeUShorts :: [Word16] -> IO UInt16Array
+        encodeColors :: [Color] -> IO UInt8Array
 
-        newByteArray :: Int -> IO Array
-        fromFloat32Array :: Float32Array -> Array
-        fromInt32Array :: Int32Array -> Array
-        decodeBytes :: Array -> IO [Word8]
+        newByteArray :: Int -> IO UInt8Array
+        fromFloat32Array :: Float32Array -> AnyArray
+        fromInt32Array :: Int32Array -> AnyArray
+        fromUInt8Array :: UInt8Array -> AnyArray
+        fromUInt16Array :: UInt16Array -> AnyArray
+        decodeBytes :: UInt8Array -> IO [Word8]
 
         glActiveTexture :: Ctx -> GLEnum -> IO ()
         glAttachShader :: Ctx -> Program -> Shader -> IO ()
@@ -96,8 +100,8 @@ class ( Integral GLEnum
         glBlendEquationSeparate :: Ctx -> GLEnum -> GLEnum -> IO ()
         glBlendFunc :: Ctx -> GLEnum -> GLEnum -> IO ()
         glBlendFuncSeparate :: Ctx -> GLEnum -> GLEnum -> GLEnum -> GLEnum -> IO ()
-        glBufferData :: Ctx -> GLEnum -> Array -> GLEnum -> IO ()
-        glBufferSubData :: Ctx -> GLEnum -> GLPtrDiff -> Array -> IO ()
+        glBufferData :: Ctx -> GLEnum -> AnyArray -> GLEnum -> IO ()
+        glBufferSubData :: Ctx -> GLEnum -> GLPtrDiff -> AnyArray -> IO ()
         glCheckFramebufferStatus :: Ctx -> GLEnum -> IO GLEnum
         glClear :: Ctx -> GLEnum -> IO ()
         glClearColor :: Ctx -> Float -> Float -> Float -> Float -> IO ()
@@ -105,8 +109,8 @@ class ( Integral GLEnum
         glClearStencil :: Ctx -> GLInt -> IO ()
         glColorMask :: Ctx -> GLBool -> GLBool -> GLBool -> GLBool -> IO ()
         glCompileShader :: Ctx -> Shader -> IO ()
-        glCompressedTexImage2D :: Ctx -> GLEnum -> GLInt -> GLEnum -> GLSize -> GLSize -> GLInt -> Array -> IO ()
-        glCompressedTexSubImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> Array -> IO ()
+        glCompressedTexImage2D :: Ctx -> GLEnum -> GLInt -> GLEnum -> GLSize -> GLSize -> GLInt -> UInt8Array -> IO ()
+        glCompressedTexSubImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> UInt8Array -> IO ()
         glCopyTexImage2D :: Ctx -> GLEnum -> GLInt -> GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> IO ()
         glCopyTexSubImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> IO ()
         glCreateBuffer :: Ctx -> IO Buffer
@@ -172,7 +176,7 @@ class ( Integral GLEnum
         glLinkProgram :: Ctx -> Program -> IO ()
         glPixelStorei :: Ctx -> GLEnum -> GLInt -> IO ()
         glPolygonOffset :: Ctx -> Float -> Float -> IO ()
-        glReadPixels :: Ctx -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> Array -> IO ()
+        glReadPixels :: Ctx -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> IO ()
         glRenderbufferStorage :: Ctx -> GLEnum -> GLEnum -> GLSize -> GLSize -> IO ()
         glSampleCoverage :: Ctx -> Float -> GLBool -> IO ()
         glScissor :: Ctx -> GLInt -> GLInt -> GLSize -> GLSize -> IO ()
@@ -183,10 +187,10 @@ class ( Integral GLEnum
         glStencilMaskSeparate :: Ctx -> GLEnum -> GLUInt -> IO ()
         glStencilOp :: Ctx -> GLEnum -> GLEnum -> GLEnum -> IO ()
         glStencilOpSeparate :: Ctx -> GLEnum -> GLEnum -> GLEnum -> GLEnum -> IO ()
-        glTexImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> Array -> IO ()
+        glTexImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> UInt8Array -> IO ()
         glTexParameterf :: Ctx -> GLEnum -> GLEnum -> Float -> IO ()
         glTexParameteri :: Ctx -> GLEnum -> GLEnum -> GLInt -> IO ()
-        glTexSubImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> Array -> IO ()
+        glTexSubImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> IO ()
         glUniform1f :: Ctx -> UniformLocation -> Float -> IO ()
         glUniform1fv :: Ctx -> UniformLocation -> Float32Array -> IO ()
         glUniform1i :: Ctx -> UniformLocation -> Int32 -> IO ()

@@ -53,7 +53,7 @@ class BaseUniform g where
 
 -- | CPU types convertible to GPU types (as attributes).
 class GPU.ShaderType g => BaseAttribute g where
-        encodeAttribute :: proxy g -> [CPUBase g] -> GL Array
+        encodeAttribute :: proxy g -> [CPUBase g] -> GL AnyArray
         setAttribute :: proxy g -> GLUInt -> GL ()
 
 class Generic g => Uniform (s :: CPUSetterType *) g where

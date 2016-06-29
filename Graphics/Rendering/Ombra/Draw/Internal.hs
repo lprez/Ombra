@@ -355,7 +355,7 @@ renderToTexture drawBufs infos w h act = do
         (ts, as) <- fmap unzip . gl . flip mapM infos $
                 \(internalFormat, format, pixelType, attachment) ->
                         do t <- emptyTexture
-                           arr <- liftIO $ noArray
+                           arr <- liftIO $ noUInt8Array
                            bindTexture gl_TEXTURE_2D t
                            texImage2D gl_TEXTURE_2D 0 internalFormat w 
                                       h 0 format pixelType arr

@@ -196,10 +196,10 @@ blendFunc a b = getCtx >>= \ctx -> liftIO $ glBlendFunc ctx a b
 blendFuncSeparate :: GLES => GLEnum -> GLEnum -> GLEnum -> GLEnum -> GL ()
 blendFuncSeparate a b c d = getCtx >>= \ctx -> liftIO $ glBlendFuncSeparate ctx a b c d
 
-bufferData :: GLES => GLEnum -> Array -> GLEnum -> GL ()
+bufferData :: GLES => GLEnum -> AnyArray -> GLEnum -> GL ()
 bufferData a b c = getCtx >>= \ctx -> liftIO $ glBufferData ctx a b c
 
-bufferSubData :: GLES => GLEnum -> GLPtrDiff -> Array -> GL ()
+bufferSubData :: GLES => GLEnum -> GLPtrDiff -> AnyArray -> GL ()
 bufferSubData a b c = getCtx >>= \ctx -> liftIO $ glBufferSubData ctx a b c
 
 checkFramebufferStatus :: GLES => GLEnum -> GL GLEnum
@@ -223,10 +223,10 @@ colorMask a b c d = getCtx >>= \ctx -> liftIO $ glColorMask ctx a b c d
 compileShader :: GLES => Shader -> GL ()
 compileShader a = getCtx >>= \ctx -> liftIO $ glCompileShader ctx a
 
-compressedTexImage2D :: GLES => GLEnum -> GLInt -> GLEnum -> GLSize -> GLSize -> GLInt -> Array -> GL ()
+compressedTexImage2D :: GLES => GLEnum -> GLInt -> GLEnum -> GLSize -> GLSize -> GLInt -> UInt8Array -> GL ()
 compressedTexImage2D a b c d e f g = getCtx >>= \ctx -> liftIO $ glCompressedTexImage2D ctx a b c d e f g
 
-compressedTexSubImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> Array -> GL ()
+compressedTexSubImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> UInt8Array -> GL ()
 compressedTexSubImage2D a b c d e f g h = getCtx >>= \ctx -> liftIO $ glCompressedTexSubImage2D ctx a b c d e f g h
 
 copyTexImage2D :: GLES => GLEnum -> GLInt -> GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GL ()
@@ -424,7 +424,7 @@ pixelStorei a b = getCtx >>= \ctx -> liftIO $ glPixelStorei ctx a b
 polygonOffset :: GLES => Float -> Float -> GL ()
 polygonOffset a b = getCtx >>= \ctx -> liftIO $ glPolygonOffset ctx a b
 
-readPixels :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> Array -> GL ()
+readPixels :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> GL ()
 readPixels a b c d e f g = getCtx >>= \ctx -> liftIO $ glReadPixels ctx a b c d e f g
 
 renderbufferStorage :: GLES => GLEnum -> GLEnum -> GLSize -> GLSize -> GL ()
@@ -457,7 +457,7 @@ stencilOp a b c = getCtx >>= \ctx -> liftIO $ glStencilOp ctx a b c
 stencilOpSeparate :: GLES => GLEnum -> GLEnum -> GLEnum -> GLEnum -> GL ()
 stencilOpSeparate a b c d = getCtx >>= \ctx -> liftIO $ glStencilOpSeparate ctx a b c d
 
-texImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> Array -> GL ()
+texImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> UInt8Array -> GL ()
 texImage2D a b c d e f g h i = getCtx >>= \ctx -> liftIO $ glTexImage2D ctx a b c d e f g h i
 
 texParameterf :: GLES => GLEnum -> GLEnum -> Float -> GL ()
@@ -466,7 +466,7 @@ texParameterf a b c = getCtx >>= \ctx -> liftIO $ glTexParameterf ctx a b c
 texParameteri :: GLES => GLEnum -> GLEnum -> GLInt -> GL ()
 texParameteri a b c = getCtx >>= \ctx -> liftIO $ glTexParameteri ctx a b c
 
-texSubImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> Array -> GL ()
+texSubImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> GL ()
 texSubImage2D a b c d e f g h i = getCtx >>= \ctx -> liftIO $ glTexSubImage2D ctx a b c d e f g h i
 
 uniform1f :: GLES => UniformLocation -> Float -> GL ()
