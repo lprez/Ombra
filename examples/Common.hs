@@ -52,16 +52,7 @@ loadTexture path = do eimg <- readImage path
                                    case convertRGBA8 img of
                                         Image w h v -> return . mkTexture w h $
                                                         colList v
-        where {-
-              convert :: DynamicImage -> Image PixelRGBA8
-              convert (ImageRGBA8 img) = img
-              convert (ImageRGB8 img) = promoteImage img
-              convert (ImageYA8 img) = promoteImage img
-              convert (ImageY8 img) = promoteImage img
-              convert _ = error "Unsupported image format."
-              -}
-
-              colList = fst . V.foldr (\x (l, cs) ->
+        where colList = fst . V.foldr (\x (l, cs) ->
                                         case cs of
                                              [g, b, a] -> ( Color x g b a : l
                                                           , [] )

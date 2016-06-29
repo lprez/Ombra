@@ -35,4 +35,4 @@ main :: IO ()
 -- We use the helper functions 'loadTexture' and 'static' from the Common module
 -- to load the cube texture and create a window and a OpenGL context with GLFW,
 -- drawing the Layer inside.
-main = loadTexture "tex.png" >>= static . scene
+main = loadTexture "../tex.png" >>= static . scene
