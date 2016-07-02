@@ -4,10 +4,14 @@
              ScopedTypeVariables #-}
 
 module Graphics.Rendering.Ombra.Internal.TList (
+        Not,
         Empty,
         Equal,
+        IsEqual,
+        EqualOrErr,
         Member,
         IsMember,
+        NotMemberOrErr,
         Subset,
         IsSubset,
         Remove,
@@ -16,8 +20,12 @@ module Graphics.Rendering.Ombra.Internal.TList (
         Insert,
         Reverse,
         Union,
-        Set
+        Set,
+        module GHC.TypeLits
 ) where
+
+import GHC.TypeLits (TypeError, ErrorMessage(..))
+import GHC.Exts (Constraint)
 
 type Set xs = Union xs xs ~ xs
 
@@ -25,11 +33,23 @@ type family Empty (xs :: [*]) :: Bool where
         Empty '[] = True
         Empty (x ': xs) = False
 
-type Equal xs ys = And (IsSubset xs ys) (IsSubset ys xs) ~ True
+type family Not (a :: Bool) :: Bool where
+        Not True = False
+        Not False = True
+
+type IsEqual xs ys = And (IsSubset xs ys) (IsSubset ys xs)
+type Equal xs ys = IsEqual xs ys ~ True
+type EqualOrErr xs ys err = TrueOrErr (IsEqual xs ys) err
+
+type family TrueOrErr (a :: Bool) (err :: ErrorMessage) :: Constraint where
+        TrueOrErr False err = TypeError err
+        TrueOrErr a err = a ~ True
+
+type FalseOrErr a err = TrueOrErr (Not a) err
 
 type Member x xs = IsMember x xs ~ True
-
-type NotMember x xs = IsMember x xs ~ False
+type MemberOrErr x xs err = TrueOrErr (IsMember x xs) err
+type NotMemberOrErr x xs err = FalseOrErr (IsMember x xs) err
 
 type family IsMember x (xs :: [*]) :: Bool where
         IsMember x '[] = False
@@ -41,8 +61,14 @@ type family IsSubset (xs :: [*]) (ys :: [*]) :: Bool where
         IsSubset '[] ys = True
         IsSubset (x ': xs) ys = And (IsMember x ys) (IsSubset xs ys)
 
-class Subset (xs :: [*]) (ys :: [*])
-instance IsSubset xs ys ~ 'True => Subset xs ys
+type Subset xs ys = TrueOrErr (IsSubset xs ys)
+                              (Text "‘" :<>: ShowType xs :<>:
+                               Text "’ is not a subset of ‘" :<>:
+                               ShowType ys :<>: Text "’")
+
+-- class Subset (xs :: [*]) (ys :: [*])
+-- instance IsSubset xs ys ~ 'True => Subset xs ys
+
 type family Remove x (xs :: [*]) where
         Remove x '[] = '[]
         Remove x (x ': xs) = Remove x xs

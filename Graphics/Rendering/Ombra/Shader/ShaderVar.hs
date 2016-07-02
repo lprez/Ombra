@@ -29,10 +29,18 @@ import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType)
 
 infixr 4 :-
 
+type NonDuplicate x xs = NotMemberOrErr x xs
+                                        (Text "Duplicate variable: ‘" :<>:
+                                         ShowType x :$$:
+                                         Text "’    In SVList: ... : [" :<>:
+                                         ShowType x :<>:
+                                         Text "] : " :<>:
+                                         ShowType xs)
+
 -- | An heterogeneous set of 'ShaderVar's.
 data SVList :: [*] -> * where
         N :: SVList '[]
-        (:-) :: (ShaderVar a, IsMember a xs ~ False)
+        (:-) :: (ShaderVar a, NonDuplicate a xs)
              => a -> SVList xs -> SVList (a ': xs)
 
 -- | The condition for a valid 'Shader'.
@@ -130,7 +138,7 @@ class StaticSVList (xs :: [*]) where
 instance StaticSVList '[] where
         staticSVList (_ :: Proxy '[]) _ = N
 
-instance (ShaderVar x, StaticSVList xs, IsMember x xs ~ False) =>
+instance (ShaderVar x, StaticSVList xs, NonDuplicate x xs) =>
          StaticSVList (x ': xs) where
         staticSVList (_ :: Proxy (x ': xs)) f =
                 f (Proxy :: Proxy x) :- staticSVList (Proxy :: Proxy xs) f

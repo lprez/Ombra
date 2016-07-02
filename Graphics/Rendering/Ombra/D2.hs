@@ -84,7 +84,9 @@ rect = flip poly . rectGeometry $ Vec2 1 1
 poly :: (IsObject2D Uniforms2D is, GLES)
      => Texture -> Geometry is -> Object Uniforms2D is
 poly t g = globalTexture Image t :~>
-           Depth -= 0 :~> Transform2 -= idmtx :~> geom g
+           Depth -= 0 :~>
+           Transform2 -= idmtx :~>
+           geom g
 
 -- | A rectangle with the aspect ratio adapted to its texture.
 image :: GLES => Texture -> Object2D

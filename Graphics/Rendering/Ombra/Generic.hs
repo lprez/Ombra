@@ -157,6 +157,7 @@ modifyGeometry fg (Mesh g) = Mesh $ fg g
 
 -- | Create a 'Global' from a pure value. The first argument is ignored,
 -- it just provides the type (you can use the constructor of the GPU type).
+-- You can use this to set the value of a shader uniform.
 (-=) :: (ShaderVar g, Uniform 'S g) => (a -> g) -> CPU 'S g -> Global g
 g -= c = g := return c
 
@@ -185,8 +186,17 @@ globalFramebufferSize g fc = g := (fc . tupleToVec <$>
 group :: (Set is, Set gs) => [Object is gs] -> Group is gs
 group = foldr (\obj grp -> grp ~~ Object obj) emptyGroup
 
+type EqualJoin x y v = EqualOrErr x y (Text "Can't join groups with " :<>:
+                                       Text "different " :<>: v :<>:
+                                       Text "." :$$:
+                                       Text "    Left group " :<>: v :<>:
+                                       Text ": " :<>: ShowType x :$$:
+                                       Text "    Right group " :<>: v :<>:
+                                       Text ": " :<>: ShowType y)
+
+
 -- | Join two groups.
-(~~) :: (Equal gs gs', Equal is is')
+(~~) :: (EqualJoin gs gs' (Text "globals"), EqualJoin is is' (Text "inputs"))
      => Group gs is -> Group gs' is'
      -> Group (Union gs gs') (Union is is')
 (~~) = Append
