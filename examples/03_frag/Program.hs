@@ -19,7 +19,7 @@ fragmentShader :: FragmentShader '[ Texture2 ]    -- List of uniforms
                                                   -- to the GPU and are
                                                   -- constant for every
                                                   -- shader call).
-                                 '[ UV, Normal3 ] -- List of attributes (values
+                                 '[ UV, Normal3 ] -- List of inputs (values
                                                   -- the fragment shader
                                                   -- receives from the vertex
                                                   -- one and change for every
