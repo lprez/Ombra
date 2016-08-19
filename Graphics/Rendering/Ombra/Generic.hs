@@ -219,7 +219,9 @@ combineLayers = MultiLayer
 colorTex :: GLES => Color -> Texture
 colorTex c = mkTexture 1 1 [ c ]
 
--- | Use a 'Layer' as a 'Texture' on another. Based on 'renderColor'.
+-- | Use a 'Layer' as a 'Texture' on another.
+--
+-- > subLayer w h l = subRenderLayer . renderColor w h l
 subLayer :: Int                         -- ^ Texture width.
          -> Int                         -- ^ Texture height.
          -> Layer                       -- ^ Layer to draw on a 'Texture'.
@@ -227,7 +229,9 @@ subLayer :: Int                         -- ^ Texture width.
          -> Layer
 subLayer w h l = subRenderLayer . renderColor w h l
 
--- | Use a 'Layer' as a depth 'Texture' on another. Based on 'renderDepth'.
+-- | Use a 'Layer' as a depth 'Texture' on another.
+--
+-- > depthSubLayer w h l = subRenderLayer . renderDepth w h l
 depthSubLayer :: Int                         -- ^ Texture width.
               -> Int                         -- ^ Texture height.
               -> Layer                       -- ^ Layer to draw on a

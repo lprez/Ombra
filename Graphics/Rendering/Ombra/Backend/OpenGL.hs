@@ -123,7 +123,7 @@ instance GLES where
         encodeIVec3s = mkArray
         encodeIVec4s = mkArray
         encodeUShorts = mkArray
-        encodeColors = mkArray
+        encodeUInt8s = mkArray
 
         newByteArray = mkArrayLen
         fromFloat32Array (size, fptr) = (size, castForeignPtr fptr)

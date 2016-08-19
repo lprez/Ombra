@@ -2,6 +2,7 @@
 
 module Graphics.Rendering.Ombra.Texture (
         mkTexture,
+        mkTextureRaw,
         emptyTexture
 ) where
 
@@ -25,14 +26,28 @@ mkTexture w h ps = TextureImage . TexturePixels ps (fromIntegral w)
                                                    (fromIntegral h)
                         $ hash (w, h, ps)
 
+mkTextureRaw :: GLES
+             => Int
+             -> Int
+             -> UInt8Array
+             -> Int
+             -> Texture
+mkTextureRaw w h arr hash = TextureImage $ TextureRaw arr
+                                                      (fromIntegral w)
+                                                      (fromIntegral h)
+                                                      hash
+
 instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i -- TODO: err check
         unloadResource _ (LoadedTexture _ _ t) = deleteTexture t
 
 loadTextureImage :: GLES => TextureImage -> GL LoadedTexture
-loadTextureImage (TexturePixels ps w h _) =
+loadTextureImage (TexturePixels ps w h hash) =
+        do arr <- liftIO . encodeUInt8s $
+                        ps >>= \(Color r g b a) -> [r, g, b, a]
+           loadTextureImage $ TextureRaw arr w h hash
+loadTextureImage (TextureRaw arr w h _) =
         do t <- emptyTexture
-           arr <- liftIO $ encodeColors ps
            texImage2D gl_TEXTURE_2D 0
                       (fromIntegral gl_RGBA)
                       w h 0

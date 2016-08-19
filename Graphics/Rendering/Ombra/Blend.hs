@@ -14,7 +14,7 @@ data Mode = Mode {
 } deriving Eq
 
 -- | Blend operator.
-data Operator = Add | Subtract | ReverseSubtract {- | Min | Max -} deriving Eq
+data Operator = Add | Subtract | ReverseSubtract {- Min | Max -} deriving Eq
 
 -- | Blend function parameters.
 data Parameter = Zero | One | SourceColor | DestinationColor | ConstantColor

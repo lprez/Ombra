@@ -67,6 +67,7 @@ data Texture = TextureImage TextureImage
              deriving Eq
              
 data TextureImage = TexturePixels [Color] GLSize GLSize Int
+                  | TextureRaw UInt8Array GLSize GLSize Int
 
 data LoadedTexture = LoadedTexture GLSize GLSize GL.Texture
 
@@ -117,9 +118,12 @@ instance Hashable TextureImage where
 
 instance Eq TextureImage where
         (TexturePixels _ _ _ h) == (TexturePixels _ _ _ h') = h == h'
+        (TextureRaw _ _ _ h) == (TextureRaw _ _ _ h') = h == h'
+        _ == _ = False
 
 instance GLES => Eq LoadedTexture where
         LoadedTexture _ _ t == LoadedTexture _ _ t' = t == t'
 
 textureHash :: TextureImage -> Int
 textureHash (TexturePixels _ _ _ h) = h
+textureHash (TextureRaw _ _ _ h) = h

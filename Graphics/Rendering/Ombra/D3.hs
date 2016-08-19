@@ -139,12 +139,12 @@ rotX :: (MemberGlobal Transform3 gs, GLES) => Float
      -> Object gs is -> Object gs is
 rotX a = transform $ rotXMat4 a
 
--- | Rotate a 3D 'Object' around the X axis.
+-- | Rotate a 3D 'Object' around the Y axis.
 rotY :: (MemberGlobal Transform3 gs, GLES) => Float
      -> Object gs is -> Object gs is
 rotY a = transform $ rotYMat4 a
 
--- | Rotate a 3D 'Object' around the X axis.
+-- | Rotate a 3D 'Object' around the Z axis.
 rotZ :: (MemberGlobal Transform3 gs, GLES) => Float
      -> Object gs is -> Object gs is
 rotZ a = transform $ rotZMat4 a

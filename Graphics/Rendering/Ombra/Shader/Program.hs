@@ -72,19 +72,20 @@ castProgram :: Program gs is -> Program gs' is'
 -- castProgram (Program v f h) = Program v f h
 castProgram = unsafeCoerce
 
+type Compatible pgs vgs fgs =
+        EqualOrErr pgs (Union vgs fgs)
+                   (Text "Incompatible shader uniforms" :$$:
+                    Text "    Vertex shader uniforms: " :<>:
+                    ShowType vgs :$$:
+                    Text "    Fragment shader uniforms: " :<>:
+                    ShowType fgs :$$:
+                    Text "    United shader uniforms: " :<>:
+                    ShowType (Union vgs fgs) :$$:
+                    Text "    Program uniforms: " :<>:
+                    ShowType pgs)
+
 -- | Create a 'Program' from the shaders.
-program :: (ValidVertex vgs vis vos, Valid fgs vos '[],
-            EqualOrErr pgs (Union vgs fgs)
-                       (Text "Incompatible shader uniforms" :$$:
-                        Text "    Vertex shader uniforms: " :<>:
-                        ShowType vgs :$$:
-                        Text "    Fragment shader uniforms: " :<>:
-                        ShowType fgs :$$:
-                        Text "    United shader uniforms: " :<>:
-                        ShowType (Union vgs fgs) :$$:
-                        Text "    Program uniforms: " :<>:
-                        ShowType pgs)
-           )
+program :: (ValidVertex vgs vis vos, Valid fgs vos '[], Compatible pgs vgs fgs)
         => VertexShader vgs vis vos -> FragmentShader fgs vos
         -> Program pgs vis
 program vs fs = let (vss, attrs) = vertexToGLSLAttr vs

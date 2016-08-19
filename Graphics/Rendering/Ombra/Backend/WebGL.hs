@@ -34,7 +34,8 @@ import qualified JavaScript.TypedArray.ArrayBuffer as JS
 import qualified JavaScript.TypedArray.Internal as JS
 import qualified JavaScript.TypedArray.DataView as JSDataView
 
-foreign import javascript unsafe "null" nullUInt8Array :: IO UInt8Array
+-- TODO: ??? 
+foreign import javascript unsafe "eval('null')" nullUInt8Array :: IO UInt8Array
 
 data TagTex = TagTex Int JS.Texture
 
@@ -165,12 +166,17 @@ instance GLES where
         encodeUShorts v = JSArray.fromList <$> mapM toJSVal v
                           >>= JS.uint16ArrayFrom
 
+        encodeUInt8s v = JSArray.fromList <$> mapM toJSVal v
+                         >>= JS.uint8ArrayFrom
+
+{-
         encodeColors v = toJSArray next (0, v) >>= JS.uint8ArrayFrom
                 where next (0, xs@(Color x _ _ _ : _)) = Just (x, (1, xs))
                       next (1, xs@(Color _ y _ _ : _)) = Just (y, (2, xs))
                       next (2, xs@(Color _ _ z _ : _)) = Just (z, (3, xs))
                       next (3, Color _ _ _ w : xs) = Just (w, (0, xs))
                       next (_, []) = Nothing
+-}
 
         -- !
         newByteArray l = do arr <- JSArray.create

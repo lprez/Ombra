@@ -15,7 +15,8 @@ data IVec2 = IVec2 !Int32 !Int32
 data IVec3 = IVec3 !Int32 !Int32 !Int32
 data IVec4 = IVec4 !Int32 !Int32 !Int32 !Int32
 
--- | Mixed OpenGL ES 2.0/WebGL 1.0/OpenGL 2.0 API, with VAOs and FBOs.
+-- Mixed OpenGL ES 2.0/WebGL 1.0/OpenGL 2.0 API, with VAOs and FBOs.
+-- | Backend API.
 class ( Integral GLEnum
       , Integral GLUInt
       , Integral GLInt
@@ -78,7 +79,7 @@ class ( Integral GLEnum
         encodeIVec3s :: [IVec3] -> IO Int32Array
         encodeIVec4s :: [IVec4] -> IO Int32Array
         encodeUShorts :: [Word16] -> IO UInt16Array
-        encodeColors :: [Color] -> IO UInt8Array
+        encodeUInt8s :: [Word8] -> IO UInt8Array
 
         newByteArray :: Int -> IO UInt8Array
         fromFloat32Array :: Float32Array -> AnyArray
