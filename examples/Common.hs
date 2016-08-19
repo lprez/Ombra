@@ -85,7 +85,6 @@ loadTexture path = do img <- loadImage $ fromString path
                                         0x36d1615b7400a4
                                         [ 0 .. l - 1 ]
 
-                      print hash
                       return $ mkTextureRaw w h arr hash
 
 #else
