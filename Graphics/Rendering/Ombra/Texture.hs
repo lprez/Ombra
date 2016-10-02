@@ -27,15 +27,15 @@ mkTexture w h ps = TextureImage . TexturePixels ps (fromIntegral w)
                         $ hash (w, h, ps)
 
 mkTextureRaw :: GLES
-             => Int
-             -> Int
-             -> UInt8Array
-             -> Int
+             => Int         -- ^ Width.
+             -> Int         -- ^ Height.
+             -> UInt8Array  -- ^ Array of pixel components.
+             -> Int         -- ^ Texture hash
              -> Texture
-mkTextureRaw w h arr hash = TextureImage $ TextureRaw arr
-                                                      (fromIntegral w)
-                                                      (fromIntegral h)
-                                                      hash
+mkTextureRaw w h arr pxhash = TextureImage $ TextureRaw arr
+                                                        (fromIntegral w)
+                                                        (fromIntegral h)
+                                                        $ hash (w, h, pxhash)
 
 instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i -- TODO: err check

@@ -24,6 +24,12 @@ module Graphics.Rendering.Ombra.Generic (
         Blend.transparency,
         Blend.additive,
         -- ** Stencil test
+        stencil,
+        noStencil,
+        -- ** Culling
+        CullFace(..),
+        cull,
+        noCull,
 
         -- * Layers
         Layer,
@@ -78,6 +84,7 @@ import Data.Vect.Float
 import Data.Word (Word8)
 import Graphics.Rendering.Ombra.Backend (GLES)
 import qualified Graphics.Rendering.Ombra.Blend as Blend
+import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Draw
@@ -98,18 +105,40 @@ emptyGroup = Empty
 globalGroup :: Global g -> Group gs is -> Group (g ': gs) is
 globalGroup = Global
 
--- | Set the blending mode for a 'Group' of objects.
+-- | Enable blending and set the blending mode for a 'Group' of objects.
 blend :: Blend.Mode -> Group gs is -> Group gs is
 blend m = Blend $ Just m
+-- TODO: should search and modify existing Blend
 
 -- | Disable blending for a 'Group'.
 noBlend :: Group gs is -> Group gs is
 noBlend = Blend Nothing
+-- TODO: should search and modify existing Blend
 
--- | Enable/disable the depth test for a 'Group'.
+-- | Enable stencil testing and set the stencil mode for a 'Group' of objects.
+stencil :: Stencil.Mode -> Group gs is -> Group gs is
+stencil m = Stencil $ Just m
+-- TODO: should search and modify existing Stencil
+
+-- | Disable stencil testing on a 'Group' of objects.
+noStencil :: Group gs is -> Group gs is
+noStencil = Stencil Nothing
+-- TODO: should search and modify existing Stencil
+
+-- | Enable/disable depth testing for a 'Group'.
 depthTest :: Bool -> Group gs is -> Group gs is
 depthTest = DepthTest
+-- TODO: should search and modify existing DepthTest
 
+-- | Enable face culling.
+cull :: CullFace -> Group gs is -> Group gs is
+cull m = Cull $ Just m
+-- TODO: should search and modify existing Cull
+
+-- | Disable face culling.
+noCull :: Group gs is -> Group gs is
+noCull = Cull Nothing
+-- TODO: should search and modify existing Cull
 
 -- | An empty object.
 nothing :: Object '[] '[]

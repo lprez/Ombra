@@ -79,13 +79,13 @@ loadTexture path = do img <- loadImage $ fromString path
                       let buf = buffer arr
                           dw = dataView buf
                           l = w * h * 4
-                          hash = flip hashWithSalt l $
+                          pxhash = flip hashWithSalt l $
                                         foldl (\s i -> hashWithSalt s $
                                                         getUint8 i dw)
                                         0x36d1615b7400a4
                                         [ 0 .. l - 1 ]
 
-                      return $ mkTextureRaw w h arr hash
+                      return . mkTextureRaw w h arr $ hash (w, h, pxhash)
 
 #else
 

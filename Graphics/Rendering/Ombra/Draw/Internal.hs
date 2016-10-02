@@ -35,13 +35,14 @@ import Graphics.Rendering.Ombra.Types
 import Graphics.Rendering.Ombra.Texture
 import Graphics.Rendering.Ombra.Backend (GLES)
 import qualified Graphics.Rendering.Ombra.Backend as GL
-import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, UniformLocation)
+import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, UniformLocation, cullFace)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.GLSL
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Shader.ShaderVar
+import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 
 import Data.Bits ((.|.))
 import Data.Hashable (Hashable)
@@ -77,7 +78,10 @@ drawState w h = do programs <- newGLResMap
                                             V.replicate maxTexs Nothing
                                     , viewportSize = (w, h)
                                     , blendMode = Nothing
-                                    , depthTest = True }
+                                    , depthTest = True
+                                    , stencilMode = Nothing
+                                    , cullFace = Just CullBack
+                                    }
 
         where newGLResMap :: (Hashable i, Resource i r GL) => IO (ResMap i r)
               newGLResMap = newResMap
@@ -126,7 +130,12 @@ resizeViewport w h = do gl $ viewport 0 0 (fromIntegral w) (fromIntegral h)
 -- | Clear the buffers.
 drawBegin :: GLES => Draw ()
 drawBegin = do freeActiveTextures -- ?
-               gl . clear $ gl_COLOR_BUFFER_BIT .|. gl_DEPTH_BUFFER_BIT
+               m <- stencilMode <$> Draw get
+               let clearBits = case m of
+                    Just _ -> gl_COLOR_BUFFER_BIT .|. gl_DEPTH_BUFFER_BIT .|.
+                              gl_STENCIL_BUFFER_BIT
+                    Nothing -> gl_COLOR_BUFFER_BIT .|. gl_DEPTH_BUFFER_BIT
+               gl . clear $ clearBits
 
 drawEnd :: GLES => Draw ()
 drawEnd = return ()
@@ -167,10 +176,18 @@ drawGroup (Global (g := c) o) = c >>= uniform single (g undefined)
 drawGroup (Append g g') = drawGroup g >> drawGroup g'
 drawGroup (Blend m g) = blendMode <$> Draw get >>=
                         \om -> setBlendMode m >> drawGroup g >> setBlendMode om
+drawGroup (Stencil m g) = do om <- stencilMode <$> Draw get
+                             setStencilMode m
+                             drawGroup g
+                             setStencilMode om
 drawGroup (DepthTest d g) = do od <- depthTest <$> Draw get
                                setDepthTest d
                                drawGroup g
                                setDepthTest od
+drawGroup (Cull f g) = do oc <- cullFace <$> Draw get
+                          setCullFace f
+                          drawGroup g
+                          setCullFace oc
 
 -- | Draw an 'Object'.
 drawObject :: GLES => Object gs is -> Draw ()
@@ -406,6 +423,48 @@ setBlendMode (Just newMode) =
               changeEquation = gl $ blendEquationSeparate rgbEq alphaEq
               changeFunction = gl $ blendFuncSeparate rgbs rgbd
                                                       alphas alphad
+
+setStencilMode :: GLES => Maybe Stencil.Mode -> Draw ()
+setStencilMode Nothing = do m <- stencilMode <$> Draw get
+                            case m of
+                                 Just _ -> gl $ disable gl_STENCIL_TEST
+                                 Nothing -> return ()
+                            Draw . modify $ \s -> s { stencilMode = Nothing }
+setStencilMode (Just newMode@(Stencil.Mode newFun newOp)) =
+        do mOldMode <- stencilMode <$> Draw get
+           case mOldMode of
+                Nothing -> do gl $ enable gl_STENCIL_TEST
+                              sides newFun changeFunction
+                              sides newOp changeOperation
+                Just (Stencil.Mode oldFun oldOp) ->
+                        do when (oldFun /= newFun) $
+                                sides newFun changeFunction
+                           when (oldOp /= newOp) $
+                                sides newOp changeOperation
+           Draw . modify $ \s -> s { stencilMode = Just newMode }
+        where changeFunction face f = let (t, v, m) = Stencil.function f
+                                      in gl $ stencilFuncSeparate face t v m
+              changeOperation face o = let (s, d, n) = Stencil.operation o
+                                       in gl $ stencilOpSeparate face s d n
+              sides (Stencil.FrontBack x) f = f gl_FRONT_AND_BACK x
+              sides (Stencil.Separate x y) f = f gl_FRONT x >> f gl_BACK y
+
+setCullFace :: GLES => Maybe CullFace -> Draw ()
+setCullFace Nothing = do old <- cullFace <$> Draw get
+                         case old of
+                              Just _ -> gl $ disable gl_CULL_FACE
+                              Nothing -> return ()
+                         Draw . modify $ \s -> s { cullFace = Nothing }
+setCullFace (Just newFace) =
+        do old <- cullFace <$> Draw get
+           when (old == Nothing) . gl $ enable gl_CULL_FACE
+           case old of
+                Just oldFace | oldFace == newFace -> return ()
+                _ -> gl . GL.cullFace $ case newFace of
+                                             CullFront -> gl_FRONT
+                                             CullBack -> gl_BACK
+                                             CullFrontBack -> gl_FRONT_AND_BACK
+           Draw . modify $ \s -> s { cullFace = Just newFace }
                    
 setDepthTest :: GLES => Bool -> Draw ()
 setDepthTest new = do old <- depthTest <$> Draw get
