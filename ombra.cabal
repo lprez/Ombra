@@ -2,6 +2,21 @@ name:                ombra
 version:             0.1.0.0
 synopsis:            Render engine.
 description:         Ombra is a render engine written in Haskell. It provides a purely functional interface for advanced graphics programming, including a type safe embedded DSL for GPU programming. You are not required to know or use OpenGL directly to work with Ombra, you just need a basic knowledge of what vertex/fragment shaders, uniforms and attributes are (if you are going to make a more advanced use of it). Ombra supports both OpenGL and WebGL.
+                     .
+                     .
+                     The modules you generally need to use are:
+                     .
+                     "Graphics.Rendering.Ombra.D3": 3D graphics
+                     .
+                     "Graphics.Rendering.Ombra.D2": 2D graphics
+                     .
+                     "Graphics.Rendering.Ombra.Generic": although both D3 and D2 export it, you may want to read the documentation
+                     .
+                     "Graphics.Rendering.Ombra.Shader": for creating shaders
+                     .
+                     "Graphics.Rendering.Ombra.Draw": this lets you render the pure objects you create with D2 and D3
+                     .
+                     "Graphics.Rendering.Ombra.Texture": for creating textures                     
 homepage:            https://github.com/ziocroc/Ombra
 bug-reports:         https://github.com/ziocroc/Ombra/issues
 license:             BSD3
@@ -26,7 +41,7 @@ flag webgl
 
 library
   exposed-modules:     Graphics.Rendering.Ombra.Generic, Graphics.Rendering.Ombra.Blend, Graphics.Rendering.Ombra.Shader, Graphics.Rendering.Ombra.Transformation, Graphics.Rendering.Ombra.Draw, Graphics.Rendering.Ombra.Draw.Internal, Graphics.Rendering.Ombra.D2, Graphics.Rendering.Ombra.Geometry, Graphics.Rendering.Ombra.D3, Graphics.Rendering.Ombra.Types, Graphics.Rendering.Ombra.Texture, Graphics.Rendering.Ombra.Color, Graphics.Rendering.Ombra.Backend, Graphics.Rendering.Ombra.Shapes, Graphics.Rendering.Ombra.Internal.GL, Graphics.Rendering.Ombra.Shader.ShaderVar, Graphics.Rendering.Ombra.Shader.GLSL, Graphics.Rendering.Ombra.Shader.Stages, Graphics.Rendering.Ombra.Shader.Program, Graphics.Rendering.Ombra.Shader.CPU, Graphics.Rendering.Ombra.Shader.Default3D, Graphics.Rendering.Ombra.Shader.Default2D, Graphics.Rendering.Ombra.Shader.Language.Types, Graphics.Rendering.Ombra.Shader.Language.Functions
-  other-modules:       Graphics.Rendering.Ombra.Internal.STVectorLen, Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList
+  other-modules:       Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList
 
   if flag(webgl) && impl(ghcjs)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.WebGL
