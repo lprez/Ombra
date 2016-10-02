@@ -13,8 +13,10 @@ module Graphics.Rendering.Ombra.Types (
         Object(..),
         Global(..),
         Layer(..),
+        Buffer(..),
         RenderLayer(..),
-        LayerType(..)
+        LayerType(..),
+        CullFace(..)
 ) where
 
 import Control.Applicative
@@ -27,9 +29,11 @@ import Data.Vector (Vector)
 import Data.Typeable
 import Data.Word (Word8)
 import qualified Graphics.Rendering.Ombra.Blend as Blend
+import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Internal.GL hiding (Program, Texture, UniformLocation)
+import Graphics.Rendering.Ombra.Internal.GL hiding (Program, Texture,
+                                                    UniformLocation, Buffer)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Internal.Resource
@@ -51,7 +55,10 @@ data DrawState = DrawState {
         activeTextures :: Vector (Maybe Texture),
         viewportSize :: (Int, Int),
         blendMode :: Maybe Blend.Mode,
-        depthTest :: Bool
+        stencilMode :: Maybe Stencil.Mode,
+        cullFace :: Maybe CullFace,
+        depthTest :: Bool,
+        depthMask :: Bool
 }
 
 -- | A state monad on top of 'GL'.
@@ -78,7 +85,10 @@ data Group (gs :: [*]) (is :: [*]) where
         Global :: Global g -> Group gs is -> Group (g ': gs) is
         Append :: Group gs is -> Group gs' is' -> Group gs'' is''
         Blend :: Maybe Blend.Mode -> Group gs is -> Group gs is
+        Stencil :: Maybe Stencil.Mode -> Group gs is -> Group gs is
+        Cull :: Maybe CullFace -> Group gs is -> Group gs is
         DepthTest :: Bool -> Group gs is -> Group gs is
+        DepthMask :: Bool -> Group gs is -> Group gs is
 
 -- | A geometry associated with some uniforms.
 data Object (gs :: [*]) (is :: [*]) where
@@ -98,8 +108,11 @@ infix 3 :=
 -- | A 'Group' associated with a program.
 data Layer = forall oi pi og pg. (Subset pi oi, Subset pg og)
                               => Layer (Program pg pi) (Group og oi)
-           | SubLayer (RenderLayer [Layer])
-           | MultiLayer [Layer]
+           | SubLayer (RenderLayer Layer)
+           | OverLayer Layer Layer
+           | ClearLayer [Buffer] Layer
+
+data Buffer = ColorBuffer | DepthBuffer | StencilBuffer
 
 -- | Represents a 'Layer' drawn on a 'Texture'.
 data RenderLayer a = RenderLayer Bool                   -- Use drawBuffers
@@ -111,7 +124,13 @@ data RenderLayer a = RenderLayer Bool                   -- Use drawBuffers
                                  ([Texture] -> Maybe [Color] ->
                                   Maybe [Word8] -> a)   -- Accepting function
 
-data LayerType = ColorLayer | DepthLayer | BufferLayer Int deriving Eq
+data LayerType = ColorLayer
+               | DepthLayer
+               | DepthStencilLayer
+               | BufferLayer Int deriving Eq
+
+-- Side(s) to be culled.
+data CullFace = CullFront | CullBack | CullFrontBack deriving Eq
 
 instance Hashable TextureImage where
         hashWithSalt salt tex = hashWithSalt salt $ textureHash tex

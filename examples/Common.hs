@@ -59,11 +59,10 @@ animation layer = do canvas <- query "#canvas"
                      stateRef <- drawState 512 512 >>= newIORef
 
                      flip (refDrawCtx ctx) stateRef $
-                              do drawInit
-                                 loop $ \t -> do
-                                     drawBegin
-                                     drawLayer . layer $ realToFrac t
-                                     drawEnd
+                                 drawInit
+                              >> loop $ \t ->
+                                     do clearBuffers [ColorBuffer, DepthBuffer]
+                                        drawLayer . layer $ realToFrac t
 
                      return ()
         where loop a = do t <- liftIO waitFrame
@@ -108,11 +107,9 @@ animation layer =
            ctx <- makeContext
            flip (refDrawCtx ctx) stateRef $
                 do drawInit
-                   loop 0 $ \n -> do
-                         drawBegin
-                         drawLayer $ layer n
-                         drawEnd
-                         liftIO $ swapBuffers w
+                   loop 0 $ \n -> do clearBuffers [ColorBuffer, DepthBuffer]
+                                     drawLayer (layer n)
+                                     liftIO (swapBuffers w)
            return ()
         where loop n a = do a n
                             liftIO $ threadDelay delay

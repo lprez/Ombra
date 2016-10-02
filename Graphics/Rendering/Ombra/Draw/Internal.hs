@@ -6,11 +6,10 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         DrawState,
         drawState,
         drawInit,
-        drawBegin,
+        clearBuffers,
         drawLayer,
         drawGroup,
         drawObject,
-        drawEnd,
         removeGeometry,
         removeTexture,
         removeProgram,
@@ -35,7 +34,9 @@ import Graphics.Rendering.Ombra.Types
 import Graphics.Rendering.Ombra.Texture
 import Graphics.Rendering.Ombra.Backend (GLES)
 import qualified Graphics.Rendering.Ombra.Backend as GL
-import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, UniformLocation, cullFace)
+import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, Buffer,
+                                                    UniformLocation, cullFace,
+                                                    depthMask)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Shader.CPU
@@ -79,6 +80,7 @@ drawState w h = do programs <- newGLResMap
                                     , viewportSize = (w, h)
                                     , blendMode = Nothing
                                     , depthTest = True
+                                    , depthMask = True
                                     , stencilMode = Nothing
                                     , cullFace = Just CullBack
                                     }
@@ -127,18 +129,11 @@ resizeViewport :: GLES
 resizeViewport w h = do gl $ viewport 0 0 (fromIntegral w) (fromIntegral h)
                         Draw . modify $ \s -> s { viewportSize = (w, h) }
 
--- | Clear the buffers.
-drawBegin :: GLES => Draw ()
-drawBegin = do freeActiveTextures -- ?
-               m <- stencilMode <$> Draw get
-               let clearBits = case m of
-                    Just _ -> gl_COLOR_BUFFER_BIT .|. gl_DEPTH_BUFFER_BIT .|.
-                              gl_STENCIL_BUFFER_BIT
-                    Nothing -> gl_COLOR_BUFFER_BIT .|. gl_DEPTH_BUFFER_BIT
-               gl . clear $ clearBits
-
-drawEnd :: GLES => Draw ()
-drawEnd = return ()
+clearBuffers :: GLES => [Buffer] -> Draw ()
+clearBuffers = mapM_ $ gl . clear . buffer
+        where buffer ColorBuffer = gl_COLOR_BUFFER_BIT
+              buffer DepthBuffer = gl_DEPTH_BUFFER_BIT
+              buffer StencilBuffer = gl_STENCIL_BUFFER_BIT
 
 -- | Manually delete a 'Geometry' from the GPU (this is automatically done when
 -- the 'Geometry' becomes unreachable). Note that if you try to draw it, it will
@@ -160,12 +155,16 @@ removeProgram = removeDrawResource gl programs . castProgram
 
 -- | Draw a 'Layer'.
 drawLayer :: GLES => Layer -> Draw ()
-drawLayer (Layer prg grp) = setProgram prg >> drawGroup grp
+-- TODO: freeActiveTextures should not be here
+drawLayer (Layer prg grp) = freeActiveTextures >>
+                            setProgram prg >>
+                            drawGroup grp
 drawLayer (SubLayer rl) =
-        do (layers, textures) <- renderLayer rl
-           mapM_ drawLayer layers
+        do (layer, textures) <- renderLayer rl
+           drawLayer layer
            mapM_ removeTexture textures
-drawLayer (MultiLayer layers) = mapM_ drawLayer layers
+drawLayer (OverLayer top behind) = drawLayer behind >> drawLayer top
+drawLayer (ClearLayer bufs l) = clearBuffers bufs >> drawLayer l
 
 -- | Draw a 'Group'.
 drawGroup :: GLES => Group gs is -> Draw ()
@@ -174,20 +173,17 @@ drawGroup (Object o) = drawObject o
 drawGroup (Global (g := c) o) = c >>= uniform single (g undefined)
                                   >>  drawGroup o
 drawGroup (Append g g') = drawGroup g >> drawGroup g'
-drawGroup (Blend m g) = blendMode <$> Draw get >>=
-                        \om -> setBlendMode m >> drawGroup g >> setBlendMode om
-drawGroup (Stencil m g) = do om <- stencilMode <$> Draw get
-                             setStencilMode m
-                             drawGroup g
-                             setStencilMode om
-drawGroup (DepthTest d g) = do od <- depthTest <$> Draw get
-                               setDepthTest d
-                               drawGroup g
-                               setDepthTest od
-drawGroup (Cull f g) = do oc <- cullFace <$> Draw get
-                          setCullFace f
-                          drawGroup g
-                          setCullFace oc
+drawGroup (Blend m g) = stateReset blendMode setBlendMode m $ drawGroup g
+drawGroup (Stencil m g) = stateReset stencilMode setStencilMode m $ drawGroup g
+drawGroup (DepthTest d g) = stateReset depthTest setDepthTest d $ drawGroup g
+drawGroup (DepthMask d g) = stateReset depthMask setDepthMask d $ drawGroup g
+drawGroup (Cull face g) = stateReset cullFace setCullFace face $ drawGroup g
+
+stateReset :: (DrawState -> a) -> (a -> Draw ()) -> a -> Draw () -> Draw ()
+stateReset getOld set new act = do old <- getOld <$> Draw get
+                                   set new
+                                   act
+                                   set old
 
 -- | Draw an 'Object'.
 drawObject :: GLES => Object gs is -> Draw ()
@@ -335,16 +331,27 @@ layerToTexture drawBufs stypes wp hp layer einspc einspd = do
                               ColorLayer -> ( fromIntegral gl_RGBA
                                             , gl_RGBA
                                             , gl_UNSIGNED_BYTE
-                                            , gl_COLOR_ATTACHMENT0 )
+                                            , gl_COLOR_ATTACHMENT0
+                                            , [ColorBuffer] )
                               DepthLayer -> ( fromIntegral gl_DEPTH_COMPONENT
                                             , gl_DEPTH_COMPONENT
                                             , gl_UNSIGNED_SHORT
-                                            , gl_DEPTH_ATTACHMENT )
+                                            , gl_DEPTH_ATTACHMENT
+                                            , [DepthBuffer] )
+                              DepthStencilLayer -> ( fromIntegral
+                                                        gl_DEPTH_STENCIL
+                                                   , gl_DEPTH_STENCIL
+                                                   , gl_UNSIGNED_INT_24_8
+                                                   , gl_DEPTH_STENCIL_ATTACHMENT
+                                                   , [ DepthBuffer
+                                                     , StencilBuffer]
+                                                   )
                               BufferLayer n -> ( fromIntegral gl_RGBA32F
                                                , gl_RGBA
                                                , gl_FLOAT
                                                , gl_COLOR_ATTACHMENT0 + 
-                                                 fromIntegral n )
+                                                 fromIntegral n
+                                               , [] )
 
               inspect :: Either c (a -> Draw c, Int, Int, Int, Int) -> GLEnum
                       -> ([Word8] -> a) -> Int -> Draw c
@@ -363,14 +370,14 @@ layerToTexture drawBufs stypes wp hp layer einspc einspd = do
               wordsToColors _ = []
 
 renderToTexture :: GLES
-                => Bool -> [(GLInt, GLEnum, GLEnum, GLEnum)]
+                => Bool -> [(GLInt, GLEnum, GLEnum, GLEnum, [Buffer])]
                 -> GLSize -> GLSize -> Draw a -> Draw ([GL.Texture], a)
 renderToTexture drawBufs infos w h act = do
         fb <- gl createFramebuffer 
         gl $ bindFramebuffer gl_FRAMEBUFFER fb
 
-        (ts, as) <- fmap unzip . gl . flip mapM infos $
-                \(internalFormat, format, pixelType, attachment) ->
+        (ts, attchs, buffersToClear) <- fmap unzip3 . gl . flip mapM infos $
+                \(internalFormat, format, pixelType, attachment, buffer) ->
                         do t <- emptyTexture
                            arr <- liftIO $ noUInt8Array
                            bindTexture gl_TEXTURE_2D t
@@ -378,17 +385,16 @@ renderToTexture drawBufs infos w h act = do
                                       h 0 format pixelType arr
                            framebufferTexture2D gl_FRAMEBUFFER attachment
                                                 gl_TEXTURE_2D t 0
-                           return (t, fromIntegral attachment)
+                           return (t, fromIntegral attachment, buffer)
 
-        let buffers = filter (/= fromIntegral gl_DEPTH_ATTACHMENT) as
-        when drawBufs $ liftIO (encodeInts buffers) >>= gl . drawBuffers
+        let buffersToDraw = filter (/= fromIntegral gl_DEPTH_ATTACHMENT) attchs
+        when drawBufs $ liftIO (encodeInts buffersToDraw) >>= gl . drawBuffers
 
         (sw, sh) <- viewportSize <$> Draw get
         resizeViewport (fromIntegral w) (fromIntegral h)
 
-        drawBegin
+        clearBuffers $ concat buffersToClear
         ret <- act
-        drawEnd
 
         resizeViewport sw sh
         gl $ deleteFramebuffer fb
@@ -467,12 +473,27 @@ setCullFace (Just newFace) =
            Draw . modify $ \s -> s { cullFace = Just newFace }
                    
 setDepthTest :: GLES => Bool -> Draw ()
-setDepthTest new = do old <- depthTest <$> Draw get
-                      case (old, new) of
-                              (False, True) -> gl $ enable gl_DEPTH_TEST
-                              (True, False) -> gl $ disable gl_DEPTH_TEST
-                              _ -> return ()
-                      Draw . modify $ \s -> s { depthTest = new }
+setDepthTest = setFlag depthTest (\x s -> s { depthTest = x })
+                       (gl $ enable gl_DEPTH_TEST) (gl $ disable gl_DEPTH_TEST)
+                   
+setDepthMask :: GLES => Bool -> Draw ()
+setDepthMask = setFlag depthMask (\x s -> s { depthMask = x })
+                       (gl $ GL.depthMask true) (gl $ GL.depthMask false)
+
+setFlag :: GLES
+        => (DrawState -> Bool)
+        -> (Bool -> DrawState -> DrawState)
+        -> Draw ()
+        -> Draw ()
+        -> Bool
+        -> Draw ()
+setFlag getFlag setFlag enable disable new =
+        do old <- getFlag <$> Draw get
+           case (old, new) of
+                   (False, True) -> enable
+                   (True, False) -> disable
+                   _ -> return ()
+           Draw . modify $ setFlag new
 
 getDrawResource :: (Resource i r m, Hashable i)
                 => (m (Either String r) -> Draw (Either String r))

@@ -1,13 +1,13 @@
 module Graphics.Rendering.Ombra.Draw (
+        Buffer(..),
         refDrawCtx,
         runDrawCtx,
         execDrawCtx,
         evalDrawCtx,
         drawInit,
         drawState,
-        drawBegin,
+        clearBuffers,
         drawLayer,
-        drawEnd,
         drawGet,
         removeGeometry,
         removeTexture,
@@ -21,7 +21,8 @@ module Graphics.Rendering.Ombra.Draw (
 
 import Data.IORef
 import Graphics.Rendering.Ombra.Draw.Internal
-import Graphics.Rendering.Ombra.Internal.GL
+import Graphics.Rendering.Ombra.Internal.GL hiding (Buffer)
+import Graphics.Rendering.Ombra.Types (Buffer(..))
 
 -- | Run a Draw action using an IORef and a context.
 refDrawCtx :: GLES => Ctx -> Draw a -> IORef DrawState -> IO a

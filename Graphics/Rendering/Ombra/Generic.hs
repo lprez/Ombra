@@ -32,9 +32,11 @@ module Graphics.Rendering.Ombra.Generic (
         noCull,
 
         -- * Layers
+        Buffer(..),
         Layer,
         layer,
-        combineLayers,
+        over,
+        clear,
         -- ** Sublayers
         subLayer,
         depthSubLayer,
@@ -44,10 +46,14 @@ module Graphics.Rendering.Ombra.Generic (
         renderColor,
         renderDepth,
         renderColorDepth,
+        renderColorStencil,
         renderColorInspect,
         renderDepthInspect,
         renderColorDepthInspect,
+        renderColorStencilInspect,
         renderBuffers,
+        renderBuffersDepth,
+        renderBuffersStencil,
 
         -- * Shaders
         Program,
@@ -129,6 +135,11 @@ noStencil = Stencil Nothing
 depthTest :: Bool -> Group gs is -> Group gs is
 depthTest = DepthTest
 -- TODO: should search and modify existing DepthTest
+
+-- | Enable/disable writing into the depth buffer for a 'Group'.
+depthMask :: Bool -> Group gs is -> Group gs is
+depthMask = DepthMask
+-- TODO: should search and modify existing DepthMask
 
 -- | Enable face culling.
 cull :: CullFace -> Group gs is -> Group gs is
@@ -240,9 +251,15 @@ layer :: (Subset progAttr grpAttr, Subset progUni grpUni)
       => Program progUni progAttr -> Group grpUni grpAttr -> Layer
 layer = Layer
 
--- | Combine some layers.
-combineLayers :: [Layer] -> Layer
-combineLayers = MultiLayer
+infixl 1 `over`
+-- | Draw the first Layer over the second one. The first Layer will use the same
+-- buffers (color, depth, stencil) of the second one.
+over :: Layer -> Layer -> Layer
+over = OverLayer
+
+-- | Clear some buffers before drawing a Layer.
+clear :: [Buffer] -> Layer -> Layer
+clear = ClearLayer
 
 -- | Generate a 1x1 texture.
 colorTex :: GLES => Color -> Texture
@@ -254,7 +271,7 @@ colorTex c = mkTexture 1 1 [ c ]
 subLayer :: Int                         -- ^ Texture width.
          -> Int                         -- ^ Texture height.
          -> Layer                       -- ^ Layer to draw on a 'Texture'.
-         -> (Texture -> [Layer])        -- ^ Layers using the texture.
+         -> (Texture -> Layer)          -- ^ Layers using the texture.
          -> Layer
 subLayer w h l = subRenderLayer . renderColor w h l
 
@@ -265,14 +282,14 @@ depthSubLayer :: Int                         -- ^ Texture width.
               -> Int                         -- ^ Texture height.
               -> Layer                       -- ^ Layer to draw on a
                                              -- depth 'Texture'.
-              -> (Texture -> [Layer])        -- ^ Layers using the texture.
+              -> (Texture -> Layer)          -- ^ Layers using the texture.
               -> Layer
 depthSubLayer w h l = subRenderLayer . renderDepth w h l
 
 -- TODO: buffersSubLayer
 
 -- | Generalized version of 'subLayer' and 'depthSubLayer'.
-subRenderLayer :: RenderLayer [Layer] -> Layer
+subRenderLayer :: RenderLayer Layer -> Layer
 subRenderLayer = SubLayer
 
 -- | Render a 'Layer' in a 'Texture'.
@@ -303,6 +320,17 @@ renderColorDepth :: Int                         -- ^ Texture width.
 renderColorDepth w h l f =
         RenderLayer False [ColorLayer, DepthLayer] w h 0 0 0 0 False False l $
                     \[ct, dt] _ _ -> f ct dt
+
+-- | 'renderColor' with an additional stencil buffer.
+renderColorStencil :: Int                         -- ^ Texture width.
+                   -> Int                         -- ^ Texture height.
+                   -> Layer                       -- ^ Layer to draw on a 'Texture'
+                   -> (Texture -> a)              -- ^ Color.
+                   -> RenderLayer a
+renderColorStencil w h l f =
+        RenderLayer False [ColorLayer, DepthStencilLayer] w h 0 0 0 0
+                    False False l $
+                    \[ct, _] _ _ -> f ct
 
 -- | Render a 'Layer' in a 'Texture', reading the content of the texture.
 renderColorInspect
@@ -353,16 +381,54 @@ renderColorDepthInspect w h l rx ry rw rh f =
         RenderLayer False [ColorLayer, DepthLayer] w h rx ry rw rh True True l $
                     \[ct, dt] (Just c) (Just d) -> f ct dt c d
 
+-- | 'renderColorInspect' with an additional stencil buffer.
+renderColorStencilInspect
+        :: Int                          -- ^ Texture width.
+        -> Int                          -- ^ Texture height.
+        -> Layer                        -- ^ Layer to draw on a 'Texture'.
+        -> Int                          -- ^ First pixel to read X
+        -> Int                          -- ^ First pixel to read Y
+        -> Int                          -- ^ Width of the rectangle to read
+        -> Int                          -- ^ Height of the rectangle to read
+        -> (Texture -> [Color] -> a)    -- ^ Function using the texture.
+        -> RenderLayer a
+renderColorStencilInspect w h l rx ry rw rh f =
+        RenderLayer False [ColorLayer, DepthStencilLayer] w h rx ry
+                    rw rh True False l $
+                    \[t, _] (Just c) _ -> f t c
+
 -- | Render a 'Layer' with multiple floating point colors
 -- (use 'Fragment2', 'Fragment3', etc.) in some 'Texture's.
 renderBuffers :: Int                           -- ^ Textures width.
               -> Int                           -- ^ Textures height.
               -> Int                           -- ^ Number of colors.
               -> Layer                         -- ^ Layer to draw.
-              -> ([Texture] -> a)              -- ^ Function using the texture.
+              -> ([Texture] -> a)              -- ^ Function using the textures.
               -> RenderLayer a
 renderBuffers w h n l f =
         RenderLayer True (DepthLayer : map BufferLayer [0 .. n - 1]) w h
                     0 0 0 0 False False l $ \(_ : ts) _ _ -> f ts
 
--- TODO: renderBuffersDepth
+-- | Combination of 'renderBuffers' and 'renderDepth'.
+renderBuffersDepth :: Int                           -- ^ Textures width.
+                   -> Int                           -- ^ Textures height.
+                   -> Int                           -- ^ Number of colors.
+                   -> Layer                         -- ^ Layer to draw.
+                   -> ([Texture] -> Texture -> a)   -- ^ Function using the
+                                                    -- buffers textures and
+                                                    -- the depth texture.
+                   -> RenderLayer a
+renderBuffersDepth w h n l f =
+        RenderLayer True (DepthLayer : map BufferLayer [0 .. n - 1]) w h
+                    0 0 0 0 False False l $ \(dt : ts) _ _ -> f ts dt
+
+-- | 'renderBuffers' with an additional stencil buffer.
+renderBuffersStencil :: Int                      -- ^ Textures width.
+                     -> Int                      -- ^ Textures height.
+                     -> Int                      -- ^ Number of colors.
+                     -> Layer                    -- ^ Layer to draw.
+                     -> ([Texture] -> a)         -- ^ Function using the texture.
+                     -> RenderLayer a
+renderBuffersStencil w h n l f =
+        RenderLayer True (DepthStencilLayer : map BufferLayer [0 .. n - 1]) w h
+                    0 0 0 0 False False l $ \(_ : ts) _ _ -> f ts

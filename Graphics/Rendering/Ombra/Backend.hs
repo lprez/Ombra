@@ -346,8 +346,10 @@ class ( Integral GLEnum
         gl_UNSIGNED_SHORT :: GLEnum
         gl_INT :: GLEnum
         gl_UNSIGNED_INT :: GLEnum
+        gl_UNSIGNED_INT_24_8 :: GLEnum
         gl_FLOAT :: GLEnum
         gl_DEPTH_COMPONENT :: GLEnum
+        gl_DEPTH_STENCIL :: GLEnum
         gl_ALPHA :: GLEnum
         gl_RGB :: GLEnum
         gl_RGBA :: GLEnum
@@ -535,6 +537,7 @@ class ( Integral GLEnum
         gl_COLOR_ATTACHMENT15 :: GLEnum
         gl_DEPTH_ATTACHMENT :: GLEnum
         gl_STENCIL_ATTACHMENT :: GLEnum
+        gl_DEPTH_STENCIL_ATTACHMENT :: GLEnum
         gl_NONE :: GLEnum
         gl_FRAMEBUFFER_COMPLETE :: GLEnum
         gl_FRAMEBUFFER_INCOMPLETE_ATTACHMENT :: GLEnum

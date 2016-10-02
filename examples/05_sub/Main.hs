@@ -37,10 +37,9 @@ scene tex noiseTex time =
             -- the previous example) to a 512x512 texture, and pass it to
             -- a 2D layer, which draws a distorted texture.
             in subLayer 512 512 sceneLayer $ \renderedSceneTex ->
-                      [   layer prg2D
-                        . D2.view idmtx
-                        $ [distortedRect renderedSceneTex]
-                      ]
+                        layer prg2D
+                      . D2.view idmtx
+                      $ [distortedRect renderedSceneTex]
         where prg :: Program Uniforms Attributes
               prg = program vertexShader fragmentShader
 
