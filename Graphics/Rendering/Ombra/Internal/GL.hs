@@ -96,7 +96,8 @@ module Graphics.Rendering.Ombra.Internal.GL (
         stencilMaskSeparate,
         stencilOp,
         stencilOpSeparate,
-        texImage2D,
+        texImage2DUInt,
+        texImage2DFloat,
         texParameterf,
         texParameteri,
         texSubImage2D,
@@ -457,8 +458,11 @@ stencilOp a b c = getCtx >>= \ctx -> liftIO $ glStencilOp ctx a b c
 stencilOpSeparate :: GLES => GLEnum -> GLEnum -> GLEnum -> GLEnum -> GL ()
 stencilOpSeparate a b c d = getCtx >>= \ctx -> liftIO $ glStencilOpSeparate ctx a b c d
 
-texImage2D :: GLES => GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> UInt8Array -> GL ()
-texImage2D a b c d e f g h i = getCtx >>= \ctx -> liftIO $ glTexImage2D ctx a b c d e f g h i
+texImage2DUInt :: GLES => GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> UInt8Array -> GL ()
+texImage2DUInt a b c d e f g h i = getCtx >>= \ctx -> liftIO $ glTexImage2DUInt ctx a b c d e f g h i
+
+texImage2DFloat :: GLES => GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> Float32Array -> GL ()
+texImage2DFloat a b c d e f g h i = getCtx >>= \ctx -> liftIO $ glTexImage2DFloat ctx a b c d e f g h i
 
 texParameterf :: GLES => GLEnum -> GLEnum -> Float -> GL ()
 texParameterf a b c = getCtx >>= \ctx -> liftIO $ glTexParameterf ctx a b c

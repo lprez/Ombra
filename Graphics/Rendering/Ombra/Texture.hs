@@ -3,6 +3,7 @@
 module Graphics.Rendering.Ombra.Texture (
         mkTexture,
         mkTextureRaw,
+        mkTextureFloat,
         emptyTexture
 ) where
 
@@ -37,6 +38,16 @@ mkTextureRaw w h arr pxhash = TextureImage $ TextureRaw arr
                                                         (fromIntegral h)
                                                         $ hash (w, h, pxhash)
 
+-- | Creates a float 'Texture' from a list of values.
+mkTextureFloat :: GLES
+               => Int      -- ^ Width.
+               -> Int      -- ^ Height.
+               -> [Float]  -- ^ List of values
+               -> Texture
+mkTextureFloat w h ps = TextureImage . TextureFloat ps (fromIntegral w)
+                                                       (fromIntegral h)
+                                $ hash (w, h, ps)
+
 instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i -- TODO: err check
         unloadResource _ (LoadedTexture _ _ t) = deleteTexture t
@@ -48,12 +59,24 @@ loadTextureImage (TexturePixels ps w h hash) =
            loadTextureImage $ TextureRaw arr w h hash
 loadTextureImage (TextureRaw arr w h _) =
         do t <- emptyTexture
-           texImage2D gl_TEXTURE_2D 0
-                      (fromIntegral gl_RGBA)
-                      w h 0
-                      gl_RGBA
-                      gl_UNSIGNED_BYTE
-                      arr
+           texImage2DUInt gl_TEXTURE_2D 0
+                          (fromIntegral gl_RGBA)
+                          w h 0
+                          gl_RGBA
+                          gl_UNSIGNED_BYTE
+                          arr
+           return $ LoadedTexture (fromIntegral w)
+                                  (fromIntegral h)
+                                  t
+loadTextureImage (TextureFloat ps w h hash) =
+        do arr <- liftIO . encodeFloats $ ps
+           t <- emptyTexture
+           texImage2DFloat gl_TEXTURE_2D 0
+                           (fromIntegral gl_RGBA32F)
+                           w h 0
+                           gl_RGBA
+                           gl_FLOAT
+                           arr
            return $ LoadedTexture (fromIntegral w)
                                   (fromIntegral h)
                                   t

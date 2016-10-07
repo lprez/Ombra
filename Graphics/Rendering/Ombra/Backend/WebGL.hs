@@ -37,6 +37,8 @@ import qualified JavaScript.TypedArray.DataView as JSDataView
 -- TODO: ??? 
 foreign import javascript unsafe "eval('null')" nullUInt8Array :: IO UInt8Array
 
+foreign import javascript unsafe "eval('null')" nullFloat32Array :: IO Float32Array
+
 data TagTex = TagTex Int JS.Texture
 
 instance Eq TagTex where
@@ -99,6 +101,7 @@ instance GLES where
         noBuffer = JS.noBuffer
         noTexture = TagTex (-1) JS.noTexture
         noUInt8Array = nullUInt8Array
+        noFloat32Array = nullFloat32Array
         noVAO = JS.noVAO
 
         encodeMat2 (Mat2 (Vec2 a1 a2) (Vec2 b1 b2)) =
@@ -295,7 +298,8 @@ instance GLES where
         glStencilMaskSeparate = JS.glStencilMaskSeparate . snd
         glStencilOp = JS.glStencilOp . snd
         glStencilOpSeparate = JS.glStencilOpSeparate . snd
-        glTexImage2D = JS.glTexImage2D . snd
+        glTexImage2DUInt = JS.glTexImage2DUInt . snd
+        glTexImage2DFloat = JS.glTexImage2DFloat . snd
         glTexParameterf = JS.glTexParameterf . snd
         glTexParameteri = JS.glTexParameteri . snd
         glTexSubImage2D = JS.glTexSubImage2D . snd

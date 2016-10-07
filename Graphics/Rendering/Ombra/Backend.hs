@@ -67,6 +67,7 @@ class ( Integral GLEnum
         noTexture :: Texture
         noVAO :: VertexArrayObject
         noUInt8Array :: IO UInt8Array
+        noFloat32Array :: IO Float32Array
         encodeMat2 :: Mat2 -> IO Float32Array
         encodeMat3 :: Mat3 -> IO Float32Array
         encodeMat4 :: Mat4 -> IO Float32Array
@@ -188,7 +189,8 @@ class ( Integral GLEnum
         glStencilMaskSeparate :: Ctx -> GLEnum -> GLUInt -> IO ()
         glStencilOp :: Ctx -> GLEnum -> GLEnum -> GLEnum -> IO ()
         glStencilOpSeparate :: Ctx -> GLEnum -> GLEnum -> GLEnum -> GLEnum -> IO ()
-        glTexImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> UInt8Array -> IO ()
+        glTexImage2DUInt :: Ctx -> GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> UInt8Array -> IO ()
+        glTexImage2DFloat :: Ctx -> GLEnum -> GLInt -> GLInt -> GLSize -> GLSize -> GLInt -> GLEnum -> GLEnum -> Float32Array -> IO ()
         glTexParameterf :: Ctx -> GLEnum -> GLEnum -> Float -> IO ()
         glTexParameteri :: Ctx -> GLEnum -> GLEnum -> GLInt -> IO ()
         glTexSubImage2D :: Ctx -> GLEnum -> GLInt -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> IO ()

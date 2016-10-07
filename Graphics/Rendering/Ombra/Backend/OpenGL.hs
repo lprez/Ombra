@@ -98,6 +98,7 @@ instance GLES where
         noTexture = 0
         noVAO = 0
         noUInt8Array = fmap ((,) 0) $ newForeignPtr_ nullPtr
+        noFloat32Array = fmap ((,) 0) $ newForeignPtr_ nullPtr
 
         encodeMat2 (Mat2 (Vec2 a1 a2) (Vec2 b1 b2)) = mkArray [ a1, a2, b1, b2 ]
 
@@ -230,7 +231,9 @@ instance GLES where
         glStencilMaskSeparate = const GL.glStencilMaskSeparate
         glStencilOp = const GL.glStencilOp
         glStencilOpSeparate = const GL.glStencilOpSeparate
-        glTexImage2D _ a b c d e f g h (_, fp) = withForeignPtr fp $
+        glTexImage2DUInt _ a b c d e f g h (_, fp) = withForeignPtr fp $
+                GL.glTexImage2D a b c d e f g h . castPtr
+        glTexImage2DFloat _ a b c d e f g h (_, fp) = withForeignPtr fp $
                 GL.glTexImage2D a b c d e f g h . castPtr
         glTexParameterf = const GL.glTexParameterf
         glTexParameteri = const GL.glTexParameteri
