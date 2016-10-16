@@ -1,5 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses, DeriveDataTypeable, DataKinds,
-             KindSignatures, ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses, DataKinds, KindSignatures,
+             ScopedTypeVariables #-}
 
 module Graphics.Rendering.Ombra.Shader.Language.Types where
 

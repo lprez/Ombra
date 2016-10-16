@@ -16,8 +16,8 @@ scene tex noiseTex time =
                               . scale 0.2
                               $ cube tex
 
-            cubeGroup =   globalGroup (Time -= time / 2)
-                        . globalGroup (globalTexture NoiseTexture noiseTex)
+            cubeGroup =   groupGlobal (Time -= time / 2)
+                        . groupGlobal (globalTexture NoiseTexture noiseTex)
                         $ viewPersp 0.5
                                     100000
                                     100

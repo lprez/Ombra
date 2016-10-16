@@ -1,11 +1,11 @@
 {-# LANGUAGE MultiParamTypeClasses, ExistentialQuantification, ConstraintKinds,
-             FunctionalDependencies, KindSignatures, DataKinds, GADTs,
-             RankNTypes, FlexibleInstances, ScopedTypeVariables,
-             TypeOperators, ImpredicativeTypes, TypeSynonymInstances,
-             FlexibleContexts #-}
+             KindSignatures, DataKinds, GADTs, RankNTypes, FlexibleInstances,
+             ScopedTypeVariables, TypeOperators, ImpredicativeTypes,
+             TypeSynonymInstances, FlexibleContexts #-}
 
 module Graphics.Rendering.Ombra.Shader.Program (
         LoadedProgram(..),
+        Compatible,
         Program,
         program,
         loadProgram,
@@ -37,7 +37,6 @@ data Program (gs :: [*]) (is :: [*]) =
         Program (String, [(String, Int)]) String Int
 
 data LoadedProgram = LoadedProgram !GL.Program (H.HashMap String Int) Int
-
 
 -- | The uniforms used in the default 3D program.
 type DefaultUniforms3D = Default3D.Uniforms
@@ -72,6 +71,7 @@ castProgram :: Program gs is -> Program gs' is'
 -- castProgram (Program v f h) = Program v f h
 castProgram = unsafeCoerce
 
+-- | Compatible shaders.
 type Compatible pgs vgs fgs =
         EqualOrErr pgs (Union vgs fgs)
                    (Text "Incompatible shader uniforms" :$$:

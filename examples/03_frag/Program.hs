@@ -14,16 +14,17 @@ import Graphics.Rendering.Ombra.Shader
 import Graphics.Rendering.Ombra.Shader.Default3D hiding (fragmentShader)
 
 -- The fragment shader operates on the colors of the pixels.
-fragmentShader :: FragmentShader '[ Texture2 ]    -- List of uniforms
-                                                  -- (i.e. values we can send
-                                                  -- to the GPU and are
-                                                  -- constant for every
-                                                  -- shader call).
-                                 '[ UV, Normal3 ] -- List of inputs (values
-                                                  -- the fragment shader
-                                                  -- receives from the vertex
-                                                  -- one and change for every
-                                                  -- vertex/fragment).
+fragmentShader ::
+        FragmentShader '[ Texture2 ]               -- List of uniforms
+                                                   -- (i.e. values we can send
+                                                   -- to the GPU and are
+                                                   -- constant for every
+                                                   -- shader call).
+                       '[ Position3, UV, Normal3 ] -- List of inputs (values
+                                                   -- the fragment shader
+                                                   -- receives from the vertex
+                                                   -- one and change for every
+                                                   -- vertex/fragment).
 
 -- We define the fragment shader as if it was a function from an heterogeneous
 -- list of uniforms and an heterogeneous list of attribues to an heterogeneous
@@ -31,13 +32,13 @@ fragmentShader :: FragmentShader '[ Texture2 ]    -- List of uniforms
 -- you're drawing to multiple textures instead of the screen). :- is the cons
 -- operator and 'N' marks the end of the list.
 fragmentShader (Texture2 sampler :- N)  -- The texture of the object to draw.
-               (UV (Vec2 s t) :- -- The UV coordinates of the current fragment,
+               (Position3 _ :-   -- The world coordinates of the pixel. We
+                                 -- don't need them, but we add it to match the
+                                 -- output of the standard vertex shader.
+                UV (Vec2 s t) :- -- The UV coordinates of the current fragment,
                                  -- we use them to get the right pixel from the
                                  -- texture.
-                Normal3 _ :- N) -- We don't need this one in this case, but we
-                                -- add it so that the interface of this
-                                -- fragment shader is compatible with the
-                                -- standard vertex shader.
+                _)
                 = let (Vec4 x y z _) = fragCoord -- The coordinates of the
                                                  -- current pixel, we use them
                                                  -- to vary the color of the

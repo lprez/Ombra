@@ -4,11 +4,13 @@ module Graphics.Rendering.Ombra.Texture (
         mkTexture,
         mkTextureRaw,
         mkTextureFloat,
+        setFilter,
         emptyTexture
 ) where
 
 import Data.Hashable
 
+import Data.Vect.Float
 import Graphics.Rendering.Ombra.Backend (GLES)
 import qualified Graphics.Rendering.Ombra.Backend as GL
 import Graphics.Rendering.Ombra.Color
@@ -23,9 +25,10 @@ mkTexture :: GLES
           -> Int      -- ^ Height.
           -> [Color]  -- ^ List of pixels
           -> Texture
-mkTexture w h ps = TextureImage . TexturePixels ps (fromIntegral w)
+mkTexture w h ps = TextureImage . TexturePixels ps Linear Linear
+                                                   (fromIntegral w)
                                                    (fromIntegral h)
-                        $ hash (w, h, ps)
+                        $ hash (w, h, take (w * h) ps)
 
 mkTextureRaw :: GLES
              => Int         -- ^ Width.
@@ -33,32 +36,45 @@ mkTextureRaw :: GLES
              -> UInt8Array  -- ^ Array of pixel components.
              -> Int         -- ^ Texture hash
              -> Texture
-mkTextureRaw w h arr pxhash = TextureImage $ TextureRaw arr
+mkTextureRaw w h arr pxhash = TextureImage $ TextureRaw arr Linear Linear
                                                         (fromIntegral w)
                                                         (fromIntegral h)
                                                         $ hash (w, h, pxhash)
 
--- | Creates a float 'Texture' from a list of values.
+-- | Creates a float 'Texture' from a list of vectors.
 mkTextureFloat :: GLES
                => Int      -- ^ Width.
                -> Int      -- ^ Height.
-               -> [Float]  -- ^ List of values
+               -> [Vec4]   -- ^ List of vectors.
                -> Texture
-mkTextureFloat w h ps = TextureImage . TextureFloat ps (fromIntegral w)
+mkTextureFloat w h vs = TextureImage . TextureFloat ps Linear Linear
+                                                       (fromIntegral w)
                                                        (fromIntegral h)
-                                $ hash (w, h, ps)
+                                $ hash (w, h, take (w * h * 4) ps)
+        where ps = vs >>= \(Vec4 x y z w) -> [x, y, z, w]
+
+-- | Change the Texture minifying and magnifying functions. This doesn't work on
+-- sublayer textures.
+setFilter :: Filter -> Filter -> Texture -> Texture
+setFilter min mag (TextureImage (TexturePixels c _ _ w h s)) =
+        TextureImage (TexturePixels c min mag w h s)
+setFilter min mag (TextureImage (TextureRaw c _ _ w h s)) =
+        TextureImage (TextureRaw c min mag w h s)
+setFilter min mag (TextureImage (TextureFloat c _ _ w h s)) =
+        TextureImage (TextureFloat c min mag w h s)
+setFilter _ _ t = t
 
 instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i -- TODO: err check
         unloadResource _ (LoadedTexture _ _ t) = deleteTexture t
 
 loadTextureImage :: GLES => TextureImage -> GL LoadedTexture
-loadTextureImage (TexturePixels ps w h hash) =
-        do arr <- liftIO . encodeUInt8s $
+loadTextureImage (TexturePixels ps min mag w h hash) =
+        do arr <- liftIO . encodeUInt8s . take (fromIntegral $ w * h * 4) $
                         ps >>= \(Color r g b a) -> [r, g, b, a]
-           loadTextureImage $ TextureRaw arr w h hash
-loadTextureImage (TextureRaw arr w h _) =
-        do t <- emptyTexture
+           loadTextureImage $ TextureRaw arr min mag w h hash
+loadTextureImage (TextureRaw arr min mag w h _) =
+        do t <- emptyTexture min mag
            texImage2DUInt gl_TEXTURE_2D 0
                           (fromIntegral gl_RGBA)
                           w h 0
@@ -68,9 +84,9 @@ loadTextureImage (TextureRaw arr w h _) =
            return $ LoadedTexture (fromIntegral w)
                                   (fromIntegral h)
                                   t
-loadTextureImage (TextureFloat ps w h hash) =
-        do arr <- liftIO . encodeFloats $ ps
-           t <- emptyTexture
+loadTextureImage (TextureFloat ps min mag w h hash) =
+        do arr <- liftIO . encodeFloats . take (fromIntegral $ w * h * 4) $ ps
+           t <- emptyTexture min mag
            texImage2DFloat gl_TEXTURE_2D 0
                            (fromIntegral gl_RGBA32F)
                            w h 0
@@ -81,13 +97,16 @@ loadTextureImage (TextureFloat ps w h hash) =
                                   (fromIntegral h)
                                   t
 
-emptyTexture :: GLES => GL GL.Texture
-emptyTexture = do t <- createTexture
-                  bindTexture gl_TEXTURE_2D t
-                  param gl_TEXTURE_MAG_FILTER gl_LINEAR
-                  param gl_TEXTURE_MIN_FILTER gl_LINEAR
-                  param gl_TEXTURE_WRAP_S gl_REPEAT
-                  param gl_TEXTURE_WRAP_T gl_REPEAT
-                  return t
-        where param :: GLES => GLEnum -> GLEnum -> GL ()
+emptyTexture :: GLES => Filter -> Filter -> GL GL.Texture
+emptyTexture minf magf = do t <- createTexture
+                            bindTexture gl_TEXTURE_2D t
+                            param gl_TEXTURE_MIN_FILTER $ f minf
+                            param gl_TEXTURE_MAG_FILTER $ f magf
+                            param gl_TEXTURE_WRAP_S gl_REPEAT
+                            param gl_TEXTURE_WRAP_T gl_REPEAT
+                            return t
+        where f Linear = gl_LINEAR
+              f Nearest = gl_NEAREST
+
+              param :: GLES => GLEnum -> GLEnum -> GL ()
               param p v = texParameteri gl_TEXTURE_2D p $ fromIntegral v

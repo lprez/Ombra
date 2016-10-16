@@ -1,11 +1,12 @@
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses, DataKinds, TypeOperators,
-             FunctionalDependencies, FlexibleInstances, RankNTypes, PolyKinds,
-             FlexibleContexts, UndecidableInstances, ScopedTypeVariables #-}
+             FlexibleInstances, RankNTypes, PolyKinds, FlexibleContexts,
+             UndecidableInstances, ScopedTypeVariables #-}
 
 module Graphics.Rendering.Ombra.Shader.CPU (
         CPUSetterType(..),
         CPU(..),
         CPUBase(..),
+        CPUMirror(..),
         BaseUniform(..),
         BaseAttribute(..),
         Uniform(..),
@@ -42,7 +43,18 @@ type family CPU (s :: CPUSetterType *) g where
         CPU 'M x = CPUMirror x
 
 type family CPUBase g
+
+-- | The mirror type of a certain global.
+-- 
+-- For instance:
+--
+-- @
+--      data T = T Vec3 Float -- In the shader module
+--      data T = T Vec3 Float -- CPU version of the uniform type
+--      type CPUMirror GPU.T = T
+-- @
 type family CPUMirror g
+
 
 -- type family CPUAutoSetter (g :: * -> *) :: CPUSetterType
 -- type CPUAuto g = CPU (CPUAutoSetter g) g
@@ -152,7 +164,7 @@ instance ( GUniformMirror a (GCPUMirror a d c) d c
 instance ( GUniformMirror a ma d c
          , M1 mi mv ma ~ GCPUMirror (M1 i v a) d c )
         => GUniformMirror (M1 i v a) (M1 mi mv ma) d c where
-        gWithUniformMirror p i (M1 x) (M1 mx) f = gWithUniformMirror p i x mx f
+        gWithUniformMirror p i (M1 x) (M1 mx) = gWithUniformMirror p i x mx
 
 instance (BaseUniform a, m ~ GCPUMirror (K1 i a) d c)
         => GUniformMirror (K1 i a) m d c where
@@ -198,7 +210,7 @@ type instance CPUBase GPU.Float = CPU.Float
 type instance CPUBase (GPU.Array n GPU.Float) = [CPU.Float]
 
 instance GLES => BaseUniform GPU.Float where
-        setUniform l _ v = uniform1f l v
+        setUniform l _ = uniform1f l
 
 instance GLES => BaseUniform (GPU.Array n GPU.Float) where
         setUniform l _ v = liftIO (encodeFloats v) >>= uniform1fv l
@@ -213,7 +225,7 @@ type instance CPUBase GPU.Bool = CPU.Int32
 type instance CPUBase (GPU.Array n GPU.Bool) = [CPU.Int32]
 
 instance GLES => BaseUniform GPU.Bool where
-        setUniform l _ v = uniform1i l v
+        setUniform l _ = uniform1i l
 
 instance GLES => BaseUniform (GPU.Array n GPU.Bool) where
         setUniform l _ v = liftIO (encodeInts v) >>= uniform1iv l
@@ -228,7 +240,7 @@ type instance CPUBase GPU.Int = CPU.Int32
 type instance CPUBase (GPU.Array n GPU.Int) = [CPU.Int32]
 
 instance GLES => BaseUniform GPU.Int where
-        setUniform l _ v = uniform1i l v
+        setUniform l _ = uniform1i l
 
 instance GLES => BaseUniform (GPU.Array n GPU.Int) where
         setUniform l _ v = liftIO (encodeInts v) >>= uniform1iv l

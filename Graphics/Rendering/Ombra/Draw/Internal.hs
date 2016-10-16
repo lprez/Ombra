@@ -36,7 +36,7 @@ import Graphics.Rendering.Ombra.Backend (GLES)
 import qualified Graphics.Rendering.Ombra.Backend as GL
 import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, Buffer,
                                                     UniformLocation, cullFace,
-                                                    depthMask)
+                                                    depthMask, colorMask)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Shader.CPU
@@ -83,6 +83,7 @@ drawState w h = do programs <- newGLResMap
                                     , depthMask = True
                                     , stencilMode = Nothing
                                     , cullFace = Just CullBack
+                                    , colorMask = (True, True, True, True)
                                     }
 
         where newGLResMap :: (Hashable i, Resource i r GL) => IO (ResMap i r)
@@ -172,11 +173,15 @@ drawGroup Empty = return ()
 drawGroup (Object o) = drawObject o
 drawGroup (Global (g := c) o) = c >>= uniform single (g undefined)
                                   >>  drawGroup o
+drawGroup (Global (Mirror g c) o) = c >>= uniform mirror
+                                                  (varBuild (const undefined) g)
+                                      >> drawGroup o
 drawGroup (Append g g') = drawGroup g >> drawGroup g'
 drawGroup (Blend m g) = stateReset blendMode setBlendMode m $ drawGroup g
 drawGroup (Stencil m g) = stateReset stencilMode setStencilMode m $ drawGroup g
 drawGroup (DepthTest d g) = stateReset depthTest setDepthTest d $ drawGroup g
 drawGroup (DepthMask d g) = stateReset depthMask setDepthMask d $ drawGroup g
+drawGroup (ColorMask d g) = stateReset colorMask setColorMask d $ drawGroup g
 drawGroup (Cull face g) = stateReset cullFace setCullFace face $ drawGroup g
 
 stateReset :: (DrawState -> a) -> (a -> Draw ()) -> a -> Draw () -> Draw ()
@@ -191,6 +196,9 @@ drawObject NoMesh = return ()
 drawObject (Mesh g) = withRes_ (getGPUVAOGeometry $ castGeometry g)
                                  drawGPUVAOGeometry
 drawObject ((g := c) :~> o) = c >>= uniform single (g undefined) >> drawObject o
+drawObject (Mirror g c :~> o) = c >>= uniform mirror
+                                              (varBuild (const undefined) g)
+                                  >> drawObject o
 
 uniform :: (GLES, ShaderVar g, Uniform s g)
         => proxy (s :: CPUSetterType *) -> g -> CPU s g -> Draw ()
@@ -200,7 +208,7 @@ uniform p g c = withUniforms p g c $
                                                                 
 
 -- | This helps you set the uniforms of type 'Graphics.Rendering.Ombra.Shader.Sampler2D'.
-textureUniform :: GLES  => Texture -> Draw ActiveTexture
+textureUniform :: GLES => Texture -> Draw ActiveTexture
 textureUniform tex = withRes (getTexture tex) (return $ ActiveTexture 0)
                                  $ \(LoadedTexture _ _ wtex) ->
                                         do at <- makeActive tex
@@ -378,11 +386,17 @@ renderToTexture drawBufs infos w h act = do
 
         (ts, attchs, buffersToClear) <- fmap unzip3 . gl . flip mapM infos $
                 \(internalFormat, format, pixelType, attachment, buffer) ->
-                        do t <- emptyTexture
-                           arr <- liftIO $ noUInt8Array
+                        do t <- emptyTexture Linear Linear
                            bindTexture gl_TEXTURE_2D t
-                           texImage2D gl_TEXTURE_2D 0 internalFormat w 
-                                      h 0 format pixelType arr
+                           case pixelType of
+                                gl_FLOAT -> liftIO noFloat32Array >>=
+                                            texImage2DFloat gl_TEXTURE_2D 0
+                                                            internalFormat w h
+                                                            0 format pixelType
+                                _ -> liftIO noUInt8Array >>=
+                                     texImage2DUInt gl_TEXTURE_2D 0
+                                                    internalFormat w h
+                                                    0 format pixelType
                            framebufferTexture2D gl_FRAMEBUFFER attachment
                                                 gl_TEXTURE_2D t 0
                            return (t, fromIntegral attachment, buffer)
@@ -494,6 +508,15 @@ setFlag getFlag setFlag enable disable new =
                    (True, False) -> disable
                    _ -> return ()
            Draw . modify $ setFlag new
+
+setColorMask :: GLES => (Bool, Bool, Bool, Bool) -> Draw ()
+setColorMask new@(r, g, b, a) = do old <- colorMask <$> Draw get
+                                   when (old /= new) . gl $
+                                           GL.colorMask r' g' b' a'
+                                   Draw . modify $ \s -> s { colorMask = new }
+        where (r', g', b', a') = (bool r, bool g, bool b, bool a)
+              bool True = true
+              bool False = false
 
 getDrawResource :: (Resource i r m, Hashable i)
                 => (m (Either String r) -> Draw (Either String r))

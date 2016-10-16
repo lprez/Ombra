@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, GADTs, RankNTypes, FlexibleContexts,
-             KindSignatures, DataKinds, TypeOperators, ConstraintKinds #-}
+             DataKinds, TypeOperators, ConstraintKinds #-}
 
 module Graphics.Rendering.Ombra.Shader.GLSL (
         vertexToGLSLAttr,
@@ -74,7 +74,7 @@ shaderToGLSL header ins outs (ShaderVars gs is os) predec = concat
         , "}" ]
         where var qual (ty, nm) = qual ++ " " ++ ty ++ " " ++ nm ++ ";"
               replace x xs = case filter ((== x) . fst) xs of
-                                        ((_, y) : []) -> y
+                                        [(_, y)] -> y
                                         _ -> x
               (_, outNames, outExprs) = unzip3 os
               (actions, outStrs) = compile outExprs
@@ -108,7 +108,7 @@ vars isFragment (shader :: Shader gs is os) =
 
               varExpr :: ShaderVar v => VarPrefix -> Proxy v -> v
               varExpr p (pvar :: Proxy v) =
-                      varBuild (\n -> fromExpr . Read $ varName p var n) pvar
+                      varBuild (fromExpr . Read . varName p var) pvar
                 where var = undefined :: v
 
 type ActionID = Int

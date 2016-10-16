@@ -21,8 +21,8 @@ scene tex noiseTex time =
             -- Globals are created with the globalTexture function. Note that
             -- the "uniform name" can be any function with the uniform datatype
             -- as return value, so we can use its constructor.
-            cubeGroup =   globalGroup (Time -= time / 2)
-                        . globalGroup (globalTexture NoiseTexture noiseTex)
+            cubeGroup =   groupGlobal (Time -= time / 2)
+                        . groupGlobal (globalTexture NoiseTexture noiseTex)
                         $ viewPersp 0.5
                                     100000
                                     100

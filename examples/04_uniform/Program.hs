@@ -21,12 +21,11 @@ data Time = Time Float deriving Generic
 type Uniforms = '[ Time, NoiseTexture, View3, Transform3, Texture2 ]
 
 fragmentShader :: FragmentShader '[ Time, NoiseTexture, Texture2 ]
-                                 '[ UV, Normal3 ]
+                                 '[ Position3, UV, Normal3 ]
 fragmentShader (Time time :-
                 NoiseTexture noiseSampler :-
                 Texture2 sampler :- N)
-               (UV (Vec2 s t) :-
-                Normal3 _ :- N)
+               (_ :- UV (Vec2 s t) :- _)
                 = let Vec4 value _ _ _ = texture2D noiseSampler $ Vec2 s t
                       intensity = fract $ value + time
                       color = Vec4 0.5 0.6 0 1

@@ -7,6 +7,7 @@ module Graphics.Rendering.Ombra.Types (
         UniformLocation(..),
         Texture(..),
         TextureImage(..),
+        Filter(..),
         LoadedTexture(..),
         Geometry(..),
         Group(..),
@@ -24,6 +25,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State
 import Data.Hashable
+import Data.Proxy (Proxy)
 import Data.Vect.Float hiding (Vector)
 import Data.Vector (Vector)
 import Data.Typeable
@@ -58,7 +60,8 @@ data DrawState = DrawState {
         stencilMode :: Maybe Stencil.Mode,
         cullFace :: Maybe CullFace,
         depthTest :: Bool,
-        depthMask :: Bool
+        depthMask :: Bool,
+        colorMask :: (Bool, Bool, Bool, Bool)
 }
 
 -- | A state monad on top of 'GL'.
@@ -73,8 +76,13 @@ data Texture = TextureImage TextureImage
              | TextureLoaded LoadedTexture
              deriving Eq
              
-data TextureImage = TexturePixels [Color] GLSize GLSize Int
-                  | TextureRaw UInt8Array GLSize GLSize Int
+data TextureImage = TexturePixels [Color] Filter Filter GLSize GLSize Int
+                  | TextureRaw UInt8Array Filter Filter GLSize GLSize Int
+                  | TextureFloat [Float] Filter Filter GLSize GLSize Int
+
+data Filter = Linear    -- ^ Average of the four nearest pixels.
+            | Nearest   -- ^ Nearest pixel.
+            deriving Eq
 
 data LoadedTexture = LoadedTexture GLSize GLSize GL.Texture
 
@@ -89,6 +97,7 @@ data Group (gs :: [*]) (is :: [*]) where
         Cull :: Maybe CullFace -> Group gs is -> Group gs is
         DepthTest :: Bool -> Group gs is -> Group gs is
         DepthMask :: Bool -> Group gs is -> Group gs is
+        ColorMask :: (Bool, Bool, Bool, Bool) -> Group gs is -> Group gs is
 
 -- | A geometry associated with some uniforms.
 data Object (gs :: [*]) (is :: [*]) where
@@ -102,6 +111,8 @@ infixr 2 :~>
 data Global g where
         (:=) :: (ShaderVar g, Uniform 'S g)
              => (a -> g) -> Draw (CPU 'S g) -> Global g
+        Mirror :: (ShaderVar g, Uniform 'M g)
+               => Proxy g -> Draw (CPU 'M g) -> Global g
 
 infix 3 :=
 
@@ -110,7 +121,7 @@ data Layer = forall oi pi og pg. (Subset pi oi, Subset pg og)
                               => Layer (Program pg pi) (Group og oi)
            | SubLayer (RenderLayer Layer)
            | OverLayer Layer Layer
-           | ClearLayer [Buffer] Layer
+           | ClearLayer [Buffer] Layer -- TODO: like OverLayer
 
 data Buffer = ColorBuffer | DepthBuffer | StencilBuffer
 
@@ -136,13 +147,15 @@ instance Hashable TextureImage where
         hashWithSalt salt tex = hashWithSalt salt $ textureHash tex
 
 instance Eq TextureImage where
-        (TexturePixels _ _ _ h) == (TexturePixels _ _ _ h') = h == h'
-        (TextureRaw _ _ _ h) == (TextureRaw _ _ _ h') = h == h'
+        (TexturePixels _ _ _ _ _ h) == (TexturePixels _ _ _ _ _ h') = h == h'
+        (TextureRaw _ _ _ _ _ h) == (TextureRaw _ _ _ _ _ h') = h == h'
+        (TextureFloat _ _ _ _ _ h) == (TextureFloat _ _ _ _ _ h') = h == h'
         _ == _ = False
 
 instance GLES => Eq LoadedTexture where
         LoadedTexture _ _ t == LoadedTexture _ _ t' = t == t'
 
 textureHash :: TextureImage -> Int
-textureHash (TexturePixels _ _ _ h) = h
-textureHash (TextureRaw _ _ _ h) = h
+textureHash (TexturePixels _ _ _ _ _ h) = h
+textureHash (TextureRaw _ _ _ _ _ h) = h
+textureHash (TextureFloat _ _ _ _ _ h) = h

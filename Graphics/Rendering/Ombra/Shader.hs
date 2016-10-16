@@ -38,6 +38,11 @@ Required extensions:
 
 -}
 
+-- TODO: Alternative version of the module that can be used without
+-- RebindableSyntax and with Prelude functions. Use Num for scalars, vect
+-- typeclasses for vectors and matrices, and prefixed functions for the other
+-- clashing functions.
+
 module Graphics.Rendering.Ombra.Shader (
         -- * Types
         Shader,
@@ -45,6 +50,9 @@ module Graphics.Rendering.Ombra.Shader (
         FragmentShader,
         VertexShaderOutput(Vertex),
         FragmentShaderOutput(..),
+        Valid,
+        ValidVertex,
+        NonDuplicate,
         Uniform,
         Attribute,
         Generic,

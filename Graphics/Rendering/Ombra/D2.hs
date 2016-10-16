@@ -116,7 +116,7 @@ viewScreen m = viewVP $ \s -> screenMat3 s .*. m
 -- framebuffer.
 viewVP :: (Set gs, Set is, GLES)
        => (Vec2 -> Mat3) -> [Object gs is] -> Group (View2 ': gs) is
-viewVP mf = globalGroup (globalFramebufferSize View2 mf) . group
+viewVP mf = groupGlobal (globalFramebufferSize View2 mf) . group
 
 -- | A 'Layer' with the standard 2D program.
 layerS :: IsGroup2D gs is => Group gs is -> Layer

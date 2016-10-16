@@ -16,6 +16,7 @@ module Graphics.Rendering.Ombra.D3 (
         Geometry3D,
         mesh,
         mkGeometry3D,
+        positionOnly,
         -- * Transformations
         trans,
         rotX,
@@ -123,7 +124,7 @@ viewOrtho n f l r b t m = view $ m .*. orthoMat4 n f l r b t
 -- framebuffer.
 viewVP :: (GLES, Set gs, Set is)
        => (Vec2 -> Mat4) -> [Object gs is] -> Group (View3 ': gs) is
-viewVP mf = globalGroup (globalFramebufferSize View3 mf) . group
+viewVP mf = groupGlobal (globalFramebufferSize View3 mf) . group
 
 -- | A 'Layer' with the standard 3D program.
 layerS :: IsGroup3D gs is => Group gs is -> Layer

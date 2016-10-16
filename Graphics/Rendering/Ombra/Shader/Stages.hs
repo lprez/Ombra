@@ -1,5 +1,4 @@
-{-# LANGUAGE TypeOperators, DataKinds, GeneralizedNewtypeDeriving,
-             DeriveDataTypeable, RankNTypes, FlexibleContexts,
+{-# LANGUAGE TypeOperators, DataKinds, RankNTypes, FlexibleContexts,
              TypeFamilies, ConstraintKinds, DeriveGeneric #-}
 
 module Graphics.Rendering.Ombra.Shader.Stages (

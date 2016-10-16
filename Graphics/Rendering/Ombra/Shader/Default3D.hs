@@ -21,12 +21,15 @@ data UV = UV Vec2 deriving Generic
 
 vertexShader :: VertexShader '[ Transform3, View3 ]
                              '[ Position3, UV, Normal3 ]
-                             '[ UV, Normal3 ]
+                             '[ Position3, UV, Normal3 ]
 vertexShader (Transform3 modelMatrix :- View3 viewMatrix :- N)
-             (Position3 (Vec3 x y z) :- uv@(UV _) :- norm@(Normal3 _) :- N) =
-             let v = viewMatrix * modelMatrix * Vec4 x y z 1.0
-             in Vertex v :- uv :- norm :- N
+             (Position3 pos :- uv :- Normal3 norm :- N) =
+             let worldPos = modelMatrix * vec4 (pos # 1.0)
+                 viewPos = viewMatrix * worldPos
+                 worldNorm = vec3 $ modelMatrix * vec4 (norm # 0.0)
+             in Vertex viewPos :- Position3 (vec3 worldPos) :-
+                uv :- Normal3 worldNorm :- N
 
-fragmentShader :: FragmentShader '[ Texture2 ] [ UV, Normal3 ]
-fragmentShader (Texture2 sampler :- N) (UV (Vec2 s t) :- Normal3 _ :- N) =
+fragmentShader :: FragmentShader '[ Texture2 ] [ Position3, UV, Normal3 ]
+fragmentShader (Texture2 sampler :- N) (_ :- UV (Vec2 s t) :- _ :- N) =
                 Fragment (texture2D sampler $ Vec2 s (1 - t)) :- N

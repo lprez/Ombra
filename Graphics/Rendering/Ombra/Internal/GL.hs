@@ -147,6 +147,7 @@ import Graphics.Rendering.Ombra.Internal.Resource (EmbedIO(..))
 newtype GL a = GL (ReaderT Ctx IO a)
         deriving (Functor, Applicative, Monad, MonadIO)
 
+-- | A Texture ready to be passed as an uniform.
 newtype ActiveTexture = ActiveTexture Word
 
 instance EmbedIO GL where

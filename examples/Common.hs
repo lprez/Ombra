@@ -101,6 +101,7 @@ animation layer =
            windowHint $ WindowHint'ClientAPI ClientAPI'OpenGL
            windowHint $ WindowHint'ContextVersionMajor 2
            windowHint $ WindowHint'ContextVersionMinor 1
+           windowHint $ WindowHint'StencilBits 8
            mw@(Just w) <- createWindow 512 512 "" Nothing Nothing
            makeContextCurrent mw
            stateRef <- drawState 512 512 >>= newIORef

@@ -5,6 +5,7 @@
 
 module Graphics.Rendering.Ombra.Shader.ShaderVar (
         Shader(..),
+        NonDuplicate,
         Valid,
         Member,
         Subset,
@@ -29,6 +30,7 @@ import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType)
 
 infixr 4 :-
 
+-- | Check if the first parameter is not in the set of the second.
 type NonDuplicate x xs = NotMemberOrErr x xs
                                         (Text "Duplicate variable: ‘" :<>:
                                          ShowType x :$$:
@@ -47,8 +49,9 @@ data SVList :: [*] -> * where
 
 type Valid gs is os = (StaticSVList gs, StaticSVList is, StaticSVList os)
 
--- | A function from a (heterogeneous) set of uniforms and a set of inputs
--- (attributes or varyings) to a set of outputs (varyings).
+-- | A function from a set of uniforms and a set of inputs (attributes or
+-- varyings) to a set of outputs (varyings). It can be used to represent a
+-- reusable piece of shader code, other than actual shaders.
 type Shader gs is os = SVList gs -> SVList is -> SVList os
 
 class GShaderVar (g :: * -> *) where

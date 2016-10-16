@@ -11,6 +11,7 @@ module Graphics.Rendering.Ombra.Geometry (
         GPUVAOGeometry(..),
         extend,
         remove,
+        positionOnly,
         withGPUBufferGeometry,
         mkGeometry,
         mkGeometry2D,
@@ -127,6 +128,11 @@ remove :: (RemoveAttr i is is', GLES)
                         -- that type).
        -> Geometry is -> Geometry is'
 remove g (Geometry al es _) = mkGeometry (removeAttr g al) es
+
+-- Remove the 'UV' and 'Normal3' attributes from a 3D Geometry.
+positionOnly :: Geometry Geometry3D -> Geometry '[Position3]
+positionOnly (Geometry (AttrListCons pg pc _) es h) =
+        Geometry (AttrListCons pg pc AttrListNil) es h
 
 class RemoveAttr i is is' where
         removeAttr :: (a -> i) -> AttrList is -> AttrList is'

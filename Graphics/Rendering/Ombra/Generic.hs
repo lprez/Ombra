@@ -15,9 +15,12 @@ module Graphics.Rendering.Ombra.Generic (
         group,
         (~~),
         unsafeJoin,
-        emptyGroup,
-        globalGroup,
+        groupEmpty,
+        groupGlobal,
         depthTest,
+        depthMask,
+        colorMask,
+        Variables,
         -- ** Blending
         blend,
         noBlend,
@@ -56,6 +59,7 @@ module Graphics.Rendering.Ombra.Generic (
         renderBuffersStencil,
 
         -- * Shaders
+        Compatible,
         Program,
         program,
         Global,
@@ -63,6 +67,9 @@ module Graphics.Rendering.Ombra.Generic (
         globalTexture,
         globalTexSize,
         globalFramebufferSize,
+        CPUMirror,
+        globalMirror,
+        globalMirror',
 
         -- * Geometries
         Geometry,
@@ -73,7 +80,11 @@ module Graphics.Rendering.Ombra.Generic (
 
         -- * Textures
         Texture,
+        ActiveTexture,
         mkTexture,
+        mkTextureFloat,
+        Filter(..),
+        setFilter,
         -- ** Colors
         Color(..),
         colorTex,
@@ -94,7 +105,8 @@ import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Types hiding (program, depthTest)
+import Graphics.Rendering.Ombra.Types hiding (program, depthTest,
+                                              depthMask, colorMask)
 import Graphics.Rendering.Ombra.Internal.GL (GLES, ActiveTexture)
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU
@@ -104,12 +116,12 @@ import Graphics.Rendering.Ombra.Texture
 import Unsafe.Coerce
 
 -- | An empty group.
-emptyGroup :: Group is gs
-emptyGroup = Empty
+groupEmpty :: Group gs is
+groupEmpty = Empty
 
 -- | Set a global uniform for a 'Group'.
-globalGroup :: Global g -> Group gs is -> Group (g ': gs) is
-globalGroup = Global
+groupGlobal :: Global g -> Group gs is -> Group (g ': gs) is
+groupGlobal = Global
 
 -- | Enable blending and set the blending mode for a 'Group' of objects.
 blend :: Blend.Mode -> Group gs is -> Group gs is
@@ -141,6 +153,12 @@ depthMask :: Bool -> Group gs is -> Group gs is
 depthMask = DepthMask
 -- TODO: should search and modify existing DepthMask
 
+-- | Enable/disable writing into the four channels of the color buffer for a
+-- 'Group'.
+colorMask :: (Bool, Bool, Bool, Bool) -> Group gs is -> Group gs is
+colorMask = ColorMask
+-- TODO: should search and modify existing DepthMask
+
 -- | Enable face culling.
 cull :: CullFace -> Group gs is -> Group gs is
 cull m = Cull $ Just m
@@ -160,7 +178,8 @@ geom :: Geometry i -> Object '[] i
 geom = Mesh
 
 class MemberGlobal g gs where
-        -- | Modify the global of an 'Object'.
+        -- | Modify the global of an 'Object'. This doesn't work with mirror
+        -- globals.
         (~~>) :: (Uniform 'S g)
               => (Draw (CPU 'S g) -> Global g)  -- ^ Changing function
               -> Object gs is
@@ -168,6 +187,7 @@ class MemberGlobal g gs where
 
 instance {-# OVERLAPPING #-} MemberGlobal g (g ': gs) where
         f ~~> (g := c :~> o) = f c :~> o
+        f ~~> (glob :~> o) = glob :~> o
 
 instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, MemberGlobal g gs) =>
          MemberGlobal g (g1 ': gs) where
@@ -220,11 +240,37 @@ globalFramebufferSize :: (ShaderVar g, Uniform 'S g) => (a -> g)
                       -> (Vec2 -> CPU 'S g) -> Global g
 globalFramebufferSize g fc = g := (fc . tupleToVec <$>
                                             (viewportSize <$> drawGet))
-        where tupleToVec (x, y) = Vec2 (fromIntegral x) (fromIntegral y)
+
+tupleToVec :: (Int, Int) -> Vec2
+tupleToVec (x, y) = Vec2 (fromIntegral x) (fromIntegral y)
+
+-- | Like '-=' but for mirror types.
+globalMirror :: (ShaderVar g, Uniform 'M g) => Proxy g -> CPU 'M g -> Global g
+globalMirror g c = Mirror g $ return c
+
+-- | Extended version of 'globalMirror'.
+globalMirror' :: (GLES, ShaderVar g, Uniform 'M g)
+              => Proxy g
+              -> [Texture]      -- ^ Textures to make active. Remember that
+                                -- the CPU version of 'Sampler2D' is
+                                -- 'ActiveTexture', not 'Texture'.
+              -> ([(ActiveTexture, (Int, Int))] -> Vec2 -> CPU 'M g)
+                                -- ^ Function that, given a list of active
+                                -- textures (the same passed in the second
+                                -- argument) and their size, and the
+                                -- framebuffer value, build the CPU value of
+                                -- the global.
+              -> Global g
+globalMirror' g ts f = Mirror g $ f <$> mapM ( \t -> (,) <$> textureUniform t
+                                                         <*> textureSize t) ts
+                                    <*> (tupleToVec . viewportSize <$> drawGet)
+
+-- | Valid variables.
+type Variables v = Set v
 
 -- | Create a 'Group' from a list of 'Object's.
-group :: (Set is, Set gs) => [Object is gs] -> Group is gs
-group = foldr (\obj grp -> grp ~~ Object obj) emptyGroup
+group :: (Variables gs, Variables is) => [Object gs is] -> Group gs is
+group = foldr (\obj grp -> grp ~~ Object obj) groupEmpty
 
 type EqualJoin x y v = EqualOrErr x y (Text "Can't join groups with " :<>:
                                        Text "different " :<>: v :<>:
