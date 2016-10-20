@@ -49,12 +49,21 @@ makeContext :: JSVal -- ^ Canvas element.
 makeContext element = do ctx <- JS.getCtx element
                          counter <- newIORef 0
                          JS.getExtension ctx "WEBGL_depth_texture"
-                         JS.getExtension ctx "WEBGL_color_buffer_float"
+                         JS.getExtension ctx "OES_texture_float"
+                         floatTexExt <-
+                                 JS.getExtension ctx "WEBGL_color_buffer_float"
                          vaoExt <- JS.getExtension ctx "OES_vertex_array_object"
                          drawBufsExt <- JS.getExtension ctx "WEBGL_draw_buffers"
+                         setProp "floatTexExt" floatTexExt $ Object ctx
                          setProp "vaoExt" vaoExt $ Object ctx
                          setProp "drawBufs" drawBufsExt $ Object ctx
                          return (counter, ctx)
+
+hasFloatTextures :: Ctx -> IO Bool
+hasFloatTextures = (not . isNull <$>) .  getProp "floatTexExt" . Object . snd
+
+hasDrawBuffers :: Ctx -> IO Bool
+hasDrawBuffers = (not . isNull <$>) .  getProp "drawBufs" . Object . snd
 
 toJSArray :: ToJSVal a => (v -> Maybe (a, v)) -> v -> IO JSArray.JSArray
 toJSArray next iv = JSArray.fromList <$> mapM toJSVal list

@@ -59,8 +59,8 @@ animation layer = do canvas <- query "#canvas"
                      stateRef <- drawState 512 512 >>= newIORef
 
                      flip (refDrawCtx ctx) stateRef $
-                                 drawInit
-                              >> loop $ \t ->
+                              do drawInit
+                                 loop $ \t ->
                                      do clearBuffers [ColorBuffer, DepthBuffer]
                                         drawLayer . layer $ realToFrac t
 
