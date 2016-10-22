@@ -20,7 +20,8 @@ module Graphics.Rendering.Ombra.Generic (
         depthTest,
         depthMask,
         colorMask,
-        Variables,
+        ShaderVars,
+        VOShaderVars,
         -- ** Blending
         blend,
         noBlend,
@@ -108,6 +109,7 @@ import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Shader.ShaderVar
+import Graphics.Rendering.Ombra.Shader.Stages
 import Graphics.Rendering.Ombra.Texture
 import Unsafe.Coerce
 
@@ -261,11 +263,8 @@ globalMirror' g ts f = Mirror g $ f <$> mapM ( \t -> (,) <$> textureUniform t
                                                          <*> textureSize t) ts
                                     <*> (tupleToVec . viewportSize <$> drawGet)
 
--- | Valid variables.
-type Variables v = Set v
-
 -- | Create a 'Group' from a list of 'Object's.
-group :: (Variables gs, Variables is) => [Object gs is] -> Group gs is
+group :: (ShaderVars gs, ShaderVars is) => [Object gs is] -> Group gs is
 group = foldr (\obj grp -> grp ~~ Object obj) groupEmpty
 
 type EqualJoin x y v = EqualOrErr x y (Text "Can't join groups with " :<>:

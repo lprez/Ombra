@@ -5,8 +5,6 @@
 
 module Graphics.Rendering.Ombra.Shader.ShaderVar (
         Shader(..),
-        NonDuplicate,
-        Valid,
         Member,
         Subset,
         Equal,
@@ -14,6 +12,7 @@ module Graphics.Rendering.Ombra.Shader.ShaderVar (
         Insert,
         SVList(..),
         ShaderVar,
+        ShaderVars,
         BaseTypes,
         varPreName,
         varBuild,
@@ -30,24 +29,13 @@ import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType)
 
 infixr 4 :-
 
--- | Check if the first parameter is not in the set of the second.
-type NonDuplicate x xs = NotMemberOrErr x xs
-                                        (Text "Duplicate variable: ‘" :<>:
-                                         ShowType x :$$:
-                                         Text "’    In SVList: ... : [" :<>:
-                                         ShowType x :<>:
-                                         Text "] : " :<>:
-                                         ShowType xs)
+-- | A type-level set of 'ShaderVar's.
+type ShaderVars = Set ShaderVar
 
--- | An heterogeneous set of 'ShaderVar's.
+-- | An heterogeneous list of 'ShaderVar's.
 data SVList :: [*] -> * where
         N :: SVList '[]
-        (:-) :: (ShaderVar a, NonDuplicate a xs)
-             => a -> SVList xs -> SVList (a ': xs)
-
--- | The condition for a valid 'Shader'.
-
-type Valid gs is os = (StaticSVList gs, StaticSVList is, StaticSVList os)
+        (:-) :: ShaderVar a => a -> SVList xs -> SVList (a ': xs)
 
 -- | A function from a set of uniforms and a set of inputs (attributes or
 -- varyings) to a set of outputs (varyings). It can be used to represent a
@@ -132,16 +120,12 @@ svFold f acc (x :- xs) = svFold f (f acc x) xs
 svToList :: (forall x. ShaderVar x => x -> [y]) -> SVList xs -> [y]
 svToList f = svFold (\acc x -> acc ++ f x) []
 
-class StaticSVList (xs :: [*]) where
-        -- | Create a 'SVList' with a function.
-        staticSVList :: Proxy (xs :: [*])
-                     -> (forall x. ShaderVar x => Proxy x -> x)
-                     -> SVList xs
-
-instance StaticSVList '[] where
-        staticSVList (_ :: Proxy '[]) _ = N
-
-instance (ShaderVar x, StaticSVList xs, NonDuplicate x xs) =>
-         StaticSVList (x ': xs) where
-        staticSVList (_ :: Proxy (x ': xs)) f =
-                f (Proxy :: Proxy x) :- staticSVList (Proxy :: Proxy xs) f
+-- | Create a 'SVList' with a function.
+staticSVList :: ShaderVars xs
+             => Proxy (xs :: [*])
+             -> (forall x. ShaderVar x => Proxy x -> x)
+             -> SVList xs
+staticSVList (_ :: Proxy xs) f = tsToSV (typeSet :: TypeSet ShaderVar xs)
+        where tsToSV :: ShaderVars s => TypeSet ShaderVar s -> SVList s
+              tsToSV PSNil = N
+              tsToSV (PSCons px ts) = f px :- tsToSV ts

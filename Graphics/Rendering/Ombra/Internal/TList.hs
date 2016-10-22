@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds, KindSignatures, MultiParamTypeClasses, TypeFamilies,
              TypeOperators, UndecidableInstances, FlexibleContexts,
              FlexibleInstances, ConstraintKinds, PolyKinds,
-             ScopedTypeVariables #-}
+             ScopedTypeVariables, GADTs #-}
 
 module Graphics.Rendering.Ombra.Internal.TList (
         Not,
@@ -20,14 +20,36 @@ module Graphics.Rendering.Ombra.Internal.TList (
         Insert,
         Reverse,
         Union,
-        Set,
+        Set(..),
+        TypeSet(..),
         module GHC.TypeLits
 ) where
 
+import Data.Proxy (Proxy(..))
 import GHC.TypeLits (TypeError, ErrorMessage(..))
 import GHC.Exts (Constraint)
 
-type Set xs = Union xs xs ~ xs
+data TypeSet (constr :: * -> Constraint) xs where
+        PSNil :: TypeSet constr '[]
+        PSCons :: (Set constr xs, constr x)
+               => Proxy x -> TypeSet constr xs -> TypeSet constr (x ': xs)
+
+class Union xs xs ~ xs => Set (constr :: * -> Constraint) xs where
+        typeSet :: TypeSet constr xs
+        
+instance Set constr '[] where
+        typeSet = PSNil
+
+instance ( NotMemberOrErr x xs (Text "Duplicate variable: ‘" :<>:
+                                ShowType x :$$:
+                                Text "’    In SVList: ... : [" :<>:
+                                ShowType x :<>:
+                                Text "] : " :<>:
+                                ShowType xs)
+         , Union (x ': xs) (x ': xs) ~ (x ': xs), Set constr xs, constr x) =>
+         Set constr (x ': xs) where
+        typeSet = PSCons (Proxy :: Proxy x) (typeSet :: TypeSet constr xs)
+                        :: TypeSet constr (x ': xs)
 
 type family Empty (xs :: [*]) :: Bool where
         Empty '[] = True

@@ -24,7 +24,7 @@ import Data.Word (Word)
 import qualified Graphics.Rendering.Ombra.Shader.Default2D as Default2D
 import qualified Graphics.Rendering.Ombra.Shader.Default3D as Default3D
 import Graphics.Rendering.Ombra.Shader.GLSL
-import Graphics.Rendering.Ombra.Shader.ShaderVar (Valid)
+import Graphics.Rendering.Ombra.Shader.ShaderVar (ShaderVars)
 import Graphics.Rendering.Ombra.Shader.Stages
 import Graphics.Rendering.Ombra.Internal.GL hiding (Program)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
@@ -85,8 +85,9 @@ type Compatible pgs vgs fgs =
                     ShowType pgs)
 
 -- | Create a 'Program' from the shaders.
-program :: (ValidVertex vgs vis vos, Valid fgs vos '[], Compatible pgs vgs fgs)
-        => VertexShader vgs vis vos -> FragmentShader fgs vos
+program :: ( ShaderVars vgs, ShaderVars vis, VOShaderVars os , ShaderVars fgs
+           , Compatible pgs vgs fgs )
+        => VertexShader vgs vis os -> FragmentShader fgs os
         -> Program pgs vis
 program vs fs = let (vss, attrs) = vertexToGLSLAttr vs
                     fss = fragmentToGLSL fs

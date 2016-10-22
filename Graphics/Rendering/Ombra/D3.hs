@@ -79,11 +79,11 @@ type Group3D = Group (View3 ': Uniforms3D) Geometry3D
 -- | 3D objects compatible with the standard 3D shader program.
 type IsObject3D globals inputs = ( Subset Geometry3D inputs
                                  , Subset Uniforms3D globals
-                                 , Set inputs, Set globals )
+                                 , ShaderVars inputs, ShaderVars globals )
 
 -- | 3D object groups compatible with the standard 3D shader program.
 type IsGroup3D gs is = ( Subset Geometry3D is, Subset (View3 ': Uniforms3D) gs
-                       , Set is, Set gs )
+                       , ShaderVars is, ShaderVars gs )
 
 -- | A cube with a specified 'Texture'.
 cube :: GLES => Texture -> Object3D
@@ -95,12 +95,12 @@ mesh :: (IsObject3D Uniforms3D is, GLES)
 mesh t g = Transform3 -= idmtx :~> globalTexture Texture2 t :~> geom g
 
 -- | Create a group of objects with a view matrix.
-view :: (GLES, Set gs, Set is)
+view :: (GLES, ShaderVars gs, ShaderVars is)
      => Mat4 -> [Object gs is] -> Group (View3 ': gs) is
 view m = viewVP $ const m
 
 -- | Create a group of objects with a view matrix and perspective projection.
-viewPersp :: (GLES, Set gs, Set is)
+viewPersp :: (GLES, ShaderVars gs, ShaderVars is)
           => Float      -- ^ Near
           -> Float      -- ^ Far
           -> Float      -- ^ FOV
@@ -109,7 +109,7 @@ viewPersp :: (GLES, Set gs, Set is)
 viewPersp n f fov m = viewVP $ \s -> m .*. perspectiveMat4Size n f fov s
 
 -- | Create a group of objects with a view matrix and orthographic projection.
-viewOrtho :: (GLES, Set gs, Set is)
+viewOrtho :: (GLES, ShaderVars gs, ShaderVars is)
           => Float      -- ^ Near
           -> Float      -- ^ Far
           -> Float      -- ^ Left
@@ -122,7 +122,7 @@ viewOrtho n f l r b t m = view $ m .*. orthoMat4 n f l r b t
 
 -- | Create a group of objects with a view matrix, depending on the size of the
 -- framebuffer.
-viewVP :: (GLES, Set gs, Set is)
+viewVP :: (GLES, ShaderVars gs, ShaderVars is)
        => (Vec2 -> Mat4) -> [Object gs is] -> Group (View3 ': gs) is
 viewVP mf = groupGlobal (globalFramebufferSize View3 mf) . group
 

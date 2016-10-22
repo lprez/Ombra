@@ -70,11 +70,12 @@ type Group2D = Group (View2 ': Uniforms2D) Geometry2D
 -- | 2D objects compatible with the standard 2D shader program.
 type IsObject2D globals inputs = ( Subset Geometry2D inputs
                                  , Subset Uniforms2D globals
-                                 , Set inputs, Set globals )
+                                 , ShaderVars inputs, ShaderVars globals
+                                 )
 
 -- | 2D object groups compatible with the standard 2D shader program.
 type IsGroup2D gs is = ( Subset Geometry2D is, Subset (View2 ': Uniforms2D) gs
-                       , Set is, Set gs )
+                       , ShaderVars is, ShaderVars gs )
 
 -- | A rectangle with a specified 'Texture'.
 rect :: GLES => Texture -> Object2D
@@ -103,18 +104,18 @@ sprite :: GLES => Texture -> Object2D
 sprite t = scaleTex t $ rect t
 
 -- | Create a group of objects with a view matrix.
-view :: (Set gs, Set is, GLES)
+view :: (ShaderVars gs, ShaderVars is, GLES)
      => Mat3 -> [Object gs is] -> Group (View2 ': gs) is
 view m = viewVP $ const m
 
 -- | Create a group of objects with a view matrix and 'screenMat3'.
-viewScreen :: (Set gs, Set is, GLES)
+viewScreen :: (ShaderVars gs, ShaderVars is, GLES)
            => Mat3 -> [Object gs is] -> Group (View2 ': gs) is
 viewScreen m = viewVP $ \s -> screenMat3 s .*. m
 
 -- | Create a group of objects with a view matrix, depending on the size of the
 -- framebuffer.
-viewVP :: (Set gs, Set is, GLES)
+viewVP :: (ShaderVars gs, ShaderVars is, GLES)
        => (Vec2 -> Mat3) -> [Object gs is] -> Group (View2 ': gs) is
 viewVP mf = groupGlobal (globalFramebufferSize View2 mf) . group
 

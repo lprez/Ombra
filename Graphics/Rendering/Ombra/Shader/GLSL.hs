@@ -15,29 +15,32 @@ import qualified Data.HashMap.Strict as H
 import Data.Typeable
 import Graphics.Rendering.Ombra.Shader.ShaderVar
 import Graphics.Rendering.Ombra.Shader.Language.Types hiding (Int, Bool)
-import Graphics.Rendering.Ombra.Shader.Stages (VertexShader, FragmentShader, ValidVertex)
+import Graphics.Rendering.Ombra.Shader.Stages (VertexShader, FragmentShader,
+                                               VOShaderVars)
 import Text.Printf
 
 data VarPrefix = Global | Varying | Attribute
 
-data ShaderVars = ShaderVars {
+data SV = SV {
         uniformVars :: [(String, String)],
         inputVars :: [(String, String, Int)],
         outputVars :: [(String, String, Expr)]
 }
 
-vertexToGLSLAttr :: ValidVertex g i o => VertexShader g i o
+vertexToGLSLAttr :: (ShaderVars g, ShaderVars i, VOShaderVars o)
+                 => VertexShader g i o 
                  -> (String, [(String, Int)])
 vertexToGLSLAttr v =
-        let r@(ShaderVars _ is _) = vars False v
+        let r@(SV _ is _) = vars False v
         in ( shaderToGLSL "#version 100\n" "attribute" "varying"
                           r [("hvVertexShaderOutput0", "gl_Position")]
            , map (\(t, n, s) -> (n, s)) is)
 
-vertexToGLSL :: ValidVertex g i o => VertexShader g i o -> String
+vertexToGLSL :: (ShaderVars g, ShaderVars i, VOShaderVars o)
+             => VertexShader g i o -> String
 vertexToGLSL = fst . vertexToGLSLAttr
 
-fragmentToGLSL :: Valid g i '[] => FragmentShader g i -> String
+fragmentToGLSL :: (ShaderVars g, ShaderVars i) => FragmentShader g i -> String
 fragmentToGLSL v =
         shaderToGLSL "#version 100\nprecision mediump float;"
                      "varying" "" (vars True v)
@@ -58,8 +61,8 @@ fragmentToGLSL v =
                       , ("hvFragmentShaderOutput14", "gl_FragData[14]")
                       , ("hvFragmentShaderOutput15", "gl_FragData[15]") ]
 
-shaderToGLSL :: String -> String -> String -> ShaderVars -> [(String, String)] -> String
-shaderToGLSL header ins outs (ShaderVars gs is os) predec = concat
+shaderToGLSL :: String -> String -> String -> SV -> [(String, String)] -> String
+shaderToGLSL header ins outs (SV gs is os) predec = concat
         [ header
         , concatMap (var "uniform") gs
         , concatMap (\(t, n, _) -> var ins (t, n)) is
@@ -80,11 +83,12 @@ shaderToGLSL header ins outs (ShaderVars gs is os) predec = concat
               (actions, outStrs) = compile outExprs
               compiledOuts = zip outNames outStrs
 
-vars :: Valid gs is os => Bool -> Shader gs is os -> ShaderVars
+vars :: (ShaderVars gs, ShaderVars is, ShaderVars os)
+     => Bool -> Shader gs is os -> SV
 vars isFragment (shader :: Shader gs is os) =
-        ShaderVars (svToList globalVar globals)
-                   (svToList inputVar inputs)
-                   (svToList outputVar outputs)
+        SV (svToList globalVar globals)
+           (svToList inputVar inputs)
+           (svToList outputVar outputs)
         where globals = staticSVList (Proxy :: Proxy gs) $ varExpr Global
               inputs = staticSVList (Proxy :: Proxy is) $ varExpr inputPrefix
               outputs = shader globals inputs

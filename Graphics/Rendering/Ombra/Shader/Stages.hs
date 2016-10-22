@@ -3,10 +3,10 @@
 
 module Graphics.Rendering.Ombra.Shader.Stages (
         VertexShader,
-        ValidVertex,
         FragmentShader,
         VertexShaderOutput(Vertex),
-        FragmentShaderOutput(..)
+        FragmentShaderOutput(..),
+        VOShaderVars,
 ) where
 
 import Data.Typeable
@@ -19,11 +19,11 @@ import Graphics.Rendering.Ombra.Shader.ShaderVar
 -- | A 'Shader' with a 'VertexShaderOutput' output.
 type VertexShader g i o = Shader g i (VertexShaderOutput ': o)
 
+-- | 'ShaderVars' for the output of 'VartexShader'.
+type VOShaderVars o = (ShaderVars o, ShaderVars (VertexShaderOutput ': o))
+
 -- | A 'Shader' with only a 'FragmentShaderOutput' output.
 type FragmentShader g i = Shader g i (FragmentShaderOutput ': '[])
-
--- | The condition for a valid 'VertexShader'.
-type ValidVertex g i o = (Valid g i o, IsMember VertexShaderOutput o ~ False)
 
 -- | The position of the vertex.
 data VertexShaderOutput = Vertex Vec4 deriving Generic
