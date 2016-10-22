@@ -6,10 +6,9 @@ module Graphics.Rendering.Ombra.Shader.Language.Functions where
 
 import Graphics.Rendering.Ombra.Shader.Language.Types
 
-import GHC.Exts (Constraint)
 import GHC.TypeLits
 import Text.Printf
-import Prelude (String, (.), ($), error, Eq)
+import Prelude (String, (.), ($), error)
 import qualified Prelude
 
 -- TODO: memoized versions of the functions

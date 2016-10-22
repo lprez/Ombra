@@ -9,7 +9,6 @@ module Graphics.Rendering.Ombra.Shader.GLSL (
         uniformName
 ) where
 
-import Control.Monad
 import Data.Hashable (hash) -- TODO: use ST hashtables
 import qualified Data.HashMap.Strict as H
 import Data.Typeable
@@ -34,7 +33,7 @@ vertexToGLSLAttr v =
         let r@(SV _ is _) = vars False v
         in ( shaderToGLSL "#version 100\n" "attribute" "varying"
                           r [("hvVertexShaderOutput0", "gl_Position")]
-           , map (\(t, n, s) -> (n, s)) is)
+           , map (\(_, n, s) -> (n, s)) is)
 
 vertexToGLSL :: (ShaderVars g, ShaderVars i, VOShaderVars o)
              => VertexShader g i o -> String
@@ -162,7 +161,7 @@ sortActions fullGraph = visitLoop (H.empty, [], fullGraph)
                       let deps = actionDeps ai
                           (childrenMap', sortedIDs', graph') =
                                 H.foldrWithKey
-                                        (\aID _ state -> visit aID state)
+                                        (\aID' _ state -> visit aID' state)
                                         (childrenMap, sortedIDs, graph)
                                         deps
                       in case actionContext ai of
@@ -177,6 +176,9 @@ sortActions fullGraph = visitLoop (H.empty, [], fullGraph)
                                           cmap' = H.unionWith H.union smap
                                                               childrenMap'
                                       in (cmap', sortedIDs', H.delete aID graph')
+                              ShallowContext _ ->
+                                      error "sortActions: unexpected \
+                                            \ShallowContext"
 
               makePair childrenMap graph aID = 
                       ( actionGenerator $ graph H.! aID
@@ -215,7 +217,7 @@ deep aID graph =
                                       aID (act { actionContext = ctx' }) graph')
                 ctx -> (ctx, graph)
         where act = graph H.! aID
-              addDepContext depID depInfo (ctx, graph) = 
+              addDepContext depID _ (ctx, graph) = 
                       let (DeepContext dCtx, graph') = deep depID graph 
                       in (H.union ctx (H.delete depID dCtx), graph')
 

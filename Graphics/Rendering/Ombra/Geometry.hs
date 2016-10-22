@@ -19,27 +19,22 @@ module Graphics.Rendering.Ombra.Geometry (
         castGeometry
 ) where
 
-import Control.Applicative
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
 import qualified Data.Hashable as H
-import qualified Data.HashMap.Strict as H
 import Data.Typeable
-import qualified Data.Vector.Storable as V
 import Data.Vect.Float hiding (Normal3)
 import Data.Word (Word16)
 import Unsafe.Coerce
 
 import Graphics.Rendering.Ombra.Internal.GL
 import Graphics.Rendering.Ombra.Internal.Resource
-import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Default2D (Position2)
 import Graphics.Rendering.Ombra.Shader.Default3D (Position3, Normal3)
 import qualified Graphics.Rendering.Ombra.Shader.Default2D as D2
 import qualified Graphics.Rendering.Ombra.Shader.Default3D as D3
 import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType(size))
-import Graphics.Rendering.Ombra.Transformation
 
 -- | A heterogeneous list of attributes.
 data AttrList (is :: [*]) where
@@ -146,7 +141,7 @@ instance RemoveAttr i is is' =>
                 AttrListCons g' c $ removeAttr g al
 
 -- | Create a custom 'Geometry'.
-mkGeometry :: GLES => AttrList is -> [Word16] -> Geometry is
+mkGeometry :: AttrList is -> [Word16] -> Geometry is
 mkGeometry al e = Geometry al e $ H.hash (al, e)
 
 castGeometry :: Geometry is -> Geometry is'
@@ -204,7 +199,7 @@ withGPUBufferGeometry :: GLES
                       => GPUBufferGeometry -> (Int -> [Buffer] -> GL a) -> GL a
 withGPUBufferGeometry (GPUBufferGeometry abs eb ec _) f =
         do bindBuffer gl_ARRAY_BUFFER noBuffer
-           (locs, bufs) <- unzip <$>
+           (_, bufs) <- unzip <$>
                    mapM (\(buf, loc, setAttr) ->
                                      do bindBuffer gl_ARRAY_BUFFER buf
                                         enableVertexAttribArray loc

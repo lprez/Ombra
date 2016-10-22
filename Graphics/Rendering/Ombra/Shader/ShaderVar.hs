@@ -4,7 +4,7 @@
              UndecidableInstances #-}
 
 module Graphics.Rendering.Ombra.Shader.ShaderVar (
-        Shader(..),
+        Shader,
         Member,
         Subset,
         Equal,
@@ -126,6 +126,6 @@ staticSVList :: ShaderVars xs
              -> (forall x. ShaderVar x => Proxy x -> x)
              -> SVList xs
 staticSVList (_ :: Proxy xs) f = tsToSV (typeSet :: TypeSet ShaderVar xs)
-        where tsToSV :: ShaderVars s => TypeSet ShaderVar s -> SVList s
+        where tsToSV :: TypeSet ShaderVar s -> SVList s
               tsToSV PSNil = N
               tsToSV (PSCons px ts) = f px :- tsToSV ts

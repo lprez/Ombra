@@ -20,7 +20,6 @@ module Graphics.Rendering.Ombra.Shader.Program (
 
 import Data.Hashable
 import qualified Data.HashMap.Strict as H
-import Data.Word (Word)
 import qualified Graphics.Rendering.Ombra.Shader.Default2D as Default2D
 import qualified Graphics.Rendering.Ombra.Shader.Default3D as Default3D
 import Graphics.Rendering.Ombra.Shader.GLSL

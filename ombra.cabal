@@ -16,7 +16,6 @@ description:         Ombra is a render engine written in Haskell. It provides a 
                      .
                      "Graphics.Rendering.Ombra.Draw": this lets you render the pure objects you create with D2 and D3
                      .
-                     "Graphics.Rendering.Ombra.Texture": for creating textures                     
 homepage:            https://github.com/ziocroc/Ombra
 bug-reports:         https://github.com/ziocroc/Ombra/issues
 license:             BSD3

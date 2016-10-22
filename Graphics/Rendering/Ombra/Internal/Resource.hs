@@ -12,11 +12,8 @@ module Graphics.Rendering.Ombra.Internal.Resource (
         removeResource
 ) where
 
-import Control.Applicative
 import Control.Monad.IO.Class
 import qualified Data.HashTable.IO as H
-import Data.IORef
-import Data.Functor
 import Data.Hashable
 import System.Mem.Weak
 
@@ -41,12 +38,14 @@ newResMap = ResMap <$> liftIO H.new
 addResource :: (Resource i r m, Hashable i) => i -> ResMap i r -> m ()
 addResource i m = () <$ getResource i m
 
-checkResource :: (Resource i r m, Hashable i)
-              => i -> ResMap i r -> m (ResStatus r)
+checkResource :: Hashable i
+              => Resource i r m
+              => i
+              -> ResMap i r
+              -> m (ResStatus r)
 checkResource i = checkResource' $ hash i
 
-checkResource' :: (Resource i r m, Hashable i)
-               => Int -> ResMap i r -> m (ResStatus r)
+checkResource' :: Resource i r m => Int -> ResMap i r -> m (ResStatus r)
 checkResource' i (ResMap map) = do m <- liftIO $ H.lookup map i
                                    return $ case m of
                                                  Just (Right r) -> Loaded r

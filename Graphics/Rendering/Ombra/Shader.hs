@@ -209,12 +209,7 @@ module Graphics.Rendering.Ombra.Shader (
         fragFrontFacing
 ) where
 
-import qualified Data.Int as CPU
-import Data.Typeable (Typeable)
-import qualified Data.Vect.Float as CPU
 import GHC.Generics (Generic)
-import qualified Graphics.Rendering.Ombra.Internal.GL as CPU
-import qualified Graphics.Rendering.Ombra.Backend as CPU
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Shader.Language.Functions

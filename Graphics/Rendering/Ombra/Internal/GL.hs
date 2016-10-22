@@ -134,12 +134,9 @@ module Graphics.Rendering.Ombra.Internal.GL (
         viewport
 ) where
 
-import Control.Applicative
-import Control.Concurrent
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Data.Int (Int32)
-import Data.Word
 
 import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Internal.Resource (EmbedIO(..))
@@ -156,7 +153,7 @@ instance EmbedIO GL where
 evalGL :: GL a -> Ctx -> IO a
 evalGL (GL m) = runReaderT m
 
-getCtx :: GLES => GL Ctx
+getCtx :: GL Ctx
 getCtx = GL ask
 
 activeTexture :: GLES => GLEnum -> GL ()

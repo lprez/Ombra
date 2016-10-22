@@ -53,7 +53,6 @@ module Graphics.Rendering.Ombra.D3 (
         View3(..),
 ) where
 
-import Control.Applicative
 import Data.Vect.Float
 import Graphics.Rendering.Ombra.Backend hiding (Texture, Program)
 import Graphics.Rendering.Ombra.Geometry
@@ -65,7 +64,6 @@ import Graphics.Rendering.Ombra.Types
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.Default3D (Texture2(..), Transform3(..), View3(..))
 import Graphics.Rendering.Ombra.Shader.Program hiding (program)
-import Graphics.Rendering.Ombra.Texture
 import Graphics.Rendering.Ombra.Transformation
 
 type Uniforms3D = '[Transform3, Texture2]
@@ -90,8 +88,7 @@ cube :: GLES => Texture -> Object3D
 cube = flip mesh cubeGeometry
 
 -- | A 3D object with a specified 'Geometry'.
-mesh :: (IsObject3D Uniforms3D is, GLES)
-     => Texture -> Geometry is -> Object Uniforms3D is
+mesh :: GLES => Texture -> Geometry is -> Object Uniforms3D is
 mesh t g = Transform3 -= idmtx :~> globalTexture Texture2 t :~> geom g
 
 -- | Create a group of objects with a view matrix.

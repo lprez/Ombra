@@ -29,7 +29,6 @@ module Graphics.Rendering.Ombra.Draw.Internal (
 import qualified Graphics.Rendering.Ombra.Blend as Blend
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Shapes
 import Graphics.Rendering.Ombra.Types
 import Graphics.Rendering.Ombra.Texture
 import Graphics.Rendering.Ombra.Backend (GLES)
@@ -45,16 +44,11 @@ import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Shader.ShaderVar
 import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 
-import Data.Bits ((.|.))
 import Data.Hashable (Hashable)
-import qualified Data.HashMap.Strict as H
 import qualified Data.Vector as V
-import Data.Typeable
 import Data.Vect.Float
-import Data.Word (Word, Word8)
-import Control.Applicative
+import Data.Word (Word8)
 import Control.Monad (when)
-import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
 
@@ -292,16 +286,13 @@ makeActive t = do ats <- activeTextures <$> Draw get
 -- | Realize a 'RenderLayer'. It returns the list of allocated 'Texture's so
 -- that you can free them if you want.
 renderLayer :: GLES => RenderLayer a -> Draw (a, [Texture])
-renderLayer (RenderLayer drawBufs stypes w' h' rx ry rw rh
+renderLayer (RenderLayer drawBufs stypes w h rx ry rw rh
                          inspCol inspDepth layer f) =
         do (ts, mcol, mdepth) <- layerToTexture drawBufs stypes w h layer
                                                 (mayInspect inspCol)
                                                 (mayInspect inspDepth)
            return (f ts mcol mdepth, ts)
-        where w = fromIntegral w'
-              h = fromIntegral h'
-
-              mayInspect :: Bool
+        where mayInspect :: Bool
                          -> Either (Maybe [r])
                                    ([r] -> Draw (Maybe [r]), Int, Int, Int, Int)
               mayInspect True = Right (return . Just, rx, ry, rw, rh)
@@ -363,7 +354,7 @@ layerToTexture drawBufs stypes wp hp layer einspc einspd = do
 
               inspect :: Either c (a -> Draw c, Int, Int, Int, Int) -> GLEnum
                       -> ([Word8] -> a) -> Int -> Draw c
-              inspect (Left r) _ _ s = return r
+              inspect (Left r) _ _ _ = return r
               inspect (Right (insp, x, y, rw, rh)) format trans s =
                         do arr <- liftIO . newByteArray $
                                         fromIntegral rw * fromIntegral rh * s
@@ -388,12 +379,12 @@ renderToTexture drawBufs infos w h act = do
                 \(internalFormat, format, pixelType, attachment, buffer) ->
                         do t <- emptyTexture Linear Linear
                            bindTexture gl_TEXTURE_2D t
-                           case pixelType of
-                                gl_FLOAT -> liftIO noFloat32Array >>=
+                           if pixelType == gl_FLOAT
+                           then liftIO noFloat32Array >>=
                                             texImage2DFloat gl_TEXTURE_2D 0
                                                             internalFormat w h
                                                             0 format pixelType
-                                _ -> liftIO noUInt8Array >>=
+                           else liftIO noUInt8Array >>=
                                      texImage2DUInt gl_TEXTURE_2D 0
                                                     internalFormat w h
                                                     0 format pixelType
@@ -494,20 +485,19 @@ setDepthMask :: GLES => Bool -> Draw ()
 setDepthMask = setFlag depthMask (\x s -> s { depthMask = x })
                        (gl $ GL.depthMask true) (gl $ GL.depthMask false)
 
-setFlag :: GLES
-        => (DrawState -> Bool)
+setFlag :: (DrawState -> Bool)
         -> (Bool -> DrawState -> DrawState)
         -> Draw ()
         -> Draw ()
         -> Bool
         -> Draw ()
-setFlag getFlag setFlag enable disable new =
-        do old <- getFlag <$> Draw get
+setFlag getF setF enable disable new =
+        do old <- getF <$> Draw get
            case (old, new) of
                    (False, True) -> enable
                    (True, False) -> disable
                    _ -> return ()
-           Draw . modify $ setFlag new
+           Draw . modify $ setF new
 
 setColorMask :: GLES => (Bool, Bool, Bool, Bool) -> Draw ()
 setColorMask new@(r, g, b, a) = do old <- colorMask <$> Draw get

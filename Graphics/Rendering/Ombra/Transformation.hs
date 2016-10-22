@@ -14,10 +14,7 @@ module Graphics.Rendering.Ombra.Transformation (
         scaleMat3
 ) where
 
-import Control.Applicative
 import Data.Vect.Float
-import Foreign.Storable
-import Foreign.Ptr (castPtr)
 
 -- | 4x4 translation matrix.
 transMat4 :: Vec3 -> Mat4
@@ -142,6 +139,3 @@ scaleMat3 :: Vec2 -> Mat3
 scaleMat3 (Vec2 x y) = Mat3 (Vec3 x 0 0)
                             (Vec3 0 y 0)
                             (Vec3 0 0 1)
-
-zipWithM_ :: Monad m => (a -> b -> m c) -> [a] -> [b] -> m ()
-zipWithM_ f xs = sequence_ . zipWith f xs

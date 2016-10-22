@@ -91,7 +91,6 @@ module Graphics.Rendering.Ombra.Generic (
         module Graphics.Rendering.Ombra.Color
 ) where
 
-import Control.Applicative
 import Data.Typeable
 import Data.Type.Equality
 import Data.Vect.Float
@@ -102,16 +101,14 @@ import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Types hiding (program, depthTest,
-                                              depthMask, colorMask)
-import Graphics.Rendering.Ombra.Internal.GL (GLES, ActiveTexture)
+import Graphics.Rendering.Ombra.Types hiding (depthTest, depthMask, colorMask)
+import Graphics.Rendering.Ombra.Internal.GL (ActiveTexture)
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Shader.ShaderVar
 import Graphics.Rendering.Ombra.Shader.Stages
 import Graphics.Rendering.Ombra.Texture
-import Unsafe.Coerce
 
 -- | An empty group.
 groupEmpty :: Group gs is
@@ -184,8 +181,8 @@ class MemberGlobal g gs where
               -> Object gs is
 
 instance {-# OVERLAPPING #-} MemberGlobal g (g ': gs) where
-        f ~~> (g := c :~> o) = f c :~> o
-        f ~~> (glob :~> o) = glob :~> o
+        f ~~> (_ := c :~> o) = f c :~> o
+        _ ~~> (glob :~> o) = glob :~> o
 
 instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, MemberGlobal g gs) =>
          MemberGlobal g (g1 ': gs) where

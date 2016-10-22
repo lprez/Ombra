@@ -1,6 +1,5 @@
 module Graphics.Rendering.Ombra.Color where
 
-import Control.Applicative
 import Data.Hashable
 import Data.Word (Word8)
 import Foreign.Ptr (castPtr)

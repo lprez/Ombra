@@ -395,13 +395,13 @@ instance Hashable Expr where
                                 Read str -> hash2 s 1 str
                                 Op1 str exp -> hash2 s 2 (str, exp)
                                 Op2 str exp exp' -> hash2 3 s (str, exp, exp')
-                                Apply str exps -> hash2 4 s exps
+                                Apply str exps -> hash2 4 s (str, exps)
                                 X exp -> hash2 5 s exp
                                 Y exp -> hash2 6 s exp
                                 Z exp -> hash2 7 s exp
                                 W exp -> hash2 8 s exp
                                 Literal str -> hash2 s 9 str
-                                Action hash -> hash2 s 10 hash
+                                Action actHash -> hash2 s 10 actHash
                                 Dummy i -> hash2 s 11 i
                                 ContextVar i LoopIteration -> hash2 s 12 i
                                 ContextVar i LoopValue -> hash2 s 13 i

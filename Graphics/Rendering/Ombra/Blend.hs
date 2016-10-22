@@ -1,7 +1,7 @@
 module Graphics.Rendering.Ombra.Blend where
 
 import Data.Vect.Float (Vec4(..))
-import Data.Vect.Float.Instances
+import Data.Vect.Float.Instances ()
 import Graphics.Rendering.Ombra.Internal.GL
 
 -- | Blend mode
@@ -62,3 +62,5 @@ function m = (rgbs, rgbd, alphas, alphad)
               param (OneMinus SourceAlpha) = gl_ONE_MINUS_SRC_ALPHA
               param (OneMinus DestinationAlpha) = gl_ONE_MINUS_DST_ALPHA
               param (OneMinus ConstantAlpha) = gl_ONE_MINUS_CONSTANT_ALPHA
+              param (OneMinus _) =
+                      error "Invalid blend function (nested OneMinus)"

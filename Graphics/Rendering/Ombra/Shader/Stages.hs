@@ -9,10 +9,7 @@ module Graphics.Rendering.Ombra.Shader.Stages (
         VOShaderVars,
 ) where
 
-import Data.Typeable
-
 import GHC.Generics
-import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Shader.ShaderVar
 

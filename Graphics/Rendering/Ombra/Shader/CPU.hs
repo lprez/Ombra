@@ -4,9 +4,9 @@
 
 module Graphics.Rendering.Ombra.Shader.CPU (
         CPUSetterType(..),
-        CPU(..),
-        CPUBase(..),
-        CPUMirror(..),
+        CPU,
+        CPUBase,
+        CPUMirror,
         BaseUniform(..),
         BaseAttribute(..),
         Uniform(..),
@@ -17,7 +17,6 @@ module Graphics.Rendering.Ombra.Shader.CPU (
 ) where
 
 import qualified Data.Int as CPU
-import Data.Word (Word)
 import Data.Typeable
 import qualified Graphics.Rendering.Ombra.Shader.Language.Types as GPU
 import Graphics.Rendering.Ombra.Internal.GL as CPU
@@ -87,11 +86,11 @@ class Generic g => Attribute (s :: CPUSetterType *) g where
                        -> f ()
 
 instance (BaseUniform (GCPUValue (Rep g)), Generic g) => Uniform S g where
-        withUniforms _ (g :: g) c f =
+        withUniforms _ (_ :: g) c f =
                 f 0 (Proxy :: Proxy (GCPUValue (Rep g))) c
 
 instance (BaseAttribute (GCPUValue (Rep g)), Generic g) => Attribute S g where
-        withAttributes _ (g :: g) c f =
+        withAttributes _ (_ :: g) c f =
                 f 0 (Proxy :: Proxy (GCPUValue (Rep g))) c
 
 instance ( GUniformMirror (Rep g) (Rep (CPUMirror g))
@@ -168,7 +167,7 @@ instance ( GUniformMirror a ma d c
 
 instance (BaseUniform a, m ~ GCPUMirror (K1 i a) d c)
         => GUniformMirror (K1 i a) m d c where
-        gWithUniformMirror _ i (K1 (x :: t)) (K1 mx) f =
+        gWithUniformMirror _ i (K1 (_ :: t)) (K1 mx) f =
                 (f i (Proxy :: Proxy t) mx, i + 1)
 
 {-

@@ -44,16 +44,13 @@ module Graphics.Rendering.Ombra.D2 (
         View2(..),
 ) where
 
-import Control.Applicative
 import Data.Vect.Float
-import Graphics.Rendering.Ombra.Backend hiding (Texture, Image, Program)
+import Graphics.Rendering.Ombra.Backend hiding (Texture, Program)
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Generic
-import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Draw
 import Graphics.Rendering.Ombra.Shapes
-import Graphics.Rendering.Ombra.Types hiding (program)
-import Graphics.Rendering.Ombra.Texture
+import Graphics.Rendering.Ombra.Types
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.Default2D (Image(..), Depth(..), Transform2(..), View2(..))
 import Graphics.Rendering.Ombra.Shader.Program
@@ -82,8 +79,7 @@ rect :: GLES => Texture -> Object2D
 rect = flip poly . rectGeometry $ Vec2 1 1
 
 -- | A 2D object with a specified 'Geometry'.
-poly :: (IsObject2D Uniforms2D is, GLES)
-     => Texture -> Geometry is -> Object Uniforms2D is
+poly :: GLES => Texture -> Geometry is -> Object Uniforms2D is
 poly t g = globalTexture Image t :~>
            Depth -= 0 :~>
            Transform2 -= idmtx :~>
