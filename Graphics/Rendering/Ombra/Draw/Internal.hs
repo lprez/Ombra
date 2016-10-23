@@ -70,7 +70,7 @@ drawState w h = do programs <- newGLResMap
                                     , uniforms = uniforms
                                     , textureImages = textureImages
                                     , activeTextures =
-                                            V.replicate maxTexs Nothing
+                                            V.replicate 16 Nothing
                                     , viewportSize = (w, h)
                                     , blendMode = Nothing
                                     , depthTest = True
@@ -95,8 +95,10 @@ drawInit = viewportSize <$> Draw get >>=
                               viewport 0 0 (fromIntegral w) (fromIntegral h)
 
 
+{-
 maxTexs :: (Integral a, GLES) => a
-maxTexs = 32 -- fromIntegral gl_MAX_COMBINED_TEXTURE_IMAGE_UNITS -- XXX
+maxTexs = fromIntegral gl_MAX_COMBINED_TEXTURE_IMAGE_UNITS
+-}
 
 -- | Run a 'Draw' action.
 runDraw :: Draw a
@@ -287,25 +289,29 @@ getProgram = getDrawResource gl programs
 
 freeActiveTextures :: GLES => Draw ()
 freeActiveTextures = Draw . modify $ \ds ->
-        ds { activeTextures = V.replicate maxTexs Nothing }
+        ds { activeTextures = V.replicate 16 Nothing }
 
--- XXX: inefficient
 makeActive :: GLES => Texture -> Draw ActiveTexture
 makeActive t = do ats <- activeTextures <$> Draw get
-                  let at@(ActiveTexture atn) =
+                  let (at@(ActiveTexture atn), ats') =
                         case V.elemIndex (Just t) ats of
-                                Just n -> ActiveTexture $ fi n
+                                Just n -> (ActiveTexture $ fromIntegral n, ats)
                                 Nothing ->
                                         case V.elemIndex Nothing ats of
-                                             Just n -> ActiveTexture $ fi n
-                                             -- TODO: Draw () error reporting
-                                             Nothing -> ActiveTexture 0
-                  gl . activeTexture $ gl_TEXTURE0 + fi atn
+                                             Just n -> ( ActiveTexture $
+                                                                fromIntegral n
+                                                       , ats )
+                                             Nothing -> let l = V.length ats
+                                                            grow = V.replicate
+                                                                    l Nothing
+                                                        in ( ActiveTexture $
+                                                                fromIntegral l
+                                                           , ats V.++ grow )
+                  gl . activeTexture $ gl_TEXTURE0 + fromIntegral atn
                   Draw . modify $ \ds ->
-                          ds { activeTextures = ats V.// [(fi atn, Just t)] }
+                          ds { activeTextures =
+                                  ats' V.// [(fromIntegral atn, Just t)] }
                   return at
-        where fi :: (Integral a, Integral b) => a -> b
-              fi = fromIntegral
 
 
 -- | Realize a 'RenderLayer'. It returns the list of allocated 'Texture's so
