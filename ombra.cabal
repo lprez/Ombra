@@ -1,7 +1,7 @@
 name:                ombra
 version:             0.1.1.0
 synopsis:            Render engine.
-description:         Ombra is a render engine written in Haskell. It provides a purely functional interface for advanced graphics programming, including a type safe embedded DSL for GPU programming. You are not required to know or use OpenGL directly to work with Ombra, you just need a basic knowledge of what vertex/fragment shaders, uniforms and attributes are (if you are going to make a more advanced use of it). Ombra supports both OpenGL and WebGL.
+description:         Type-safe render engine, with a purely functional API and a shader EDSL. Ombra supports both OpenGL (2.0 with some extensions) and WebGL, through GHCJS.
                      .
                      .
                      The modules you generally need to use are:
@@ -22,6 +22,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Luca "ziocroc" Prezzavento
 maintainer:          ziocroc@gmail.com
+stability:           Experimental
 copyright:           Copyright © 2014-2016 Luca Prezzavento
 category:            Graphics
 build-type:          Simple
