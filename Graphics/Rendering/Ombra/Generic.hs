@@ -14,7 +14,6 @@ module Graphics.Rendering.Ombra.Generic (
         Group,
         group,
         (~~),
-        unsafeJoin,
         groupEmpty,
         groupGlobal,
         depthTest,
@@ -121,32 +120,26 @@ groupGlobal = Global
 -- | Enable blending and set the blending mode for a 'Group' of objects.
 blend :: Blend.Mode -> Group gs is -> Group gs is
 blend m = Blend $ Just m
--- TODO: should search and modify existing Blend
 
 -- | Disable blending for a 'Group'.
 noBlend :: Group gs is -> Group gs is
 noBlend = Blend Nothing
--- TODO: should search and modify existing Blend
 
 -- | Enable stencil testing and set the stencil mode for a 'Group' of objects.
 stencil :: Stencil.Mode -> Group gs is -> Group gs is
 stencil m = Stencil $ Just m
--- TODO: should search and modify existing Stencil
 
 -- | Disable stencil testing on a 'Group' of objects.
 noStencil :: Group gs is -> Group gs is
 noStencil = Stencil Nothing
--- TODO: should search and modify existing Stencil
 
 -- | Enable/disable depth testing for a 'Group'.
 depthTest :: Bool -> Group gs is -> Group gs is
 depthTest = DepthTest
--- TODO: should search and modify existing DepthTest
 
 -- | Enable/disable writing into the depth buffer for a 'Group'.
 depthMask :: Bool -> Group gs is -> Group gs is
 depthMask = DepthMask
--- TODO: should search and modify existing DepthMask
 
 -- | Enable/disable writing into the four channels of the color buffer for a
 -- 'Group'.
@@ -264,25 +257,27 @@ globalMirror' g ts f = Mirror g $ f <$> mapM ( \t -> (,) <$> textureUniform t
 group :: (ShaderVars gs, ShaderVars is) => [Object gs is] -> Group gs is
 group = foldr (\obj grp -> grp ~~ Object obj) groupEmpty
 
-type EqualJoin x y v = EqualOrErr x y (Text "Can't join groups with " :<>:
-                                       Text "different " :<>: v :<>:
-                                       Text "." :$$:
-                                       Text "    Left group " :<>: v :<>:
-                                       Text ": " :<>: ShowType x :$$:
-                                       Text "    Right group " :<>: v :<>:
-                                       Text ": " :<>: ShowType y)
+type EqualMerge x y v = EqualOrErr x y (Text "Can't merge groups with " :<>:
+                                        Text "different " :<>: v :<>:
+                                        Text "." :$$:
+                                        Text "    Left group " :<>: v :<>:
+                                        Text ": " :<>: ShowType x :$$:
+                                        Text "    Right group " :<>: v :<>:
+                                        Text ": " :<>: ShowType y)
 
 
--- | Join two groups.
-(~~) :: (EqualJoin gs gs' (Text "globals"), EqualJoin is is' (Text "inputs"))
+-- | Merge two groups.
+(~~) :: (EqualMerge gs gs' (Text "globals"), EqualMerge is is' (Text "inputs"))
      => Group gs is -> Group gs' is'
      -> Group (Union gs gs') (Union is is')
 (~~) = Append
 
--- | Join two groups, even if they don't provide the same variables.
-unsafeJoin :: Group gs is -> Group gs' is'
-           -> Group (Union gs gs') (Union is is')
-unsafeJoin = Append
+{-
+-- | Merge two groups, even if they don't provide the same variables.
+unsafeMerge :: Group gs is -> Group gs' is'
+            -> Group (Union gs gs') (Union is is')
+unsafeMerge = Append
+-}
 
 -- | Associate a group with a program.
 layer :: (Subset progAttr grpAttr, Subset progUni grpUni)

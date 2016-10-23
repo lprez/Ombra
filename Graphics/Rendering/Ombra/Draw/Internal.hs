@@ -153,7 +153,7 @@ drawLayer :: GLES => Layer -> Draw ()
 -- TODO: freeActiveTextures should not be here
 drawLayer (Layer prg grp) = freeActiveTextures >>
                             setProgram prg >>
-                            drawGroup grp
+                            drawGroup initialGroupState grp
 drawLayer (SubLayer rl) =
         do (layer, textures) <- renderLayer rl
            drawLayer layer
@@ -161,22 +161,47 @@ drawLayer (SubLayer rl) =
 drawLayer (OverLayer top behind) = drawLayer behind >> drawLayer top
 drawLayer (ClearLayer bufs l) = clearBuffers bufs >> drawLayer l
 
+data GroupState = GroupState {
+        hasBlend :: Bool,
+        hasStencil :: Bool,
+        hasDepthTest :: Bool,
+        hasDepthMask :: Bool,
+        hasColorMask :: Bool,
+        hasCull :: Bool
+}
+
+initialGroupState :: GroupState
+initialGroupState = GroupState False False False False False False
+
 -- | Draw a 'Group'.
-drawGroup :: GLES => Group gs is -> Draw ()
-drawGroup Empty = return ()
-drawGroup (Object o) = drawObject o
-drawGroup (Global (g := c) o) = c >>= uniform single (g undefined)
-                                  >>  drawGroup o
-drawGroup (Global (Mirror g c) o) = c >>= uniform mirror
+drawGroup :: GLES => GroupState -> Group gs is -> Draw ()
+drawGroup _ Empty = return ()
+drawGroup _ (Object o) = drawObject o
+drawGroup s (Global (g := c) o) = do c >>= uniform single (g undefined)
+                                     drawGroup s o
+drawGroup s (Global (Mirror g c) o) = do c >>= uniform mirror
                                                   (varBuild (const undefined) g)
-                                      >> drawGroup o
-drawGroup (Append g g') = drawGroup g >> drawGroup g'
-drawGroup (Blend m g) = stateReset blendMode setBlendMode m $ drawGroup g
-drawGroup (Stencil m g) = stateReset stencilMode setStencilMode m $ drawGroup g
-drawGroup (DepthTest d g) = stateReset depthTest setDepthTest d $ drawGroup g
-drawGroup (DepthMask d g) = stateReset depthMask setDepthMask d $ drawGroup g
-drawGroup (ColorMask d g) = stateReset colorMask setColorMask d $ drawGroup g
-drawGroup (Cull face g) = stateReset cullFace setCullFace face $ drawGroup g
+                                         drawGroup s o
+drawGroup _ (Append g g') = do drawGroup initialGroupState g
+                               drawGroup initialGroupState g'
+drawGroup s (Blend m g) | hasBlend s = drawGroup s g
+                        | otherwise = stateReset blendMode setBlendMode m $
+                                drawGroup (s { hasBlend = True }) g
+drawGroup s (Stencil m g) | hasStencil s = drawGroup s g
+                          | otherwise = stateReset stencilMode setStencilMode m $
+                                drawGroup (s { hasStencil = True }) g
+drawGroup s (DepthTest d g) | hasDepthTest s = drawGroup s g
+                            | otherwise = stateReset depthTest setDepthTest d $
+                                drawGroup (s { hasDepthTest = True }) g
+drawGroup s (DepthMask d g) | hasDepthTest s = drawGroup s g
+                            | otherwise = stateReset depthMask setDepthMask d $
+                                drawGroup (s { hasDepthMask = True }) g
+drawGroup s (ColorMask d g) | hasColorMask s = drawGroup s g
+                            | otherwise = stateReset colorMask setColorMask d $
+                                drawGroup (s { hasColorMask = True }) g
+drawGroup s (Cull face g) | hasCull s = drawGroup s g
+                          | otherwise = stateReset cullFace setCullFace face $
+                                drawGroup (s { hasCull = True }) g
 
 stateReset :: (DrawState -> a) -> (a -> Draw ()) -> a -> Draw () -> Draw ()
 stateReset getOld set new act = do old <- getOld <$> Draw get
@@ -190,9 +215,9 @@ drawObject NoMesh = return ()
 drawObject (Mesh g) = withRes_ (getGPUVAOGeometry $ castGeometry g)
                                  drawGPUVAOGeometry
 drawObject ((g := c) :~> o) = c >>= uniform single (g undefined) >> drawObject o
-drawObject (Mirror g c :~> o) = c >>= uniform mirror
+drawObject (Mirror g c :~> o) = do c >>= uniform mirror
                                               (varBuild (const undefined) g)
-                                  >> drawObject o
+                                   drawObject o
 
 uniform :: (GLES, ShaderVar g, Uniform s g)
         => proxy (s :: CPUSetterType *) -> g -> CPU s g -> Draw ()
