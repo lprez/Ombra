@@ -18,7 +18,7 @@ import Data.Hashable
 import System.Mem.Weak
 
 data ResMap i r = forall m. (Resource i r m, Hashable i) =>
-                            ResMap (H.BasicHashTable Int (Either String r))
+                            ResMap (H.LinearHashTable Int (Either String r))
 
 data ResStatus r = Loaded r
                  | Unloaded
@@ -50,7 +50,7 @@ checkResource' i (ResMap map) = do m <- liftIO $ H.lookup map i
                                    return $ case m of
                                                  Just (Right r) -> Loaded r
                                                  Just (Left e) -> Error e
-                                                 Nothing ->Unloaded
+                                                 Nothing -> Unloaded
 
 getResource :: (Resource i r m, Hashable i)
             => i -> ResMap i r
@@ -66,8 +66,10 @@ getResource i rmap@(ResMap map) =
                                          Right r -> H.insert map ihash $ Right r
 
                            embedIO (addFinalizer i) $ removeResource' ihash rmap
-                           Just eRes <- liftIO . H.lookup map $ hash i
-                           return eRes
+                           meRes <- liftIO . H.lookup map $ hash i
+                           return $ case meRes of
+                                         Just eRes -> eRes
+                                         Nothing -> Left "Resource finalized"
                    Error s -> return $ Left s
                    Loaded r -> return $ Right r
         where ihash = hash i
