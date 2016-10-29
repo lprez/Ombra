@@ -39,6 +39,28 @@ foreign import javascript unsafe "eval('null')" nullUInt8Array :: IO UInt8Array
 
 foreign import javascript unsafe "eval('null')" nullFloat32Array :: IO Float32Array
 
+foreign import javascript unsafe "Float32Array.from([$1, $2, $3, $4])"
+        encodeMat2JS :: Float -> Float -> Float -> Float -> IO Float32Array
+
+foreign import javascript unsafe "Float32Array.from([$1, $2, $3, \
+                                 \                   $4, $5, $6, \
+                                 \                   $7, $8, $9])"
+        encodeMat3JS :: Float -> Float -> Float
+                     -> Float -> Float -> Float
+                     -> Float -> Float -> Float
+                     -> IO Float32Array
+
+foreign import javascript unsafe "Float32Array.from([$1, $2, $3, $4,     \
+                                 \                   $5, $6, $7, $8,     \
+                                 \                   $9, $10, $11, $12,  \
+                                 \                   $13, $14, $15, $16])"
+        encodeMat4JS :: Float -> Float -> Float -> Float
+                     -> Float -> Float -> Float -> Float
+                     -> Float -> Float -> Float -> Float
+                     -> Float -> Float -> Float -> Float
+                     -> IO Float32Array
+
+
 data TagTex = TagTex Int JS.Texture
 
 instance Eq TagTex where
@@ -114,31 +136,29 @@ instance GLES where
         noVAO = JS.noVAO
 
         encodeMat2 (Mat2 (Vec2 a1 a2) (Vec2 b1 b2)) =
-                JSArray.fromList <$> mapM toJSVal [a1, a2, b1, b2]
-                >>= JS.float32ArrayFrom
+                        encodeMat2JS a1 a2
+                                     b1 b2
 
         encodeMat3 (Mat3 (Vec3 a1 a2 a3)
                          (Vec3 b1 b2 b3)
-                         (Vec3 c1 c2 c3)) = JSArray.fromList <$> mapM toJSVal
-                                                [ a1, a2, a3
-                                                , b1, b2, b3
-                                                , c1, c2, c3 ]
-                                                >>= JS.float32ArrayFrom
+                         (Vec3 c1 c2 c3)) =
+                        encodeMat3JS a1 a2 a3
+                                     b1 b2 b3
+                                     c1 c2 c3
         encodeMat4 (Mat4 (Vec4 a1 a2 a3 a4)
                          (Vec4 b1 b2 b3 b4)
                          (Vec4 c1 c2 c3 c4)
                          (Vec4 d1 d2 d3 d4) ) =
-                        JSArray.fromList <$> mapM toJSVal [ a1, a2, a3, a4
-                                                          , b1, b2, b3, b4
-                                                          , c1, c2, c3, c4
-                                                          , d1, d2, d3, d4 ]
-                                                        >>= JS.float32ArrayFrom
+                        encodeMat4JS a1 a2 a3 a4
+                                     b1 b2 b3 b4
+                                     c1 c2 c3 c4
+                                     d1 d2 d3 d4
         encodeFloats v = JSArray.fromList <$> mapM toJSVal v
                          >>= JS.float32ArrayFrom
         encodeInts v = JSArray.fromList <$> mapM toJSVal v
                        >>= JS.int32ArrayFrom
 
-        -- TODO: decent implementation
+        -- TODO: faster implementation
         encodeVec2s v = toJSArray next (False, v) >>= JS.float32ArrayFrom
                 where next (False, xs@(Vec2 x _ : _)) = Just (x, (True, xs))
                       next (True, Vec2 _ y : xs) = Just (y, (False, xs))
