@@ -45,7 +45,6 @@ import Graphics.Rendering.Ombra.Shader.ShaderVar
 import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 
 import Data.Hashable (Hashable)
-import qualified Data.Vector as V
 import Data.Vect.Float
 import Data.Word (Word8)
 import Control.Monad (when)
@@ -69,8 +68,7 @@ drawState w h = do programs <- newGLResMap
                                     , gpuVAOs = gpuVAOs
                                     , uniforms = uniforms
                                     , textureImages = textureImages
-                                    , activeTextures =
-                                            V.replicate 16 Nothing
+                                    , activeTextures = []
                                     , viewportSize = (w, h)
                                     , blendMode = Nothing
                                     , depthTest = True
@@ -152,9 +150,7 @@ removeProgram = removeDrawResource gl programs . castProgram
 
 -- | Draw a 'Layer'.
 drawLayer :: GLES => Layer -> Draw ()
--- TODO: freeActiveTextures should not be here
-drawLayer (Layer prg grp) = freeActiveTextures >>
-                            setProgram prg >>
+drawLayer (Layer prg grp) = setProgram prg >>
                             drawGroup initialGroupState grp
 drawLayer (SubLayer rl) =
         do (layer, textures) <- renderLayer rl
@@ -178,7 +174,7 @@ initialGroupState = GroupState False False False False False False
 -- | Draw a 'Group'.
 drawGroup :: GLES => GroupState -> Group gs is -> Draw ()
 drawGroup _ Empty = return ()
-drawGroup _ (Object o) = drawObject o
+drawGroup _ (Object o) = drawObject o >> markActiveTextures
 drawGroup s (Global (g := c) o) = do c >>= uniform single (g undefined)
                                      drawGroup s o
 drawGroup s (Global (Mirror g c) o) = do c >>= uniform mirror
@@ -232,8 +228,10 @@ uniform p g c = withUniforms p g c $
 textureUniform :: GLES => Texture -> Draw ActiveTexture
 textureUniform tex = withRes (getTexture tex) (return $ ActiveTexture 0)
                                  $ \(LoadedTexture _ _ wtex) ->
-                                        do at <- makeActive tex
-                                           gl $ bindTexture gl_TEXTURE_2D wtex
+                                        do (changed, at) <- makeActive tex
+                                           when changed $
+                                                gl $ bindTexture gl_TEXTURE_2D
+                                                                 wtex
                                            return at
 
 -- | Get the dimensions of a 'Texture'.
@@ -250,7 +248,8 @@ setProgram p = do current <- currentProgram <$> Draw get
                                 \lp@(LoadedProgram glp _ _) -> do
                                    Draw . modify $ \s -> s {
                                            currentProgram = Just $ castProgram p,
-                                           loadedProgram = Just lp
+                                           loadedProgram = Just lp,
+                                           activeTextures = []
                                    }
                                    gl $ useProgram glp
 
@@ -287,31 +286,42 @@ getProgram :: GLES
            => Program '[] '[] -> Draw (Either String LoadedProgram)
 getProgram = getDrawResource gl programs
 
-freeActiveTextures :: GLES => Draw ()
-freeActiveTextures = Draw . modify $ \ds ->
-        ds { activeTextures = V.replicate 16 Nothing }
+markActiveTextures :: GLES => Draw ()
+markActiveTextures = Draw . modify $ \ds ->
+        ds { activeTextures = map (\(u, t, _) -> (u, t, True)) $
+                                  activeTextures ds }
 
-makeActive :: GLES => Texture -> Draw ActiveTexture
-makeActive t = do ats <- activeTextures <$> Draw get
-                  let (at@(ActiveTexture atn), ats') =
-                        case V.elemIndex (Just t) ats of
-                                Just n -> (ActiveTexture $ fromIntegral n, ats)
-                                Nothing ->
-                                        case V.elemIndex Nothing ats of
-                                             Just n -> ( ActiveTexture $
-                                                                fromIntegral n
-                                                       , ats )
-                                             Nothing -> let l = V.length ats
-                                                            grow = V.replicate
-                                                                    l Nothing
-                                                        in ( ActiveTexture $
-                                                                fromIntegral l
-                                                           , ats V.++ grow )
-                  gl . activeTexture $ gl_TEXTURE0 + fromIntegral atn
-                  Draw . modify $ \ds ->
-                          ds { activeTextures =
-                                  ats' V.// [(fromIntegral atn, Just t)] }
-                  return at
+makeActive :: GLES => Texture -> Draw (Bool, ActiveTexture)
+makeActive t = activeTextures <$> Draw get >>= \ats ->
+        let (changed, unit, ats') =
+                case searchUnit ats of
+                     (_, (Just unit, ats'), _) -> (False, unit, ats')
+                     (_, _, (Just unit, ats')) -> (True, unit, ats')
+                     (last, _, _) -> ( True
+                                     , last + 1
+                                     , (last + 1, t, False) : ats )
+        in do Draw . modify $ \ds -> ds { activeTextures = ats' }
+              when changed $
+                      gl . activeTexture $ gl_TEXTURE0 + fromIntegral unit
+              return (changed, ActiveTexture $ fromIntegral unit)
+
+        where searchUnit =
+                foldr (\(unit, t', mark)
+
+                        ( last
+                        , (foundSame, sameList)
+                        , (foundReplace, replacedList)
+                        ) ->
+
+                        ( unit
+                        , if t == t'
+                          then (Just unit, (unit, t, False) : sameList)
+                          else (foundSame, (unit, t', mark) : sameList)
+                        , if mark && foundReplace == Nothing
+                          then (Just unit, (unit, t, False) : replacedList)
+                          else (foundReplace, (unit, t', mark) : replacedList)
+                        )
+                      ) (-1, (Nothing, []), (Nothing, []))
 
 
 -- | Realize a 'RenderLayer'. It returns the list of allocated 'Texture's so

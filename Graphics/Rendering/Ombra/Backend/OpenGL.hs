@@ -73,7 +73,7 @@ instance GLES where
         type GLPtr = Ptr ()
         type GLPtrDiff = GLintptr
         type GLSize = GLsizei
-        type GLString = String -- XXX: Foreign CChar?
+        type GLString = String
         type GLBool = GLboolean
         type Buffer = GLuint
         type UniformLocation = GLint

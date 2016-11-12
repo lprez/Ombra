@@ -9,6 +9,7 @@ module Graphics.Rendering.Ombra.Geometry (
         Geometry3D,
         GPUBufferGeometry(..),
         GPUVAOGeometry(..),
+        emptyGeometry,
         extend,
         remove,
         positionOnly,
@@ -124,7 +125,7 @@ remove :: (RemoveAttr i is is', GLES)
        -> Geometry is -> Geometry is'
 remove g (Geometry al es _) = mkGeometry (removeAttr g al) es
 
--- Remove the 'UV' and 'Normal3' attributes from a 3D Geometry.
+-- | Remove the 'UV' and 'Normal3' attributes from a 3D Geometry.
 positionOnly :: Geometry Geometry3D -> Geometry '[Position3]
 positionOnly (Geometry (AttrListCons pg pc _) es h) =
         Geometry (AttrListCons pg pc AttrListNil) es h
@@ -140,6 +141,11 @@ instance RemoveAttr i is is' =>
         removeAttr g (AttrListCons g' c al) =
                 AttrListCons g' c $ removeAttr g al
 
+-- | Create a 'Geometry' without attributes. You can add them using 'extend'.
+emptyGeometry :: [Word16]       -- ^ Triangles.
+              -> Geometry '[]
+emptyGeometry = mkGeometry AttrListNil
+
 -- | Create a custom 'Geometry'.
 mkGeometry :: AttrList is -> [Word16] -> Geometry is
 mkGeometry al e = Geometry al e $ H.hash (al, e)
@@ -148,12 +154,10 @@ castGeometry :: Geometry is -> Geometry is'
 castGeometry = unsafeCoerce
 
 instance GLES => Resource (Geometry i) GPUBufferGeometry GL where
-        -- TODO: err check
         loadResource i = Right <$> loadGeometry i
         unloadResource _ = deleteGPUBufferGeometry
 
 instance GLES => Resource GPUBufferGeometry GPUVAOGeometry GL where
-        -- TODO: err check
         loadResource i = Right <$> loadGPUVAOGeometry i
         unloadResource _ = deleteGPUVAOGeometry
 
@@ -224,7 +228,6 @@ deleteGPUBufferGeometry :: GLES => GPUBufferGeometry -> GL ()
 deleteGPUBufferGeometry (GPUBufferGeometry abs eb _ _) =
         mapM_ (\(buf, _, _) -> deleteBuffer buf) abs >> deleteBuffer eb
 
--- TODO: move
 loadBuffer :: GLES => GLEnum -> AnyArray -> GL Buffer
 loadBuffer ty bufData =
         do buffer <- createBuffer

@@ -65,7 +65,7 @@ setFilter min mag (TextureImage (TextureFloat c _ _ w h s)) =
 setFilter _ _ t = t
 
 instance GLES => Resource TextureImage LoadedTexture GL where
-        loadResource i = Right <$> loadTextureImage i -- TODO: err check
+        loadResource i = Right <$> loadTextureImage i
         unloadResource _ (LoadedTexture _ _ t) = deleteTexture t
 
 loadTextureImage :: GLES => TextureImage -> GL LoadedTexture

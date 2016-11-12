@@ -1,5 +1,7 @@
 module Graphics.Rendering.Ombra.Draw (
         Buffer(..),
+        DrawState,
+        Ctx,
         refDrawCtx,
         runDrawCtx,
         execDrawCtx,

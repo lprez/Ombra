@@ -69,8 +69,7 @@ module Graphics.Rendering.Ombra.Generic (
 
         -- * Geometries
         Geometry,
-        AttrList(..),
-        mkGeometry,
+        emptyGeometry,
         extend,
         remove,
 
@@ -285,8 +284,9 @@ layer :: (Subset progAttr grpAttr, Subset progUni grpUni)
 layer = Layer
 
 infixl 1 `over`
--- | Draw the first Layer over the second one. The first Layer will use the same
--- buffers (color, depth, stencil) of the second one.
+-- | Draw the first Layer over the second one. This means that the first Layer
+-- will use the same buffers (color, depth, stencil) of the second, but
+-- the visibility of the objects still depends on their depth.
 over :: Layer -> Layer -> Layer
 over = OverLayer
 

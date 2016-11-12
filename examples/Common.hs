@@ -26,6 +26,7 @@ import GHCJS.Types
 import JavaScript.TypedArray
 import JavaScript.TypedArray.Internal
 import JavaScript.TypedArray.DataView
+import System.Mem (performGC)
 
 foreign import javascript unsafe "document.querySelector($1)"
         query :: JSString -> IO JSVal
@@ -63,6 +64,7 @@ animation layer = do canvas <- query "#canvas"
                                  loop $ \t ->
                                      do clearBuffers [ColorBuffer, DepthBuffer]
                                         drawLayer . layer $ realToFrac t
+                                        liftIO $ performGC
 
                      return ()
         where loop a = do t <- liftIO waitFrame
@@ -92,8 +94,11 @@ import Codec.Picture
 import Codec.Picture.Types (promoteImage)
 import Control.Concurrent
 import qualified Data.Vector.Storable as V
+import Data.Time.Clock
 import Graphics.Rendering.Ombra.Backend.OpenGL
-import Graphics.UI.GLFW as G
+import Graphics.UI.GLFW hiding (Image)
+import qualified Graphics.UI.GLFW as G
+import System.Mem (performGC)
 
 animation :: (Float -> Layer) -> IO ()
 animation layer =
@@ -108,13 +113,18 @@ animation layer =
            ctx <- makeContext
            flip (refDrawCtx ctx) stateRef $
                 do drawInit
-                   loop 0 $ \n -> do clearBuffers [ColorBuffer, DepthBuffer]
-                                     drawLayer (layer n)
-                                     liftIO (swapBuffers w)
+                   t0 <- liftIO $ getCurrentTime
+                   loop t0 t0 $ \n -> do clearBuffers [ColorBuffer, DepthBuffer]
+                                         drawLayer (layer n)
+                                         liftIO (swapBuffers w)
            return ()
-        where loop n a = do a n
-                            liftIO $ threadDelay delay
-                            loop (n + fromIntegral delay / 1000000) a
+        where loop t0 tp a = do t <- liftIO $ getCurrentTime
+                                let dt = diffUTCTime t tp
+                                    t' = diffUTCTime t t0
+                                a $ realToFrac t'
+                                liftIO $ do print $ 1 / dt
+                                            threadDelay delay
+                                loop t0 t a
               delay = 30000
 
 loadTexture :: FilePath -> IO Texture

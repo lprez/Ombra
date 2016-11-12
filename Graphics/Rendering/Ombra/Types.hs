@@ -26,8 +26,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State
 import Data.Hashable
 import Data.Proxy (Proxy)
-import Data.Vect.Float hiding (Vector)
-import Data.Vector (Vector)
+import Data.Vect.Float
 import Data.Typeable
 import Data.Word (Word8)
 import qualified Graphics.Rendering.Ombra.Blend as Blend
@@ -54,7 +53,7 @@ data DrawState = DrawState {
         gpuBuffers :: ResMap (Geometry '[]) GPUBufferGeometry,
         gpuVAOs :: ResMap (Geometry '[]) GPUVAOGeometry,
         textureImages :: ResMap TextureImage LoadedTexture,
-        activeTextures :: Vector (Maybe Texture),
+        activeTextures :: [(Int, Texture, Bool)],
         viewportSize :: (Int, Int),
         blendMode :: Maybe Blend.Mode,
         stencilMode :: Maybe Stencil.Mode,
@@ -121,7 +120,7 @@ data Layer = forall oi pi og pg. (Subset pi oi, Subset pg og)
                               => Layer (Program pg pi) (Group og oi)
            | SubLayer (RenderLayer Layer)
            | OverLayer Layer Layer
-           | ClearLayer [Buffer] Layer -- TODO: like OverLayer
+           | ClearLayer [Buffer] Layer
 
 data Buffer = ColorBuffer | DepthBuffer | StencilBuffer
 
