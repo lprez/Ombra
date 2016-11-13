@@ -103,7 +103,7 @@ drawState w h = do programs <- newGLResMap
                                     , depthTest = True
                                     , depthMask = True
                                     , stencilMode = Nothing
-                                    , cullFace = Just CullBack
+                                    , cullFace = Nothing
                                     , colorMask = (True, True, True, True)
                                     }
 
