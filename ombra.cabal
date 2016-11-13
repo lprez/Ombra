@@ -23,27 +23,28 @@ flag opengl
   description: Enable the OpenGL backend. Main module: Graphics.Rendering.Ombra.Backend.OpenGL
 
 flag webgl
-  description: Enable the GHCJS/WebGL backend, if compiled with GHCJS. Main module: Graphics.Rendering.Ombra.Backend.WebGL
+  description: Enable the GHCJS/WebGL backend, if compiled with GHCJS. This automatically disables the OpenGL backend. Main module: Graphics.Rendering.Ombra.Backend.WebGL
+  default:     False
 
 library
   exposed-modules:     Graphics.Rendering.Ombra, Graphics.Rendering.Ombra.Blend, Graphics.Rendering.Ombra.Layer, Graphics.Rendering.Ombra.Object, Graphics.Rendering.Ombra.Texture, Graphics.Rendering.Ombra.Stencil, Graphics.Rendering.Ombra.Shader, Graphics.Rendering.Ombra.Transformation, Graphics.Rendering.Ombra.Draw, Graphics.Rendering.Ombra.D2, Graphics.Rendering.Ombra.Geometry, Graphics.Rendering.Ombra.D3, Graphics.Rendering.Ombra.Color, Graphics.Rendering.Ombra.Backend, Graphics.Rendering.Ombra.Shapes, Graphics.Rendering.Ombra.Internal.GL, Graphics.Rendering.Ombra.Shader.Default3D, Graphics.Rendering.Ombra.Shader.Default2D
   other-modules:       Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList, Graphics.Rendering.Ombra.Shader.ShaderVar, Graphics.Rendering.Ombra.Shader.GLSL, Graphics.Rendering.Ombra.Shader.Stages, Graphics.Rendering.Ombra.Shader.Program, Graphics.Rendering.Ombra.Shader.CPU, Graphics.Rendering.Ombra.Shader.Language.Types, Graphics.Rendering.Ombra.Shader.Language.Functions, Graphics.Rendering.Ombra.Draw.Internal, Graphics.Rendering.Ombra.Layer.Internal, Graphics.Rendering.Ombra.Object.Internal, Graphics.Rendering.Ombra.Geometry.Internal, Graphics.Rendering.Ombra.Texture.Internal
 
-  if flag(webgl) && impl(ghcjs)
+  if flag(webgl)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.WebGL
     other-modules:     Graphics.Rendering.Ombra.Backend.WebGL.Raw, Graphics.Rendering.Ombra.Backend.WebGL.Types, Graphics.Rendering.Ombra.Backend.WebGL.Const
 
-  if flag(opengl) && !impl(ghcjs)
+  if flag(opengl) && !flag(webgl)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.OpenGL
 
   other-extensions:    TypeOperators, DataKinds, ConstraintKinds, MultiParamTypeClasses, TypeFamilies, FlexibleContexts, FlexibleInstances, RankNTypes, GADTs, TypeSynonymInstances, KindSignatures, UndecidableInstances, ExistentialQuantification, GeneralizedNewtypeDeriving, NullaryTypeClasses, PolyKinds, ScopedTypeVariables, FunctionalDependencies, DeriveDataTypeable, ImpredicativeTypes, RebindableSyntax
 
   build-depends:       base <5.0, vect <0.5, hashable <1.3, unordered-containers <0.3, transformers <0.6, hashtables <1.4
 
-  if flag(opengl) && !impl(ghcjs)
+  if flag(opengl) && !flag(webgl)
     build-depends:     gl <0.8
 
-  if flag(webgl) && impl(ghcjs)
+  if flag(webgl)
     build-depends:     ghcjs-base
 
   default-language:    Haskell2010
