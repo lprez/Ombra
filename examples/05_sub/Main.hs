@@ -1,5 +1,6 @@
 module Main where
 
+import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
 import ProgramCommon
 import Program3D
@@ -15,22 +16,22 @@ scene tex noiseTex time =
                               . rotY (time * 4)
                               . scale 0.2
                               $ cube tex
+            viewGroup = viewPersp 0.5
+                                  100000
+                                  100
+                                  idmtx
+                                  [ rotatedCube 0
+                                  , rotatedCube $ pi * 2 / 3
+                                  , rotatedCube $ pi * 4 / 3 ]
 
-            cubeGroup =   groupGlobal (Time -= time / 2)
-                        . groupGlobal (globalTexture NoiseTexture noiseTex)
-                        $ viewPersp 0.5
-                                    100000
-                                    100
-                                    idmtx
-                                    [ rotatedCube 0
-                                    , rotatedCube $ pi * 2 / 3
-                                    , rotatedCube $ pi * 4 / 3 ]
-
-            sceneLayer = layer prg cubeGroup
+            group =     Time -= time / 2
+                    :~> withTexture noiseTex (NoiseTexture -=)
+                    :~> viewGroup
+            sceneLayer = layer prg group
 
             -- A rectangle with a texture that will be distorted.
             distortedRect tex =     Time -= time / 8
-                                :~> globalTexture NoiseTexture noiseTex
+                                :~> withTexture noiseTex (NoiseTexture -=)
                                 :~> D2.scale 2 (D2.rect tex)
 
             -- We use the 'subLayer' function to draw the 3D scene (the one of

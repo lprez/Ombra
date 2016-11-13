@@ -1,46 +1,14 @@
-{-# LANGUAGE TypeOperators, DataKinds, ConstraintKinds, MultiParamTypeClasses,
-             TypeFamilies, FlexibleContexts, FlexibleInstances #-}
-
-module Graphics.Rendering.Ombra.Generic (
-        -- * Objects
-        Object((:~>)),
-        MemberGlobal((~~>)),
-        RemoveGlobal((*~>)),
-        nothing,
-        geom,
-        modifyGeometry,
-
-        -- * Groups
-        Group,
-        group,
-        (~~),
-        groupEmpty,
-        groupGlobal,
-        depthTest,
-        depthMask,
-        colorMask,
-        ShaderVars,
-        VOShaderVars,
-        -- ** Blending
-        blend,
-        noBlend,
-        Blend.transparency,
-        Blend.additive,
-        -- ** Stencil test
-        stencil,
-        noStencil,
-        -- ** Culling
-        CullFace(..),
-        cull,
-        noCull,
-
-        -- * Layers
+module Graphics.Rendering.Ombra.Layer (
         Buffer(..),
         Layer,
         layer,
         over,
         clear,
-        -- ** Sublayers
+        -- * Programs
+        Compatible,
+        Program,
+        program,
+        -- * Sublayers
         subLayer,
         colorSubLayer,
         depthSubLayer,
@@ -53,234 +21,20 @@ module Graphics.Rendering.Ombra.Generic (
         buffersSubLayer,
         buffersDepthSubLayer,
         buffersStencilSubLayer,
-
-        -- * Shaders
-        Compatible,
-        Program,
-        program,
-        Global,
-        (-=),
-        globalTexture,
-        globalTexSize,
-        globalFramebufferSize,
-        CPUMirror,
-        globalMirror,
-        globalMirror',
-
-        -- * Geometries
-        Geometry,
-        emptyGeometry,
-        extend,
-        remove,
-
-        -- * Textures
-        Texture,
-        ActiveTexture,
-        mkTexture,
-        mkTextureFloat,
-        Filter(..),
-        setFilter,
-        -- ** Colors
-        Color(..),
-        colorTex,
-
-        GLES,
-        module Data.Vect.Float,
-        module Graphics.Rendering.Ombra.Color
 ) where
 
-import Data.Typeable
-import Data.Type.Equality
-import Data.Vect.Float
 import Data.Word (Word8)
 import Graphics.Rendering.Ombra.Backend (GLES)
-import qualified Graphics.Rendering.Ombra.Blend as Blend
-import qualified Graphics.Rendering.Ombra.Stencil as Stencil
-import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Types hiding (depthTest, depthMask, colorMask)
-import Graphics.Rendering.Ombra.Internal.GL (ActiveTexture)
 import Graphics.Rendering.Ombra.Internal.TList
-import Graphics.Rendering.Ombra.Shader.CPU
+import Graphics.Rendering.Ombra.Layer.Internal
+import Graphics.Rendering.Ombra.Object
 import Graphics.Rendering.Ombra.Shader.Program
-import Graphics.Rendering.Ombra.Shader.ShaderVar
-import Graphics.Rendering.Ombra.Shader.Stages
 import Graphics.Rendering.Ombra.Texture
 
--- | An empty group.
-groupEmpty :: Group gs is
-groupEmpty = Empty
-
--- | Set a global uniform for a 'Group'.
-groupGlobal :: Global g -> Group gs is -> Group (g ': gs) is
-groupGlobal = Global
-
--- | Enable blending and set the blending mode for a 'Group' of objects.
-blend :: Blend.Mode -> Group gs is -> Group gs is
-blend m = Blend $ Just m
-
--- | Disable blending for a 'Group'.
-noBlend :: Group gs is -> Group gs is
-noBlend = Blend Nothing
-
--- | Enable stencil testing and set the stencil mode for a 'Group' of objects.
-stencil :: Stencil.Mode -> Group gs is -> Group gs is
-stencil m = Stencil $ Just m
-
--- | Disable stencil testing on a 'Group' of objects.
-noStencil :: Group gs is -> Group gs is
-noStencil = Stencil Nothing
-
--- | Enable/disable depth testing for a 'Group'.
-depthTest :: Bool -> Group gs is -> Group gs is
-depthTest = DepthTest
-
--- | Enable/disable writing into the depth buffer for a 'Group'.
-depthMask :: Bool -> Group gs is -> Group gs is
-depthMask = DepthMask
-
--- | Enable/disable writing into the four channels of the color buffer for a
--- 'Group'.
-colorMask :: (Bool, Bool, Bool, Bool) -> Group gs is -> Group gs is
-colorMask = ColorMask
--- TODO: should search and modify existing DepthMask
-
--- | Enable face culling.
-cull :: CullFace -> Group gs is -> Group gs is
-cull m = Cull $ Just m
--- TODO: should search and modify existing Cull
-
--- | Disable face culling.
-noCull :: Group gs is -> Group gs is
-noCull = Cull Nothing
--- TODO: should search and modify existing Cull
-
--- | An empty object.
-nothing :: Object '[] '[]
-nothing = NoMesh
-
--- | An object with a specified 'Geometry'.
-geom :: Geometry i -> Object '[] i
-geom = Mesh
-
-class MemberGlobal g gs where
-        -- | Modify the global of an 'Object'. This doesn't work with mirror
-        -- globals.
-        (~~>) :: (Uniform 'S g)
-              => (Draw (CPU 'S g) -> Global g)  -- ^ Changing function
-              -> Object gs is
-              -> Object gs is
-
-instance {-# OVERLAPPING #-} MemberGlobal g (g ': gs) where
-        f ~~> (_ := c :~> o) = f c :~> o
-        _ ~~> (glob :~> o) = glob :~> o
-
-instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, MemberGlobal g gs) =>
-         MemberGlobal g (g1 ': gs) where
-        f ~~> (g :~> o) = g :~> (f ~~> o)
-
-infixr 2 ~~>
-
-class RemoveGlobal g gs gs' where
-        -- | Remove a global from an 'Object'.
-        (*~>) :: (a -> g) -> Object gs is -> Object gs' is
-
-instance {-# OVERLAPPING #-} RemoveGlobal g (g ': gs) gs where
-        _ *~> (_ :~> o) = o
-
-instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, RemoveGlobal g gs gs') =>
-         RemoveGlobal g (g1 ': gs) (g1 ': gs') where
-        r *~> (g :~> o) = g :~> (r *~> o)
-
-infixr 2 *~>
-
--- | Modify the geometry of an 'Object'.
-modifyGeometry :: (Empty is ~ False)
-               => (Geometry is -> Geometry is')
-               -> Object gs is -> Object gs is'
-modifyGeometry fg (g :~> o) = g :~> modifyGeometry fg o
-modifyGeometry fg (Mesh g) = Mesh $ fg g
-
--- | Create a 'Global' from a pure value. The first argument is ignored,
--- it just provides the type (you can use the constructor of the GPU type).
--- You can use this to set the value of a shader uniform.
-(-=) :: (ShaderVar g, Uniform 'S g) => (a -> g) -> CPU 'S g -> Global g
-g -= c = g := return c
-
-infixr 4 -=
-
--- TODO: polymorphic -= instead of globalTexture
--- | Create a 'Global' of CPU type 'ActiveTexture' using a 'Texture'.
-globalTexture :: (Uniform 'S g, CPU 'S g ~ ActiveTexture, ShaderVar g, GLES)
-              => (a -> g) -> Texture -> Global g
-globalTexture g c = g := textureUniform c
-
--- | Create a 'Global' using the size of a 'Texture'.
-globalTexSize :: (ShaderVar g, Uniform 'S g, GLES)
-              => (a -> g) -> Texture
-              -> ((Int, Int) -> CPU 'S g) -> Global g
-globalTexSize g t fc = g := (fc <$> textureSize t)
-
--- | Create a 'Global' using the size of the framebuffer.
-globalFramebufferSize :: (ShaderVar g, Uniform 'S g) => (a -> g)
-                      -> (Vec2 -> CPU 'S g) -> Global g
-globalFramebufferSize g fc = g := (fc . tupleToVec <$>
-                                            (viewportSize <$> drawGet))
-
-tupleToVec :: (Int, Int) -> Vec2
-tupleToVec (x, y) = Vec2 (fromIntegral x) (fromIntegral y)
-
--- | Like '-=' but for mirror types.
-globalMirror :: (ShaderVar g, Uniform 'M g) => Proxy g -> CPU 'M g -> Global g
-globalMirror g c = Mirror g $ return c
-
--- | Extended version of 'globalMirror'.
-globalMirror' :: (GLES, ShaderVar g, Uniform 'M g)
-              => Proxy g
-              -> [Texture]      -- ^ Textures to make active. Remember that
-                                -- the CPU version of 'Sampler2D' is
-                                -- 'ActiveTexture', not 'Texture'.
-              -> ([(ActiveTexture, (Int, Int))] -> Vec2 -> CPU 'M g)
-                                -- ^ Function that, given a list of active
-                                -- textures (the same passed in the second
-                                -- argument) and their size, and the
-                                -- framebuffer value, build the CPU value of
-                                -- the global.
-              -> Global g
-globalMirror' g ts f = Mirror g $ f <$> mapM ( \t -> (,) <$> textureUniform t
-                                                         <*> textureSize t) ts
-                                    <*> (tupleToVec . viewportSize <$> drawGet)
-
--- | Create a 'Group' from a list of 'Object's.
-group :: (ShaderVars gs, ShaderVars is) => [Object gs is] -> Group gs is
-group = foldr (\obj grp -> grp ~~ Object obj) groupEmpty
-
-type EqualMerge x y v = EqualOrErr x y (Text "Can't merge groups with " :<>:
-                                        Text "different " :<>: v :<>:
-                                        Text "." :$$:
-                                        Text "    Left group " :<>: v :<>:
-                                        Text ": " :<>: ShowType x :$$:
-                                        Text "    Right group " :<>: v :<>:
-                                        Text ": " :<>: ShowType y)
-
-
--- | Merge two groups.
-(~~) :: (EqualMerge gs gs' (Text "globals"), EqualMerge is is' (Text "inputs"))
-     => Group gs is -> Group gs' is'
-     -> Group (Union gs gs') (Union is is')
-(~~) = Append
-
-{-
--- | Merge two groups, even if they don't provide the same variables.
-unsafeMerge :: Group gs is -> Group gs' is'
-            -> Group (Union gs gs') (Union is is')
-unsafeMerge = Append
--}
-
--- | Associate a group with a program.
+-- | Create a simple Layer from a Program and an Object.
 layer :: (Subset progAttr grpAttr, Subset progUni grpUni)
-      => Program progUni progAttr -> Group grpUni grpAttr -> Layer
+      => Program progUni progAttr -> Object grpUni grpAttr -> Layer
 layer = Layer
 
 infixl 1 `over`
@@ -290,6 +44,7 @@ infixl 1 `over`
 over :: Layer -> Layer -> Layer
 over = OverLayer
 
+-- TODO: document buffers.
 -- | Clear some buffers before drawing a Layer.
 clear :: [Buffer] -> Layer -> Layer
 clear = ClearLayer

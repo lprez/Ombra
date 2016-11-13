@@ -1,23 +1,18 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-
 module Graphics.Rendering.Ombra.Texture (
+        Texture,
         mkTexture,
-        mkTextureRaw,
         mkTextureFloat,
-        setFilter,
-        emptyTexture
+        mkTextureRaw,
+        Filter(..),
+        setFilter
 ) where
 
 import Data.Hashable
-
 import Data.Vect.Float
 import Graphics.Rendering.Ombra.Backend (GLES)
-import qualified Graphics.Rendering.Ombra.Backend as GL
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Types
 import Graphics.Rendering.Ombra.Internal.GL hiding (Texture)
-import qualified Graphics.Rendering.Ombra.Internal.GL as GL
-import Graphics.Rendering.Ombra.Internal.Resource
+import Graphics.Rendering.Ombra.Texture.Internal
 
 -- | Creates a 'Texture' from a list of pixels.
 mkTexture :: GLES
@@ -63,50 +58,3 @@ setFilter min mag (TextureImage (TextureRaw c _ _ w h s)) =
 setFilter min mag (TextureImage (TextureFloat c _ _ w h s)) =
         TextureImage (TextureFloat c min mag w h s)
 setFilter _ _ t = t
-
-instance GLES => Resource TextureImage LoadedTexture GL where
-        loadResource i = Right <$> loadTextureImage i
-        unloadResource _ (LoadedTexture _ _ t) = deleteTexture t
-
-loadTextureImage :: GLES => TextureImage -> GL LoadedTexture
-loadTextureImage (TexturePixels ps min mag w h hash) =
-        do arr <- liftIO . encodeUInt8s . take (fromIntegral $ w * h * 4) $
-                        ps >>= \(Color r g b a) -> [r, g, b, a]
-           loadTextureImage $ TextureRaw arr min mag w h hash
-loadTextureImage (TextureRaw arr min mag w h _) =
-        do t <- emptyTexture min mag
-           texImage2DUInt gl_TEXTURE_2D 0
-                          (fromIntegral gl_RGBA)
-                          w h 0
-                          gl_RGBA
-                          gl_UNSIGNED_BYTE
-                          arr
-           return $ LoadedTexture (fromIntegral w)
-                                  (fromIntegral h)
-                                  t
-loadTextureImage (TextureFloat ps min mag w h hash) =
-        do arr <- liftIO . encodeFloats . take (fromIntegral $ w * h * 4) $ ps
-           t <- emptyTexture min mag
-           texImage2DFloat gl_TEXTURE_2D 0
-                           (fromIntegral gl_RGBA32F)
-                           w h 0
-                           gl_RGBA
-                           gl_FLOAT
-                           arr
-           return $ LoadedTexture (fromIntegral w)
-                                  (fromIntegral h)
-                                  t
-
-emptyTexture :: GLES => Filter -> Filter -> GL GL.Texture
-emptyTexture minf magf = do t <- createTexture
-                            bindTexture gl_TEXTURE_2D t
-                            param gl_TEXTURE_MIN_FILTER $ f minf
-                            param gl_TEXTURE_MAG_FILTER $ f magf
-                            param gl_TEXTURE_WRAP_S gl_REPEAT
-                            param gl_TEXTURE_WRAP_T gl_REPEAT
-                            return t
-        where f Linear = gl_LINEAR
-              f Nearest = gl_NEAREST
-
-              param :: GLES => GLEnum -> GLEnum -> GL ()
-              param p v = texParameteri gl_TEXTURE_2D p $ fromIntegral v

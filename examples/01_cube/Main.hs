@@ -1,5 +1,6 @@
 module Main where
 
+import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
 import Common
 
@@ -12,11 +13,9 @@ scene tex = let rotatedCube =   rotY (pi / 4) -- Rotate the cube around the Y
                               $ cube tex      -- The 'cube' function creates
                                               -- a cube with a certain texture.
 
-                -- A 'Group' is a group of objects which share some common
-                -- attributes, like a view matrix. We can create a group with
-                -- the 'view' function, which creates the group and set the view
-                -- matrix for all the objects.
-                cubeGroup = view idmtx         -- In this case, we don't need
+                -- Set the view matrix for the group of objects we're going to
+                -- draw.
+                viewGroup = view idmtx         -- In this case, we don't need
                                                -- to apply any view
                                                -- transformation, so we use
                                                -- the identity matrix.
@@ -28,8 +27,8 @@ scene tex = let rotatedCube =   rotY (pi / 4) -- Rotate the cube around the Y
             -- contains the GPU instructions on how to render them. 'layerS'
             -- creates a layer associated with a simple 3D rendering program,
             -- which requires a view matrix (otherwise we could have used the
-            -- 'group' function instead of 'view' when creating the group).
-            in layerS cubeGroup
+            -- 'mconcat' function instead of 'view' when creating the group).
+            in layerS viewGroup
 
 main :: IO ()
 -- We use the helper functions 'loadTexture' and 'static' from the Common module

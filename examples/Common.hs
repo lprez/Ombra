@@ -10,10 +10,9 @@ module Common (
         loadTexture
 ) where
 
-import Graphics.Rendering.Ombra.Generic
+import Graphics.Rendering.Ombra
 import qualified Graphics.Rendering.Ombra.D2 as D2
 import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Texture
 import Control.Monad.IO.Class (liftIO)
 import Data.Hashable
 import Data.IORef

@@ -14,8 +14,6 @@ module Graphics.Rendering.Ombra.Draw (
         removeGeometry,
         removeTexture,
         removeProgram,
-        textureUniform,
-        textureSize,
         resizeViewport,
         renderLayer,
         gl
@@ -24,7 +22,7 @@ module Graphics.Rendering.Ombra.Draw (
 import Data.IORef
 import Graphics.Rendering.Ombra.Draw.Internal
 import Graphics.Rendering.Ombra.Internal.GL hiding (Buffer)
-import Graphics.Rendering.Ombra.Types (Buffer(..))
+import Graphics.Rendering.Ombra.Layer
 
 -- | Run a Draw action using an IORef and a context.
 refDrawCtx :: GLES => Ctx -> Draw a -> IORef DrawState -> IO a

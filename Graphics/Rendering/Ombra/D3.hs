@@ -4,19 +4,11 @@
 
 {-| Simplified 3D graphics system. -}
 module Graphics.Rendering.Ombra.D3 (
-        module Graphics.Rendering.Ombra.Generic,
-        module Data.Vect.Float,
         -- * 3D Objects
         Object3D,
         IsObject3D,
-        Group3D,
-        IsGroup3D,
         cube,
-        -- ** Geometry
-        Geometry3D,
         mesh,
-        mkGeometry3D,
-        positionOnly,
         -- * Transformations
         trans,
         rotX,
@@ -58,30 +50,23 @@ import Graphics.Rendering.Ombra.Backend hiding (Texture, Program)
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Generic
+import Graphics.Rendering.Ombra.Layer
+import Graphics.Rendering.Ombra.Object
 import Graphics.Rendering.Ombra.Shapes
-import Graphics.Rendering.Ombra.Types
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.Default3D (Texture2(..), Transform3(..), View3(..))
 import Graphics.Rendering.Ombra.Shader.Program hiding (program)
+import Graphics.Rendering.Ombra.Texture
 import Graphics.Rendering.Ombra.Transformation
 
 type Uniforms3D = '[Transform3, Texture2]
 
--- | A standard 3D object.
+-- | A standard 3D object, without the 'View3' matrix.
 type Object3D = Object Uniforms3D Geometry3D
 
--- | A standard 3D group.
-type Group3D = Group (View3 ': Uniforms3D) Geometry3D
-
 -- | 3D objects compatible with the standard 3D shader program.
-type IsObject3D globals inputs = ( Subset Geometry3D inputs
-                                 , Subset Uniforms3D globals
-                                 , ShaderVars inputs, ShaderVars globals )
-
--- | 3D object groups compatible with the standard 3D shader program.
-type IsGroup3D gs is = ( Subset Geometry3D is, Subset (View3 ': Uniforms3D) gs
-                       , ShaderVars is, ShaderVars gs )
+type IsObject3D gs is = ( Subset Geometry3D is, Subset (View3 ': Uniforms3D) gs
+                        , ShaderVars is, ShaderVars gs )
 
 -- | A cube with a specified 'Texture'.
 cube :: GLES => Texture -> Object3D
@@ -89,11 +74,11 @@ cube = flip mesh cubeGeometry
 
 -- | A 3D object with a specified 'Geometry'.
 mesh :: GLES => Texture -> Geometry is -> Object Uniforms3D is
-mesh t g = Transform3 -= idmtx :~> globalTexture Texture2 t :~> geom g
+mesh t g = Transform3 -= idmtx :~> withTexture t (Texture2 -=) :~> geom g
 
 -- | Create a group of objects with a view matrix.
 view :: (GLES, ShaderVars gs, ShaderVars is)
-     => Mat4 -> [Object gs is] -> Group (View3 ': gs) is
+     => Mat4 -> [Object gs is] -> Object (View3 ': gs) is
 view m = viewVP $ const m
 
 -- | Create a group of objects with a view matrix and perspective projection.
@@ -102,7 +87,8 @@ viewPersp :: (GLES, ShaderVars gs, ShaderVars is)
           -> Float      -- ^ Far
           -> Float      -- ^ FOV
           -> Mat4       -- ^ View matrix
-          -> [Object gs is] -> Group (View3 ': gs) is
+          -> [Object gs is]
+          -> Object (View3 ': gs) is
 viewPersp n f fov m = viewVP $ \s -> m .*. perspectiveMat4Size n f fov s
 
 -- | Create a group of objects with a view matrix and orthographic projection.
@@ -114,17 +100,20 @@ viewOrtho :: (GLES, ShaderVars gs, ShaderVars is)
           -> Float      -- ^ Bottom
           -> Float      -- ^ Top
           -> Mat4       -- ^ View matrix
-          -> [Object gs is] -> Group (View3 ': gs) is
+          -> [Object gs is]
+          -> Object (View3 ': gs) is
 viewOrtho n f l r b t m = view $ m .*. orthoMat4 n f l r b t
 
 -- | Create a group of objects with a view matrix, depending on the size of the
 -- framebuffer.
 viewVP :: (GLES, ShaderVars gs, ShaderVars is)
-       => (Vec2 -> Mat4) -> [Object gs is] -> Group (View3 ': gs) is
-viewVP mf = groupGlobal (globalFramebufferSize View3 mf) . group
+       => (Vec2 -> Mat4) -> [Object gs is] -> Object (View3 ': gs) is
+viewVP mf o = withFramebufferSize (\s -> View3 -= mf (tupleToVec s))
+              :~> mconcat o
+        where tupleToVec (w, h) = Vec2 (fromIntegral w) (fromIntegral h)
 
 -- | A 'Layer' with the standard 3D program.
-layerS :: IsGroup3D gs is => Group gs is -> Layer
+layerS :: IsObject3D gs is => Object gs is -> Layer
 layerS = layer defaultProgram3D
 
 -- | Translate a 3D Object.
@@ -166,7 +155,7 @@ scaleV v = transform $ scaleMat4 v
 -- | Transform a 3D 'Object'.
 transform :: (MemberGlobal Transform3 gs, GLES) => Mat4
           -> Object gs is -> Object gs is
-transform m' o = (\m -> Transform3 := (.*. m') <$> m) ~~> o
+transform m' o = (\m -> Transform3 -= m .*. m') ~~> o
 
 -- | 4x4 perspective projection matrix, using width and height instead of the
 -- aspect ratio.

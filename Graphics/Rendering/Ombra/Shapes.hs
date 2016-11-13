@@ -2,7 +2,6 @@ module Graphics.Rendering.Ombra.Shapes where
 
 import Data.Vect.Float
 import Graphics.Rendering.Ombra.Geometry
-import Graphics.Rendering.Ombra.Types
 import Graphics.Rendering.Ombra.Internal.GL (GLES)
 
 rectGeometry :: GLES => Vec2 -> Geometry Geometry2D

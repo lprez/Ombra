@@ -3,6 +3,7 @@
 module Main where
 
 import Data.Vect.Float
+import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
 
 import Common
@@ -12,7 +13,7 @@ scene :: Float -> Layer
 scene time = let -- We could have used the 'mesh' function, but that requires
                  -- a Texture, and we're not using that in our shaders. Note
                  -- that the transformation functions (e.g. trans, rotZ) modify
-                 -- the Global associated with Transform3.
+                 -- the Transform3 Global.
                  obj :: Object '[ Time, Transform3 ] Geometry3D
                  obj =     trans (Vec3 0 0 (- 1.1))
                        .   rotY (time / 2)

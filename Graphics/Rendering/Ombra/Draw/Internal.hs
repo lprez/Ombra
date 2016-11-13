@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs, DataKinds, FlexibleContexts, TypeSynonymInstances,
-             FlexibleInstances, MultiParamTypeClasses, KindSignatures #-}
+             FlexibleInstances, MultiParamTypeClasses, KindSignatures,
+             GeneralizedNewtypeDeriving #-}
 
 module Graphics.Rendering.Ombra.Draw.Internal (
         Draw,
@@ -8,12 +9,10 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         drawInit,
         clearBuffers,
         drawLayer,
-        drawGroup,
         drawObject,
         removeGeometry,
         removeTexture,
         removeProgram,
-        textureUniform,
         textureSize,
         setProgram,
         resizeViewport,
@@ -27,10 +26,11 @@ module Graphics.Rendering.Ombra.Draw.Internal (
 ) where
 
 import qualified Graphics.Rendering.Ombra.Blend as Blend
-import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Types
-import Graphics.Rendering.Ombra.Texture
+import Graphics.Rendering.Ombra.Geometry.Internal
+import Graphics.Rendering.Ombra.Layer.Internal
+import Graphics.Rendering.Ombra.Object.Internal
+import Graphics.Rendering.Ombra.Texture.Internal
 import Graphics.Rendering.Ombra.Backend (GLES)
 import qualified Graphics.Rendering.Ombra.Backend as GL
 import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, Buffer,
@@ -48,8 +48,37 @@ import Data.Hashable (Hashable)
 import Data.Vect.Float
 import Data.Word (Word8)
 import Control.Monad (when)
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
+
+-- | The state of the 'Draw' monad.
+data DrawState = DrawState {
+        currentProgram :: Maybe (Program '[] '[]),
+        loadedProgram :: Maybe LoadedProgram,
+        programs :: ResMap (Program '[] '[]) LoadedProgram,
+        uniforms :: ResMap (LoadedProgram, String) UniformLocation,
+        gpuBuffers :: ResMap (Geometry '[]) GPUBufferGeometry,
+        gpuVAOs :: ResMap (Geometry '[]) GPUVAOGeometry,
+        textureImages :: ResMap TextureImage LoadedTexture,
+        activeTextures :: Int,
+        viewportSize :: (Int, Int),
+        blendMode :: Maybe Blend.Mode,
+        stencilMode :: Maybe Stencil.Mode,
+        cullFace :: Maybe CullFace,
+        depthTest :: Bool,
+        depthMask :: Bool,
+        colorMask :: (Bool, Bool, Bool, Bool)
+}
+
+newtype UniformLocation = UniformLocation GL.UniformLocation
+
+-- | A state monad on top of 'GL'.
+newtype Draw a = Draw { unDraw :: StateT DrawState GL a }
+        deriving (Functor, Applicative, Monad, MonadIO)
+
+instance EmbedIO Draw where
+        embedIO f (Draw a) = Draw get >>= Draw . lift . embedIO f . evalStateT a
 
 -- | Create a 'DrawState'.
 drawState :: GLES
@@ -68,7 +97,7 @@ drawState w h = do programs <- newGLResMap
                                     , gpuVAOs = gpuVAOs
                                     , uniforms = uniforms
                                     , textureImages = textureImages
-                                    , activeTextures = []
+                                    , activeTextures = 0
                                     , viewportSize = (w, h)
                                     , blendMode = Nothing
                                     , depthTest = True
@@ -150,8 +179,7 @@ removeProgram = removeDrawResource gl programs . castProgram
 
 -- | Draw a 'Layer'.
 drawLayer :: GLES => Layer -> Draw ()
-drawLayer (Layer prg grp) = setProgram prg >>
-                            drawGroup initialGroupState grp
+drawLayer (Layer prg grp) = setProgram prg >> drawObject grp
 drawLayer (SubLayer rl) =
         do (layer, textures) <- renderLayer rl
            drawLayer layer
@@ -159,63 +187,39 @@ drawLayer (SubLayer rl) =
 drawLayer (OverLayer top behind) = drawLayer behind >> drawLayer top
 drawLayer (ClearLayer bufs l) = clearBuffers bufs >> drawLayer l
 
-data GroupState = GroupState {
-        hasBlend :: Bool,
-        hasStencil :: Bool,
-        hasDepthTest :: Bool,
-        hasDepthMask :: Bool,
-        hasColorMask :: Bool,
-        hasCull :: Bool
-}
-
-initialGroupState :: GroupState
-initialGroupState = GroupState False False False False False False
-
--- | Draw a 'Group'.
-drawGroup :: GLES => GroupState -> Group gs is -> Draw ()
-drawGroup _ Empty = return ()
-drawGroup _ (Object o) = drawObject o >> markActiveTextures
-drawGroup s (Global (g := c) o) = do c >>= uniform single (g undefined)
-                                     drawGroup s o
-drawGroup s (Global (Mirror g c) o) = do c >>= uniform mirror
-                                                  (varBuild (const undefined) g)
-                                         drawGroup s o
-drawGroup _ (Append g g') = do drawGroup initialGroupState g
-                               drawGroup initialGroupState g'
-drawGroup s (Blend m g) | hasBlend s = drawGroup s g
-                        | otherwise = stateReset blendMode setBlendMode m $
-                                drawGroup (s { hasBlend = True }) g
-drawGroup s (Stencil m g) | hasStencil s = drawGroup s g
-                          | otherwise = stateReset stencilMode setStencilMode m $
-                                drawGroup (s { hasStencil = True }) g
-drawGroup s (DepthTest d g) | hasDepthTest s = drawGroup s g
-                            | otherwise = stateReset depthTest setDepthTest d $
-                                drawGroup (s { hasDepthTest = True }) g
-drawGroup s (DepthMask d g) | hasDepthTest s = drawGroup s g
-                            | otherwise = stateReset depthMask setDepthMask d $
-                                drawGroup (s { hasDepthMask = True }) g
-drawGroup s (ColorMask d g) | hasColorMask s = drawGroup s g
-                            | otherwise = stateReset colorMask setColorMask d $
-                                drawGroup (s { hasColorMask = True }) g
-drawGroup s (Cull face g) | hasCull s = drawGroup s g
-                          | otherwise = stateReset cullFace setCullFace face $
-                                drawGroup (s { hasCull = True }) g
-
-stateReset :: (DrawState -> a) -> (a -> Draw ()) -> a -> Draw () -> Draw ()
-stateReset getOld set new act = do old <- getOld <$> Draw get
-                                   set new
-                                   act
-                                   set old
-
 -- | Draw an 'Object'.
 drawObject :: GLES => Object gs is -> Draw ()
-drawObject NoMesh = return ()
+drawObject (g :~> o) = withGlobal g $ drawObject o
 drawObject (Mesh g) = withRes_ (getGPUVAOGeometry $ castGeometry g)
                                  drawGPUVAOGeometry
-drawObject ((g := c) :~> o) = c >>= uniform single (g undefined) >> drawObject o
-drawObject (Mirror g c :~> o) = do c >>= uniform mirror
-                                              (varBuild (const undefined) g)
-                                   drawObject o
+drawObject NoMesh = return ()
+drawObject (Prop p o) = withObjProp p $ drawObject o
+drawObject (Append o o') = drawObject o >> drawObject o'
+
+withObjProp :: GLES => ObjProp -> Draw a -> Draw a
+withObjProp (Blend m) a = stateReset blendMode setBlendMode m a
+withObjProp (Stencil m) a = stateReset stencilMode setStencilMode m a
+withObjProp (DepthTest d) a = stateReset depthTest setDepthTest d a
+withObjProp (DepthMask d) a = stateReset depthMask setDepthMask d a
+withObjProp (ColorMask d) a = stateReset colorMask setColorMask d a
+withObjProp (Cull face) a = stateReset cullFace setCullFace face a
+
+stateReset :: (DrawState -> a) -> (a -> Draw ()) -> a -> Draw b -> Draw b
+stateReset getOld set new act = do old <- getOld <$> Draw get
+                                   set new
+                                   b <- act
+                                   set old
+                                   return b
+
+withGlobal :: GLES => Global g -> Draw () -> Draw ()
+withGlobal (Single g c) a = uniform single (g undefined) c >> a
+withGlobal (Mirror g c) a = uniform mirror (varBuild (const undefined) g) c >> a
+withGlobal (WithTexture t gf) a = withActiveTexture t $ flip withGlobal a . gf
+withGlobal (WithTextureSize t gf) a = textureSize t >>= flip withGlobal a . gf
+withGlobal (WithFramebufferSize gf) a = viewportSize <$> drawGet >>=
+                                        flip withGlobal a . gf
+
+        where tupleToVec (x, y) = Vec2 (fromIntegral x) (fromIntegral y)
 
 uniform :: (GLES, ShaderVar g, Uniform s g)
         => proxy (s :: CPUSetterType *) -> g -> CPU s g -> Draw ()
@@ -224,15 +228,20 @@ uniform p g c = withUniforms p g c $
                                 \(UniformLocation l) -> gl $ setUniform l ug uc
                                                                 
 
--- | This helps you set the uniforms of type 'Graphics.Rendering.Ombra.Shader.Sampler2D'.
-textureUniform :: GLES => Texture -> Draw ActiveTexture
-textureUniform tex = withRes (getTexture tex) (return $ ActiveTexture 0)
-                                 $ \(LoadedTexture _ _ wtex) ->
-                                        do (changed, at) <- makeActive tex
-                                           when changed $
-                                                gl $ bindTexture gl_TEXTURE_2D
-                                                                 wtex
-                                           return at
+withActiveTexture :: GLES => Texture -> (ActiveTexture -> Draw ()) -> Draw ()
+withActiveTexture tex f =
+        withRes (getTexture tex) (return ()) $
+                \(LoadedTexture _ _ wtex) -> makeActive tex $
+                        \at -> do gl $ bindTexture gl_TEXTURE_2D wtex
+                                  f at
+
+makeActive :: GLES => Texture -> (ActiveTexture -> Draw a) -> Draw a
+makeActive t f = do atn <- activeTextures <$> Draw get
+                    Draw . modify $ \ds -> ds { activeTextures = atn + 1 }
+                    gl . activeTexture $ gl_TEXTURE0 + fromIntegral atn
+                    ret <- f . ActiveTexture . fromIntegral $ atn
+                    Draw . modify $ \ds -> ds { activeTextures = atn }
+                    return ret
 
 -- | Get the dimensions of a 'Texture'.
 textureSize :: (GLES, Num a) => Texture -> Draw (a, a)
@@ -249,7 +258,7 @@ setProgram p = do current <- currentProgram <$> Draw get
                                    Draw . modify $ \s -> s {
                                            currentProgram = Just $ castProgram p,
                                            loadedProgram = Just lp,
-                                           activeTextures = []
+                                           activeTextures = 0
                                    }
                                    gl $ useProgram glp
 
@@ -285,44 +294,6 @@ getTextureImage = getDrawResource gl textureImages
 getProgram :: GLES
            => Program '[] '[] -> Draw (Either String LoadedProgram)
 getProgram = getDrawResource gl programs
-
-markActiveTextures :: GLES => Draw ()
-markActiveTextures = Draw . modify $ \ds ->
-        ds { activeTextures = map (\(u, t, _) -> (u, t, True)) $
-                                  activeTextures ds }
-
-makeActive :: GLES => Texture -> Draw (Bool, ActiveTexture)
-makeActive t = activeTextures <$> Draw get >>= \ats ->
-        let (changed, unit, ats') =
-                case searchUnit ats of
-                     (_, (Just unit, ats'), _) -> (False, unit, ats')
-                     (_, _, (Just unit, ats')) -> (True, unit, ats')
-                     (last, _, _) -> ( True
-                                     , last + 1
-                                     , (last + 1, t, False) : ats )
-        in do Draw . modify $ \ds -> ds { activeTextures = ats' }
-              when changed $
-                      gl . activeTexture $ gl_TEXTURE0 + fromIntegral unit
-              return (changed, ActiveTexture $ fromIntegral unit)
-
-        where searchUnit =
-                foldr (\(unit, t', mark)
-
-                        ( last
-                        , (foundSame, sameList)
-                        , (foundReplace, replacedList)
-                        ) ->
-
-                        ( unit
-                        , if t == t'
-                          then (Just unit, (unit, t, False) : sameList)
-                          else (foundSame, (unit, t', mark) : sameList)
-                        , if mark && foundReplace == Nothing
-                          then (Just unit, (unit, t, False) : replacedList)
-                          else (foundReplace, (unit, t', mark) : replacedList)
-                        )
-                      ) (-1, (Nothing, []), (Nothing, []))
-
 
 -- | Realize a 'RenderLayer'. It returns the list of allocated 'Texture's so
 -- that you can free them if you want.
