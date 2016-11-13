@@ -118,12 +118,14 @@ instance {-# OVERLAPPING #-} MemberGlobal g (g ': gs) where
         f ~~> (g :~> o) = globalApply f g :~> o
         f ~~> (Prop p o) = Prop p $ f ~~> o
         f ~~> (Append o o') = Append (f ~~> o) (f ~~> o')
+        f ~~> NoMesh = NoMesh
 
 instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, MemberGlobal g gs) =>
          MemberGlobal g (g1 ': gs) where
         f ~~> (g :~> o) = g :~> (f ~~> o)
         f ~~> (Prop p o) = Prop p $ f ~~> o
         f ~~> (Append o o') = Append (f ~~> o) (f ~~> o')
+        f ~~> NoMesh = NoMesh
         
 globalApply :: (Uniform 'S g)
             => (CPU 'S g -> Global g)
@@ -145,12 +147,14 @@ instance {-# OVERLAPPING #-} RemoveGlobal g (g ': gs) gs where
         _ *~> (_ :~> o) = o
         r *~> (Prop p o) = Prop p $ r *~> o
         r *~> (Append o o') = Append (r *~> o) (r *~> o')
+        r *~> NoMesh = NoMesh
 
 instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, RemoveGlobal g gs gs') =>
          RemoveGlobal g (g1 ': gs) (g1 ': gs') where
         r *~> (g :~> o) = g :~> (r *~> o)
         r *~> (Prop p o) = Prop p $ r *~> o
         r *~> (Append o o') = Append (r *~> o) (r *~> o')
+        r *~> NoMesh = NoMesh
 
 infixr 2 *~>
 
@@ -162,6 +166,7 @@ modifyGeometry fg (Mesh g) = Mesh $ fg g
 modifyGeometry fg (Prop p o) = Prop p $ modifyGeometry fg o
 modifyGeometry fg (Append o o') = Append (modifyGeometry fg o)
                                          (modifyGeometry fg o')
+modifyGeometry fg NoMesh = NoMesh
 
 -- | Create a 'Global' from a pure value. The first argument is ignored,
 -- it just provides the type (you can use the constructor of the GPU type).
