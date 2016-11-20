@@ -11,23 +11,27 @@ main :: IO ()
 main = do (file : _) <- getArgs
           eobj <- fromFile $ file
           case eobj of
-               Right obj -> let (es, ls, ts, ns) = convert obj
-                            in do putStr $ "mkGeometry3D "
-                                  putStrLn $ prettyList "\n             " ls
-                                  putStr "             "
-                                  putStrLn $ prettyList "\n             " ts
-                                  putStr "             "
-                                  putStrLn $ prettyList "\n             " ns
-                                  putStr "             "
-                                  putStrLn $ prettyList "\n             " es
+               Right obj -> let (es, vs) = convert obj
+                            in do putStr $ "mkGeometry3DInd "
+                                  putStrLn . prettyList "\n                " $
+                                          map show vs
+                                  putStr "                "
+                                  putStrLn . prettyList "\n                " $
+                                          showTriangles es
                Left err -> putStrLn err
 
-prettyList :: Show a => String -> [a] -> String
-prettyList ident (x : xs) = "[ " ++ show x ++
-                            concatMap (\x -> ident ++ ", " ++ show x) xs ++
+prettyList :: String -> [String] -> String
+prettyList ident (x : xs) = "[ " ++ x ++
+                            concatMap (\x -> ident ++ ", " ++ x) xs ++
                             ident ++ "]"
 
-convert :: WavefrontOBJ -> ([Int], [Vec3], [Vec2], [Vec3])
+showTriangles :: [Int] -> [String]
+showTriangles [] = []
+showTriangles (x : y : z : ts) = ("Triangle " ++ show x ++ " "
+                                              ++ show y ++ " "
+                                              ++ show z) : showTriangles ts
+
+convert :: WavefrontOBJ -> ([Int], [(Vec3, Vec2, Vec3)])
 convert obj =
         let locations = objLocations obj
             lslen = V.length locations
@@ -39,7 +43,7 @@ convert obj =
             nslen = V.length normals
 
             build (FaceIndex locIdx tcIdx normIdx)
-                  (attrMap, elemList, locList, tcList, normList, nextAttrIdx) =
+                  (attrMap, elemList, vertList, nextAttrIdx) =
                 let locIdx' = locIdx - 1
                     tcIdx' = maybe tslen id tcIdx - 1
                     normIdx' = maybe nslen id normIdx - 1
@@ -47,24 +51,23 @@ convert obj =
                 in case M.lookup mapIdx attrMap of
                         Just attrIdx -> ( attrMap
                                         , attrIdx : elemList
-                                        , locList
-                                        , tcList
-                                        , normList
+                                        , vertList
                                         , nextAttrIdx )
                         Nothing -> ( M.insert mapIdx nextAttrIdx attrMap
                                    , nextAttrIdx : elemList
-                                   , location (locations V.! locIdx') : locList
-                                   , texCoord (texCoords V.! tcIdx') : tcList
-                                   , normal (normals V.! normIdx') : normList
+                                   , ( location (locations V.! locIdx')
+                                     , texCoord (texCoords V.! tcIdx')
+                                     , normal (normals V.! normIdx')
+                                     ) : vertList
                                    , nextAttrIdx + 1)
 
             buildFace (Triangle f1 f2 f3) = build f1 . build f2 . build f3
             buildFace _ = error "Only triangles are supported."
 
-            (_, es, ls, ts, ns, _) = V.foldr (\elem -> buildFace $ elValue elem)
-                                             (M.empty, [], [], [], [], 0)
-                                             (objFaces obj)
-        in (es, reverse ls, reverse ts, reverse ns)
+            (_, es, vs, _) = V.foldr (\elem -> buildFace $ elValue elem)
+                                     (M.empty, [], [], 0)
+                                     (objFaces obj)
+        in (es, reverse vs)
 
 location :: Location -> Vec3
 location (Location x y z _) = Vec3 x y z
