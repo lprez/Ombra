@@ -78,7 +78,8 @@ instance Eq (AttrData i) where
 
 instance H.Hashable (AttrList is) where
         hashWithSalt salt AttrListNil = salt
-        hashWithSalt salt (AttrListCons (AttrData _ h) al) = H.hashWithSalt h al
+        hashWithSalt salt (AttrListCons (AttrData _ h) al) =
+                H.hashWithSalt (H.hashWithSalt salt h) al
 
 class Attributes (is :: [*]) where
         emptyAttrList :: Proxy (is :: [*]) -> AttrList is
@@ -89,7 +90,7 @@ instance Attributes '[] where
 instance (H.Hashable (CPU S i), Attribute S i, Attributes is) =>
         Attributes (i ': is) where
         emptyAttrList (_ :: Proxy (i ': is)) =
-                AttrListCons (AttrData [] 0 :: AttrData i) $
+                AttrListCons (AttrData [] (H.hash (0 :: Int)) :: AttrData i) $
                         emptyAttrList (Proxy :: Proxy is)
 
 geometry :: AttrList is -> ElemData -> Geometry is
