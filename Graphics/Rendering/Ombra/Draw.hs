@@ -1,21 +1,27 @@
 module Graphics.Rendering.Ombra.Draw (
-        Buffer(..),
+        Draw,
         DrawState,
         Ctx,
+        -- * Running the Draw monad
         refDrawCtx,
         runDrawCtx,
         execDrawCtx,
         evalDrawCtx,
-        drawInit,
         drawState,
+        -- * Draw actions
+        drawInit,
         clearBuffers,
         drawLayer,
-        drawGet,
+        resizeViewport,
+        -- ** Resources
+        -- $resources
+        preloadGeometry,
+        preloadTexture,
+        preloadProgram,
         removeGeometry,
         removeTexture,
         removeProgram,
-        resizeViewport,
-        renderLayer,
+        -- *
         gl
 ) where
 
@@ -43,3 +49,12 @@ execDrawCtx ctx d = flip evalGL ctx . execDraw d
 
 evalDrawCtx :: Ctx -> Draw a -> DrawState -> IO a
 evalDrawCtx ctx d = flip evalGL ctx . evalDraw d
+
+-- renderSubLayer :: 
+
+-- $resources
+-- In Ombra, GPU resources are allocated when they're needed, and they're kept
+-- alive by their corresponding CPU resources. Specifically, these resources are
+-- Geometries, Textures and Programs. This means that, when a CPU resource is
+-- garbage collected, the GPU resource is also removed. The functions below let
+-- you manage allocation and deallocation manually.

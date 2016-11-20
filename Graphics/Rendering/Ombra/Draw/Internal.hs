@@ -10,6 +10,9 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         clearBuffers,
         drawLayer,
         drawObject,
+        preloadGeometry,
+        preloadTexture,
+        preloadProgram,
         removeGeometry,
         removeTexture,
         removeProgram,
@@ -117,6 +120,7 @@ drawState w h = do programs <- newGLResMap
               newDrawResMap :: IO (ResMap r)
               newDrawResMap = newResMap
 
+-- | Initialize the render engine.
 drawInit :: GLES => Draw ()
 drawInit = viewportSize <$> Draw get >>=
            \(w, h) -> gl $ do clearColor 0.0 0.0 0.0 1.0
@@ -162,9 +166,19 @@ clearBuffers = mapM_ $ gl . clear . buffer
               buffer DepthBuffer = gl_DEPTH_BUFFER_BIT
               buffer StencilBuffer = gl_STENCIL_BUFFER_BIT
 
--- | Manually delete a 'Geometry' from the GPU (this is automatically done when
--- the 'Geometry' becomes unreachable). Note that if you try to draw it, it will
--- be allocated again.
+-- | Manually allocate a 'Geometry' in the GPU.
+preloadGeometry :: GLES => Geometry is -> Draw ()
+preloadGeometry g = () <$ getGeometry g
+
+-- | Manually allocate a 'Texture' in the GPU.
+preloadTexture :: GLES => Texture -> Draw ()
+preloadTexture t = () <$ getTexture t
+
+-- | Manually allocate a 'Program' in the GPU.
+preloadProgram :: GLES => Program gs is -> Draw ()
+preloadProgram p = () <$ getProgram p
+
+-- | Manually delete a 'Geometry' from the GPU. Note that if you try to draw it, it will be allocated again.
 removeGeometry :: GLES => Geometry is -> Draw ()
 removeGeometry g = removeDrawResource id geometries g
 
