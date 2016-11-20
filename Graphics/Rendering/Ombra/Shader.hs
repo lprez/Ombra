@@ -32,8 +32,7 @@ An example of vertex shader:
 Required extensions:
 
 @
-\{\-# LANGUAGE DataKinds, RebindableSyntax, DeriveDataTypeable,
-             GeneralizedNewtypeDeriving, GADTs #\-\}
+\{\-# LANGUAGE DataKinds, RebindableSyntax, DeriveGeneric, GADTs #\-\}
 @
 
 -}
