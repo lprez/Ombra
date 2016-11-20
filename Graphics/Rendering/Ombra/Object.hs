@@ -34,6 +34,7 @@ module Graphics.Rendering.Ombra.Object (
         withTexture,
         withTexSize,
         withFramebufferSize,
+        ActiveTexture,
         -- ** Mirror globals
         mirror,
         CPUMirror,
@@ -189,6 +190,7 @@ withTexSize = WithTextureSize
 withFramebufferSize :: ((Int, Int) -> Global g) -> Global g
 withFramebufferSize = WithFramebufferSize
 
+-- TODO: remove Proxy?
 -- | Like '-=' but for mirror types.
 mirror :: (ShaderVar g, Uniform 'M g) => Proxy g -> CPU 'M g -> Global g
 mirror = Mirror
