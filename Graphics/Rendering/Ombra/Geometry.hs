@@ -46,8 +46,8 @@ data Triangle a = Triangle a a a
 -- For instance: @Attr Position3 p :~ Attr UV u :~ Attr Normal3 n@
 data Vertex (is :: [*]) where
         Attr :: (Hashable (CPU S i), Attribute S i)
-             => (a -> i)        -- ^ Attribute constructor
-             -> CPU S i         -- ^ Attribute value
+             => (a -> i)
+             -> CPU S i
              -> Vertex '[i]
         (:~) :: Vertex '[i] -> Vertex is -> Vertex (i ': is)
 

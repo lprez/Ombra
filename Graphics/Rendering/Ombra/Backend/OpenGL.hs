@@ -14,7 +14,7 @@ import qualified Graphics.GL.Ext.ARB.VertexArrayObject as GL
 import qualified Graphics.GL.Ext.EXT.BlendColor as GL
 import Graphics.GL.Types as GL
 
-makeContext :: IO ()
+makeContext :: IO Ctx
 makeContext = return ()
 
 genToCreate :: Storable a => (GLsizei -> Ptr a -> IO ()) -> ctx -> IO a
