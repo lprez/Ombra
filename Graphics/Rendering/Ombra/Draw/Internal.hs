@@ -50,17 +50,19 @@ import Data.Word (Word8)
 import Control.Monad (when)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 
 -- | The state of the 'Draw' monad.
 data DrawState = DrawState {
-        currentProgram :: Maybe (Program '[] '[]),
+        currentProgram :: Maybe ProgramIndex,
         loadedProgram :: Maybe LoadedProgram,
-        programs :: ResMap (Program '[] '[]) LoadedProgram,
-        uniforms :: ResMap (LoadedProgram, String) UniformLocation,
-        gpuBuffers :: ResMap (Geometry '[]) GPUBufferGeometry,
-        gpuVAOs :: ResMap (Geometry '[]) GPUVAOGeometry,
-        textureImages :: ResMap TextureImage LoadedTexture,
+        programs :: ResMap LoadedProgram,
+        uniforms :: ResMap UniformLocation,
+        elemBuffers :: ResMap LoadedBuffer,
+        attributes :: ResMap LoadedAttribute,
+        geometries :: ResMap LoadedGeometry,
+        textureImages :: ResMap LoadedTexture,
         activeTextures :: Int,
         viewportSize :: (Int, Int),
         blendMode :: Maybe Blend.Mode,
@@ -86,15 +88,17 @@ drawState :: GLES
           -> Int         -- ^ Viewport height
           -> IO DrawState
 drawState w h = do programs <- newGLResMap
-                   gpuBuffers <- newGLResMap
-                   gpuVAOs <- newDrawResMap
+                   elemBuffers <- newGLResMap
+                   attributes <- newGLResMap
+                   geometries <- newDrawResMap
                    uniforms <- newGLResMap
                    textureImages <- newGLResMap
                    return DrawState { currentProgram = Nothing
                                     , loadedProgram = Nothing
                                     , programs = programs
-                                    , gpuBuffers = gpuBuffers
-                                    , gpuVAOs = gpuVAOs
+                                    , elemBuffers = elemBuffers
+                                    , attributes = attributes
+                                    , geometries = geometries
                                     , uniforms = uniforms
                                     , textureImages = textureImages
                                     , activeTextures = 0
@@ -107,11 +111,10 @@ drawState w h = do programs <- newGLResMap
                                     , colorMask = (True, True, True, True)
                                     }
 
-        where newGLResMap :: (Hashable i, Resource i r GL) => IO (ResMap i r)
+        where newGLResMap :: IO (ResMap r)
               newGLResMap = newResMap
               
-              newDrawResMap :: (Hashable i, Resource i r Draw)
-                            => IO (ResMap i r)
+              newDrawResMap :: IO (ResMap r)
               newDrawResMap = newResMap
 
 drawInit :: GLES => Draw ()
@@ -163,9 +166,7 @@ clearBuffers = mapM_ $ gl . clear . buffer
 -- the 'Geometry' becomes unreachable). Note that if you try to draw it, it will
 -- be allocated again.
 removeGeometry :: GLES => Geometry is -> Draw ()
-removeGeometry gi = let g = castGeometry gi in
-        do removeDrawResource gl gpuBuffers g
-           removeDrawResource id gpuVAOs g
+removeGeometry g = removeDrawResource id geometries g
 
 -- | Manually delete a 'Texture' from the GPU.
 removeTexture :: GLES => Texture -> Draw ()
@@ -175,7 +176,7 @@ removeTexture (TextureLoaded l) = gl $ unloadResource
 
 -- | Manually delete a 'Program' from the GPU.
 removeProgram :: GLES => Program gs is -> Draw ()
-removeProgram = removeDrawResource gl programs . castProgram
+removeProgram = removeDrawResource gl programs
 
 -- | Draw a 'Layer'.
 drawLayer :: GLES => Layer -> Draw ()
@@ -190,8 +191,7 @@ drawLayer (ClearLayer bufs l) = clearBuffers bufs >> drawLayer l
 -- | Draw an 'Object'.
 drawObject :: GLES => Object gs is -> Draw ()
 drawObject (g :~> o) = withGlobal g $ drawObject o
-drawObject (Mesh g) = withRes_ (getGPUVAOGeometry $ castGeometry g)
-                                 drawGPUVAOGeometry
+drawObject (Mesh g) = withRes_ (getGeometry g) drawGeometry
 drawObject NoMesh = return ()
 drawObject (Prop p o) = withObjProp p $ drawObject o
 drawObject (Append o o') = drawObject o >> drawObject o'
@@ -252,11 +252,12 @@ textureSize tex = withRes (getTexture tex) (return (0, 0))
 -- | Set the program.
 setProgram :: GLES => Program g i -> Draw ()
 setProgram p = do current <- currentProgram <$> Draw get
-                  when (current /= Just (castProgram p)) $
-                        withRes_ (getProgram $ castProgram p) $
+                  when (current /= Just (programIndex p)) $
+                        withRes_ (getProgram p) $
                                 \lp@(LoadedProgram glp _ _) -> do
                                    Draw . modify $ \s -> s {
-                                           currentProgram = Just $ castProgram p,
+                                           currentProgram =
+                                                   Just $ programIndex p,
                                            loadedProgram = Just lp,
                                            activeTextures = 0
                                    }
@@ -276,12 +277,8 @@ getUniform name = do mprg <- loadedProgram <$> Draw get
                           Just prg -> getDrawResource gl uniforms (prg, name)
                           Nothing -> return $ Left "No loaded program."
 
-getGPUVAOGeometry :: GLES => Geometry '[] -> Draw (Either String GPUVAOGeometry)
-getGPUVAOGeometry = getDrawResource id gpuVAOs
-
-getGPUBufferGeometry :: GLES => Geometry '[]
-                     -> Draw (Either String GPUBufferGeometry)
-getGPUBufferGeometry = getDrawResource gl gpuBuffers
+getGeometry :: GLES => Geometry is -> Draw (Either String LoadedGeometry)
+getGeometry = getDrawResource id geometries
 
 getTexture :: GLES => Texture -> Draw (Either String LoadedTexture)
 getTexture (TextureLoaded l) = return $ Right l
@@ -291,8 +288,7 @@ getTextureImage :: GLES => TextureImage
                 -> Draw (Either String LoadedTexture)
 getTextureImage = getDrawResource gl textureImages
 
-getProgram :: GLES
-           => Program '[] '[] -> Draw (Either String LoadedProgram)
+getProgram :: GLES => Program gs is -> Draw (Either String LoadedProgram)
 getProgram = getDrawResource gl programs
 
 -- | Realize a 'RenderLayer'. It returns the list of allocated 'Texture's so
@@ -520,9 +516,9 @@ setColorMask new@(r, g, b, a) = do old <- colorMask <$> Draw get
               bool True = true
               bool False = false
 
-getDrawResource :: (Resource i r m, Hashable i)
+getDrawResource :: Resource i r m
                 => (m (Either String r) -> Draw (Either String r))
-                -> (DrawState -> ResMap i r)
+                -> (DrawState -> ResMap r)
                 -> i
                 -> Draw (Either String r)
 getDrawResource lft mg i = do
@@ -531,15 +527,15 @@ getDrawResource lft mg i = do
 
 removeDrawResource :: (Resource i r m, Hashable i)
                    => (m () -> Draw ())
-                   -> (DrawState -> ResMap i r)
+                   -> (DrawState -> ResMap r)
                    -> i
                    -> Draw ()
 removeDrawResource lft mg i = do
         s <- mg <$> Draw get
         lft $ removeResource i s
 
-drawGPUVAOGeometry :: GLES => GPUVAOGeometry -> Draw ()
-drawGPUVAOGeometry (GPUVAOGeometry _ ec vao) = currentProgram <$> Draw get >>=
+drawGeometry :: GLES => LoadedGeometry -> Draw ()
+drawGeometry (LoadedGeometry ec vao) = currentProgram <$> Draw get >>=
         \mcp -> case mcp of
                      Just _ -> gl $ do bindVertexArray vao
                                        drawElements gl_TRIANGLES
@@ -555,15 +551,12 @@ instance GLES => Resource (LoadedProgram, String) UniformLocation GL where
                    return . Right $ UniformLocation loc
         unloadResource _ _ = return ()
 
-instance GLES => Resource (Geometry '[]) GPUVAOGeometry Draw where
-        loadResource g =
-                do ge <- getGPUBufferGeometry g
-                   case ge of
-                        Left err -> return $ Left err
-                        Right buf -> gl $ loadResource buf
-
-        unloadResource _ =
-                gl . unloadResource (Nothing :: Maybe GPUBufferGeometry)
+instance GLES => Resource (Geometry is) LoadedGeometry Draw where
+        loadResource = runExceptT .
+                       loadGeometry (ExceptT . getDrawResource gl attributes)
+                                    (ExceptT . getDrawResource gl elemBuffers)
+                                    (lift . gl)
+        unloadResource _ = gl . deleteGeometry
 
 -- | Perform a 'GL' action in the 'Draw' monad.
 gl :: GL a -> Draw a

@@ -43,26 +43,28 @@ Generate a cube where the lateral quads are split vertically into n rectangles.
 This lets us deform the object horizontally.
 -}
 splitCube :: GLES => Int -> Geometry Geometry3D
-splitCube n = mkGeometry3D (concat vertices)
-                           (replicate (n * 4) (Vec2 0 0)) -- We don't need UVs
-                           (replicate (n * 4) (Vec3 0 0 0)) -- Neither normals
-                           (concat floors ++ concat walls)
+splitCube n = mkGeometry3DInd (concat vertices)
+                              (concat floors ++ concat walls)
 
-        where vertices = [ [ Vec3 (-1) y (-1)
-                           , Vec3 1    y (-1)
-                           , Vec3 (-1) y 1
-                           , Vec3 1    y 1
+        where -- We don't need normals and UV coordinates in this example so we
+              -- just use the 'zero' vector. Alternatively we could have used
+              -- our own Geometry type without those attributes. It would be
+              -- more efficient but also more complex.
+              vertices = [ [ (Vec3 (-1) y (-1), zero, zero)
+                           , (Vec3 1    y (-1), zero, zero)
+                           , (Vec3 (-1) y 1, zero, zero)
+                           , (Vec3 1    y 1, zero, zero)
                            ]
                          | y <- [-1, -1 + 2 / (fromIntegral n - 1) .. 1] ]
                         
-              walls = [ quadToTris [y + l, y + r, y + 4 + l, y + 4 + r]
+              walls = [ quadToTriangle (y + l) (y + r) (y + 4 + l) (y + 4 + r)
                       | (l, r) <- [(0, 1), (1, 3), (3, 2), (2, 0)]
                       , y <- [0, 4 .. (fromIntegral n - 2) * 4] ]
 
-              floors = [ quadToTris [y, y + 1, y + 2, y + 3]
+              floors = [ quadToTriangle y (y + 1) (y + 2) (y + 3)
                        | y <- [0, fromIntegral (n - 1) * 4] ]
 
-              quadToTris [a, b, c, d] = [a, b, c, b, c, d]
+              quadToTriangle a b c d = [Triangle a b c, Triangle b c d]
 
 main :: IO ()
 main = animation scene

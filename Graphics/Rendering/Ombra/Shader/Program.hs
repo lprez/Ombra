@@ -7,15 +7,16 @@ module Graphics.Rendering.Ombra.Shader.Program (
         LoadedProgram(..),
         Compatible,
         Program,
+        ProgramIndex,
         program,
         loadProgram,
-        castProgram,
         DefaultUniforms2D,
         DefaultAttributes2D,
         DefaultUniforms3D,
         DefaultAttributes3D,
         defaultProgram3D,
-        defaultProgram2D
+        defaultProgram2D,
+        programIndex
 ) where
 
 import Data.Hashable
@@ -36,6 +37,8 @@ data Program (gs :: [*]) (is :: [*]) =
         Program (String, [(String, Int)]) String Int
 
 data LoadedProgram = LoadedProgram !GL.Program (H.HashMap String Int) Int
+
+newtype ProgramIndex = ProgramIndex Int deriving Eq
 
 -- | The uniforms used in the default 3D program.
 type DefaultUniforms3D = Default3D.Uniforms
@@ -66,10 +69,6 @@ instance GLES => Resource (Program g i) LoadedProgram GL where
         loadResource i = Right <$> loadProgram i
         unloadResource _ (LoadedProgram p _ _) = deleteProgram p
 
-castProgram :: Program gs is -> Program gs' is'
--- castProgram (Program v f h) = Program v f h
-castProgram = unsafeCoerce
-
 -- | Compatible shaders.
 type Compatible pgs vgs fgs =
         EqualOrErr pgs (Union vgs fgs)
@@ -91,6 +90,9 @@ program :: ( ShaderVars vgs, ShaderVars vis, VOShaderVars os , ShaderVars fgs
 program vs fs = let (vss, attrs) = vertexToGLSLAttr vs
                     fss = fragmentToGLSL fs
                 in Program (vss, attrs) fss (hash (vss, fss))
+
+programIndex :: Program gs is -> ProgramIndex
+programIndex (Program _ _ h) = ProgramIndex h
 
 defaultProgram3D :: Program DefaultUniforms3D DefaultAttributes3D
 defaultProgram3D = program Default3D.vertexShader Default3D.fragmentShader

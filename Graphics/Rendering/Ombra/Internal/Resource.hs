@@ -1,5 +1,5 @@
-{-# LANGUAGE ExistentialQuantification, MultiParamTypeClasses,
-             FunctionalDependencies, ScopedTypeVariables #-}
+{-# LANGUAGE ExistentialQuantification, MultiParamTypeClasses, TypeFamilies,
+             FunctionalDependencies, ScopedTypeVariables, FlexibleContexts #-}
 
 module Graphics.Rendering.Ombra.Internal.Resource (
         ResMap,
@@ -17,45 +17,45 @@ import qualified Data.HashTable.IO as H
 import Data.Hashable
 import System.Mem.Weak
 
-data ResMap i r = forall m. (Resource i r m, Hashable i) =>
-                            ResMap (H.LinearHashTable Int (Either String r))
+data ResMap r = ResMap (H.LinearHashTable Int (Either String r)) 
 
 data ResStatus r = Loaded r
                  | Unloaded
                  | Error String
 
-class (Eq i, Applicative m, EmbedIO m) =>
-      Resource i r m | i r -> m where
+class (Eq i, Applicative m, EmbedIO m, Hashable i) =>
+        Resource i r m | r -> m where
         loadResource :: i -> m (Either String r)
         unloadResource :: Maybe i -> r -> m ()
 
 class MonadIO m => EmbedIO m where
         embedIO :: (IO a -> IO b) -> m a -> m b
 
-newResMap :: (Hashable i, MonadIO io) => Resource i r m => io (ResMap i r)
+newResMap :: MonadIO m => m (ResMap r)
 newResMap = ResMap <$> liftIO H.new
 
-addResource :: (Resource i r m, Hashable i) => i -> ResMap i r -> m ()
+addResource :: Resource i r m => i -> ResMap r -> m ()
 addResource i m = () <$ getResource i m
 
-checkResource :: Hashable i
-              => Resource i r m
+checkResource :: Resource i r m
               => i
-              -> ResMap i r
+              -> ResMap r
               -> m (ResStatus r)
-checkResource i = checkResource' $ hash i
+checkResource i = checkResource' (Just i) $ hash i
 
-checkResource' :: Resource i r m => Int -> ResMap i r -> m (ResStatus r)
-checkResource' i (ResMap map) = do m <- liftIO $ H.lookup map i
-                                   return $ case m of
-                                                 Just (Right r) -> Loaded r
-                                                 Just (Left e) -> Error e
-                                                 Nothing -> Unloaded
+checkResource' :: Resource i r m
+               => Maybe i
+               -> Int
+               -> ResMap r
+               -> m (ResStatus r)
+checkResource' _ i (ResMap map) = do m <- liftIO $ H.lookup map i
+                                     return $ case m of
+                                                   Just (Right r) -> Loaded r
+                                                   Just (Left e) -> Error e
+                                                   Nothing -> Unloaded
 
-getResource :: (Resource i r m, Hashable i)
-            => i -> ResMap i r
-            -> m (Either String r)
-getResource i rmap@(ResMap map) =
+getResource :: Resource i r m => i -> ResMap r -> m (Either String r)
+getResource (i :: i) rmap@(ResMap map) =
         do status <- checkResource i rmap
            case status of
                    Unloaded ->
@@ -65,8 +65,10 @@ getResource i rmap@(ResMap map) =
                                          Left s -> H.insert map ihash $ Left s
                                          Right r -> H.insert map ihash $ Right r
 
-                           embedIO (addFinalizer i) $ removeResource' ihash rmap
-                           meRes <- liftIO . H.lookup map $ hash i
+                           embedIO (addFinalizer i) $
+                                   removeResource' (Nothing :: Maybe i)
+                                                   ihash rmap
+                           meRes <- liftIO . H.lookup map $ ihash
                            return $ case meRes of
                                          Just eRes -> eRes
                                          Nothing -> Left "Resource finalized"
@@ -76,13 +78,13 @@ getResource i rmap@(ResMap map) =
 
 -- reloadResource
 
-removeResource :: (Resource i r m, Hashable i) => i -> ResMap i r -> m ()
-removeResource i = removeResource' $ hash i
+removeResource :: Resource i r m => i -> ResMap r -> m ()
+removeResource i = removeResource' (Just i) $ hash i
 
-removeResource' :: (Resource i r m, Hashable i) => Int -> ResMap i r -> m ()
-removeResource' i rmap@(ResMap map :: ResMap i r) = 
-        do status <- checkResource' i rmap
+removeResource' :: Resource i r m => Maybe i -> Int -> ResMap r -> m ()
+removeResource' mi i rmap@(ResMap map) = 
+        do status <- checkResource' mi i rmap
            case status of
-                Loaded r -> unloadResource (Nothing :: Maybe i) r
+                Loaded r -> unloadResource mi r
                 _ -> return ()
            liftIO $ H.delete map i

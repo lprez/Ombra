@@ -1,23 +1,20 @@
 {-# LANGUAGE GADTs, TypeOperators, KindSignatures, DataKinds, FlexibleContexts,
              MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables,
-             PolyKinds #-}
+             PolyKinds, UndecidableInstances, RankNTypes #-}
 
 module Graphics.Rendering.Ombra.Geometry.Internal (
         AttrList(..),
+        AttrData(..),
         Geometry(..),
-        Geometry2D,
-        Geometry3D,
-        GPUBufferGeometry(..),
-        GPUVAOGeometry(..),
-        emptyGeometry,
-        extend,
-        remove,
-        positionOnly,
-        withGPUBufferGeometry,
-        mkGeometry,
-        mkGeometry2D,
-        mkGeometry3D,
-        castGeometry
+        ElemData(..),
+        LoadedBuffer,
+        LoadedAttribute,
+        LoadedGeometry(..),
+        Attributes(..),
+        geometry,
+        removeAttribute,
+        loadGeometry,
+        deleteGeometry
 ) where
 
 import Control.Monad.Trans.Class
@@ -41,192 +38,144 @@ import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType(size))
 data AttrList (is :: [*]) where
         AttrListNil :: AttrList '[]
         AttrListCons :: (H.Hashable (CPU S i), Attribute S i)
-                     => (a -> i)
-                     -> [CPU S i]
+                     => AttrData i
                      -> AttrList is
                      -> AttrList (i ': is)
 
+data AttrData i = AttrData [CPU S i] Int
+
 -- | A set of attributes and indices.
-data Geometry (is :: [*]) = Geometry (AttrList is) [Word16] Int
+data Geometry (is :: [*]) = Geometry (AttrList is) ElemData Int
 
-data GPUBufferGeometry = GPUBufferGeometry {
-        attributeBuffers :: [(Buffer, GLUInt, GLUInt -> GL ())],
-        elementBuffer :: Buffer,
+data LoadedGeometry = LoadedGeometry {
         elementCount :: Int,
-        geometryHash :: Int
-}
-
-data GPUVAOGeometry = GPUVAOGeometry {
-        vaoBoundBuffers :: [Buffer],
-        vaoElementCount :: Int,
         vao :: VertexArrayObject
 }
 
--- | A 3D geometry.
-type Geometry3D = '[Position3, D3.UV, Normal3]
+newtype LoadedBuffer = LoadedBuffer Buffer
 
--- | A 2D geometry.
-type Geometry2D = '[Position2, D2.UV]
+data ElemData = ElemData [Word16] Int
 
-instance H.Hashable (AttrList is) where
-        hashWithSalt salt AttrListNil = salt
-        hashWithSalt salt (AttrListCons _ i is) = H.hashWithSalt salt (i, is)
-
-instance H.Hashable (Geometry is) where
-        hashWithSalt salt (Geometry _ _ h) = H.hashWithSalt salt h
+data LoadedAttribute = LoadedAttribute GLUInt [(Buffer, GLUInt -> GL ())]
 
 instance Eq (Geometry is) where
         (Geometry _ _ h) == (Geometry _ _ h') = h == h'
 
-instance H.Hashable GPUBufferGeometry where
-        hashWithSalt salt = H.hashWithSalt salt . geometryHash
+instance H.Hashable (Geometry is) where
+        hashWithSalt salt (Geometry _ _ h) = H.hashWithSalt salt h
 
-instance Eq GPUBufferGeometry where
-        g == g' = geometryHash g == geometryHash g'
+instance H.Hashable ElemData where
+        hashWithSalt salt (ElemData _ h) = H.hashWithSalt salt h
 
--- | Create a 3D 'Geometry'. The first three lists should have the same length.
-mkGeometry3D :: GLES
-            => [Vec3]   -- ^ List of vertices.
-            -> [Vec2]   -- ^ List of UV coordinates.
-            -> [Vec3]   -- ^ List of normals.
-            -> [Word16] -- ^ Triangles expressed as triples of indices to the
-                        --   three lists above.
-            -> Geometry Geometry3D
-mkGeometry3D v u n = mkGeometry (AttrListCons D3.Position3 v $
-                                AttrListCons D3.UV u $
-                                AttrListCons D3.Normal3 n
-                                AttrListNil)
+instance Eq ElemData where
+        (ElemData _ h) == (ElemData _ h') = h == h'
 
--- | Create a 2D 'Geometry'. The first two lists should have the same length.
-mkGeometry2D :: GLES
-            => [Vec2]     -- ^ List of vertices.
-            -> [Vec2]     -- ^ List of UV coordinates.
-            -> [Word16] -- ^ Triangles expressed as triples of indices to the
-                        --   two lists above.
-            -> Geometry Geometry2D
-mkGeometry2D v u = mkGeometry (AttrListCons D2.Position2 v $
-                               AttrListCons D2.UV u
-                               AttrListNil)
+instance H.Hashable (AttrData i) where
+        hashWithSalt salt (AttrData _ h) = H.hashWithSalt salt h
 
+instance Eq (AttrData i) where
+        (AttrData _ h) == (AttrData _ h') = h == h'
 
--- | Add an attribute to a geometry.
-extend :: (Attribute 'S i, H.Hashable (CPU 'S i), ShaderType i, GLES)
-       => (a -> i)              -- ^ Attribute constructor (or any other
-                                -- function with that type).
-       -> [CPU 'S i]            -- ^ List of values
-       -> Geometry is
-       -> Geometry (i ': is)
-extend g c (Geometry al es _) = mkGeometry (AttrListCons g c al) es
+instance H.Hashable (AttrList is) where
+        hashWithSalt salt AttrListNil = salt
+        hashWithSalt salt (AttrListCons (AttrData _ h) al) = H.hashWithSalt h al
+
+class Attributes (is :: [*]) where
+        emptyAttrList :: Proxy (is :: [*]) -> AttrList is
+        
+instance Attributes '[] where
+        emptyAttrList _ = AttrListNil
+
+instance (H.Hashable (CPU S i), Attribute S i, Attributes is) =>
+        Attributes (i ': is) where
+        emptyAttrList (_ :: Proxy (i ': is)) =
+                AttrListCons (AttrData [] 0 :: AttrData i) $
+                        emptyAttrList (Proxy :: Proxy is)
+
+geometry :: AttrList is -> ElemData -> Geometry is
+geometry al es = Geometry al es $ H.hashWithSalt (H.hash al) es
 
 -- | Remove an attribute from a geometry.
-remove :: (RemoveAttr i is is', GLES)
-       => (a -> i)      -- ^ Attribute constructor (or any other function with
-                        -- that type).
-       -> Geometry is -> Geometry is'
-remove g (Geometry al es _) = mkGeometry (removeAttr g al) es
-
--- | Remove the 'UV' and 'Normal3' attributes from a 3D Geometry.
-positionOnly :: Geometry Geometry3D -> Geometry '[Position3]
-positionOnly (Geometry (AttrListCons pg pc _) es h) =
-        Geometry (AttrListCons pg pc AttrListNil) es h
+removeAttribute :: (RemoveAttr i is is', GLES)
+                => (a -> i)      -- ^ Attribute constructor (or any other
+                                 -- function with that type).
+                -> Geometry is -> Geometry is'
+removeAttribute g (Geometry al es _) = geometry (removeAttr g al) es
 
 class RemoveAttr i is is' where
         removeAttr :: (a -> i) -> AttrList is -> AttrList is'
 
 instance RemoveAttr i (i ': is) is where
-        removeAttr _ (AttrListCons _ _ al) = al
+        removeAttr _ (AttrListCons _ al) = al
 
 instance RemoveAttr i is is' =>
          RemoveAttr i (i1 ': is) (i1 ': is') where
-        removeAttr g (AttrListCons g' c al) =
-                AttrListCons g' c $ removeAttr g al
+        removeAttr g (AttrListCons c al) =
+                AttrListCons c $ removeAttr g al
 
--- | Create a 'Geometry' without attributes. You can add them using 'extend'.
-emptyGeometry :: [Word16]       -- ^ Triangles.
-              -> Geometry '[]
-emptyGeometry = mkGeometry AttrListNil
+instance (GLES, Attribute 'S i) => Resource (AttrData i) LoadedAttribute GL where
+        loadResource (AttrData vs _ :: AttrData i) =
+                fmap (Right . uncurry LoadedAttribute) .
+                flip execStateT (0, []) $
+                        withAttributes (Proxy :: Proxy 'S) (undefined :: i) vs $
+                                \_ (g :: Proxy g) c ->
+                                        do (i, as) <- get
+                                           arr <- lift $ encodeAttribute g c
+                                           buf <- lift $
+                                                   loadBuffer gl_ARRAY_BUFFER
+                                                              arr
+                                           let sz = fromIntegral . size $
+                                                        (undefined :: g)
+                                               set = setAttribute g . (+ i)
+                                           put (i + sz, (buf, set) : as)
+        unloadResource _ (LoadedAttribute _ as) =
+                mapM_ (\(buf, _) -> deleteBuffer buf) as
 
--- | Create a custom 'Geometry'.
-mkGeometry :: AttrList is -> [Word16] -> Geometry is
-mkGeometry al e = Geometry al e $ H.hash (al, e)
+instance GLES => Resource ElemData LoadedBuffer GL where
+        loadResource (ElemData elems _) =
+                liftIO (encodeUShorts elems) >>=
+                        fmap (Right . LoadedBuffer) .
+                        loadBuffer gl_ELEMENT_ARRAY_BUFFER
+                        . fromUInt16Array
+        unloadResource _ (LoadedBuffer buf) = deleteBuffer buf
 
-castGeometry :: Geometry is -> Geometry is'
-castGeometry = unsafeCoerce
+loadGeometry :: (GLES, Monad m)
+             => (forall i. Attribute 'S i => AttrData i -> m LoadedAttribute)
+             -> (ElemData -> m LoadedBuffer)
+             -> (forall a. GL a -> m a)
+             -> Geometry is
+             -> m LoadedGeometry
+loadGeometry getAttr getElems gl (Geometry attrList elems@(ElemData es _) _) =
+        do vao <- gl createVertexArray
+           gl $ bindVertexArray vao
 
-instance GLES => Resource (Geometry i) GPUBufferGeometry GL where
-        loadResource i = Right <$> loadGeometry i
-        unloadResource _ = deleteGPUBufferGeometry
+           setAttrList getAttr gl (0 :: GLUInt) attrList
+           LoadedBuffer eb <- getElems elems
 
-instance GLES => Resource GPUBufferGeometry GPUVAOGeometry GL where
-        loadResource i = Right <$> loadGPUVAOGeometry i
-        unloadResource _ = deleteGPUVAOGeometry
+           gl $ do bindBuffer gl_ELEMENT_ARRAY_BUFFER eb
+                   bindVertexArray noVAO
+                   bindBuffer gl_ELEMENT_ARRAY_BUFFER noBuffer
+                   bindBuffer gl_ARRAY_BUFFER noBuffer
 
-loadGPUVAOGeometry :: GLES
-                   => GPUBufferGeometry
-                   -> GL GPUVAOGeometry
-loadGPUVAOGeometry g =
-        do vao <- createVertexArray
-           bindVertexArray vao
-           (ec, bufs) <- withGPUBufferGeometry g $
-                   \ec bufs -> bindVertexArray noVAO >> return (ec, bufs)
-           return $ GPUVAOGeometry bufs ec vao
+           return $ LoadedGeometry (length es) vao
 
-loadGeometry :: GLES => Geometry i -> GL GPUBufferGeometry
-loadGeometry (Geometry al es h) =
-        GPUBufferGeometry <$> loadAttrList al
-                          <*> (liftIO (encodeUShorts es) >>=
-                                  loadBuffer gl_ELEMENT_ARRAY_BUFFER .
-                                  fromUInt16Array)
-                          <*> pure (length es)
-                          <*> pure h
+setAttrList :: (GLES, Monad m)
+            => (forall i. Attribute 'S i => AttrData i -> m LoadedAttribute)
+            -> (forall a. GL a -> m a)
+            -> GLUInt
+            -> AttrList is
+            -> m ()
+setAttrList getAttr gl i (AttrListCons attrData rest) =
+        do (LoadedAttribute sz as) <- getAttr attrData
+           gl $ mapM_ (\(buf, set) -> do bindBuffer gl_ARRAY_BUFFER buf
+                                         enableVertexAttribArray i
+                                         set i
+                      ) as
+           setAttrList getAttr gl (i + sz) rest
+setAttrList _ _ _ AttrListNil = return ()
 
-loadAttrList :: GLES => AttrList is -> GL [(Buffer, GLUInt, GLUInt -> GL ())]
-loadAttrList = loadFrom 0
-        where loadFrom :: GLUInt -> AttrList is
-                       -> GL [(Buffer, GLUInt, GLUInt -> GL ())]
-              loadFrom _ AttrListNil = return []
-              loadFrom idx (AttrListCons g c al) =
-                      do (newIdx, attrInfo) <- loadAttribute idx (g undefined) c
-                         (attrInfo ++) <$> loadFrom newIdx al
-         
-              loadAttribute :: Attribute 'S g => GLUInt -> g -> [CPU 'S g]
-                            -> GL (GLUInt, [(Buffer, GLUInt, GLUInt -> GL ())])
-              loadAttribute ii g c = flip execStateT (ii, []) $
-                withAttributes (Proxy :: Proxy 'S) g c $ \_ (g :: Proxy g) c ->
-                        do (i, infos) <- get
-                           arr <- lift $ encodeAttribute g c
-                           buf <- lift $ loadBuffer gl_ARRAY_BUFFER arr
-                           put ( i + fromIntegral (size (undefined :: g))
-                               , (buf, i, setAttribute g) : infos )
-
-withGPUBufferGeometry :: GLES
-                      => GPUBufferGeometry -> (Int -> [Buffer] -> GL a) -> GL a
-withGPUBufferGeometry (GPUBufferGeometry abs eb ec _) f =
-        do bindBuffer gl_ARRAY_BUFFER noBuffer
-           (_, bufs) <- unzip <$>
-                   mapM (\(buf, loc, setAttr) ->
-                                     do bindBuffer gl_ARRAY_BUFFER buf
-                                        enableVertexAttribArray loc
-                                        setAttr loc
-                                        return (loc, buf)
-                        ) abs
-
-           bindBuffer gl_ELEMENT_ARRAY_BUFFER eb
-           r <- f ec $ eb : bufs
-           bindBuffer gl_ELEMENT_ARRAY_BUFFER noBuffer
-           bindBuffer gl_ARRAY_BUFFER noBuffer
-           -- mapM_ (disableVertexAttribArray . fromIntegral) locs
-           return r
-
-deleteGPUVAOGeometry :: GLES => GPUVAOGeometry -> GL ()
-deleteGPUVAOGeometry (GPUVAOGeometry bufs _ vao) =
-        do mapM_ deleteBuffer bufs
-           deleteVertexArray vao
-
-
-deleteGPUBufferGeometry :: GLES => GPUBufferGeometry -> GL ()
-deleteGPUBufferGeometry (GPUBufferGeometry abs eb _ _) =
-        mapM_ (\(buf, _, _) -> deleteBuffer buf) abs >> deleteBuffer eb
+deleteGeometry :: GLES => LoadedGeometry -> GL ()
+deleteGeometry (LoadedGeometry _ vao) = deleteVertexArray vao
 
 loadBuffer :: GLES => GLEnum -> AnyArray -> GL Buffer
 loadBuffer ty bufData =

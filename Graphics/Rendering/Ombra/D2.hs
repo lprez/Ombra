@@ -61,7 +61,7 @@ type IsObject2D gs is = ( Subset Geometry2D is, Subset (View2 ': Uniforms2D) gs
 
 -- | A rectangle with a specified 'Texture'.
 rect :: GLES => Texture -> Object2D
-rect = flip poly . rectGeometry $ Vec2 1 1
+rect = flip poly rectGeometry
 
 -- | A 2D object with a specified 'Geometry'.
 poly :: GLES => Texture -> Geometry is -> Object Uniforms2D is
