@@ -25,7 +25,7 @@ import GHCJS.Types
 import JavaScript.TypedArray
 import JavaScript.TypedArray.Internal
 import JavaScript.TypedArray.DataView
-import System.Mem (performGC)
+import System.Mem (performMinorGC)
 
 foreign import javascript unsafe "document.querySelector($1)"
         query :: JSString -> IO JSVal
@@ -63,7 +63,7 @@ animation layer = do canvas <- query "#canvas"
                                  loop $ \t ->
                                      do clearBuffers [ColorBuffer, DepthBuffer]
                                         drawLayer . layer $ realToFrac t
-                                        liftIO $ performGC
+                                        liftIO $ performMinorGC
 
                      return ()
         where loop a = do t <- liftIO waitFrame
@@ -97,7 +97,7 @@ import Data.Time.Clock
 import Graphics.Rendering.Ombra.Backend.OpenGL
 import Graphics.UI.GLFW hiding (Image)
 import qualified Graphics.UI.GLFW as G
-import System.Mem (performGC)
+import System.Mem (performMinorGC)
 
 animation :: (Float -> Layer) -> IO ()
 animation layer =
@@ -115,6 +115,7 @@ animation layer =
                    t0 <- liftIO $ getCurrentTime
                    loop t0 t0 $ \n -> do clearBuffers [ColorBuffer, DepthBuffer]
                                          drawLayer (layer n)
+                                         liftIO performMinorGC
                                          liftIO (swapBuffers w)
            return ()
         where loop t0 tp a = do t <- liftIO $ getCurrentTime
