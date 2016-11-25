@@ -1,5 +1,5 @@
 name:                ombra
-version:             0.2.1.0
+version:             0.2.1.1
 synopsis:            Render engine.
 description:         Type-safe render engine, with a purely functional API and a shader EDSL. Ombra supports both OpenGL (2.0 with some extensions) and WebGL, through GHCJS.
 homepage:            https://github.com/ziocroc/Ombra
@@ -28,7 +28,7 @@ flag webgl
 
 library
   exposed-modules:     Graphics.Rendering.Ombra, Graphics.Rendering.Ombra.Blend, Graphics.Rendering.Ombra.Layer, Graphics.Rendering.Ombra.Object, Graphics.Rendering.Ombra.Texture, Graphics.Rendering.Ombra.Stencil, Graphics.Rendering.Ombra.Shader, Graphics.Rendering.Ombra.Transformation, Graphics.Rendering.Ombra.Draw, Graphics.Rendering.Ombra.D2, Graphics.Rendering.Ombra.Geometry, Graphics.Rendering.Ombra.D3, Graphics.Rendering.Ombra.Color, Graphics.Rendering.Ombra.Backend, Graphics.Rendering.Ombra.Shapes, Graphics.Rendering.Ombra.Internal.GL, Graphics.Rendering.Ombra.Shader.Default3D, Graphics.Rendering.Ombra.Shader.Default2D
-  other-modules:       Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList, Graphics.Rendering.Ombra.Shader.ShaderVar, Graphics.Rendering.Ombra.Shader.GLSL, Graphics.Rendering.Ombra.Shader.Stages, Graphics.Rendering.Ombra.Shader.Program, Graphics.Rendering.Ombra.Shader.CPU, Graphics.Rendering.Ombra.Shader.Language.Types, Graphics.Rendering.Ombra.Shader.Language.Functions, Graphics.Rendering.Ombra.Draw.Internal, Graphics.Rendering.Ombra.Layer.Internal, Graphics.Rendering.Ombra.Object.Internal, Graphics.Rendering.Ombra.Geometry.Internal, Graphics.Rendering.Ombra.Texture.Internal
+  other-modules:       Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList, Graphics.Rendering.Ombra.Shader.ShaderVar, Graphics.Rendering.Ombra.Shader.GLSL, Graphics.Rendering.Ombra.Shader.Stages, Graphics.Rendering.Ombra.Shader.Program, Graphics.Rendering.Ombra.Shader.CPU, Graphics.Rendering.Ombra.Shader.Language.Types, Graphics.Rendering.Ombra.Shader.Language.Functions, Graphics.Rendering.Ombra.Draw.Internal, Graphics.Rendering.Ombra.Layer.Internal, Graphics.Rendering.Ombra.Object.Internal, Graphics.Rendering.Ombra.Geometry.Internal, Graphics.Rendering.Ombra.Texture.Internal, Graphics.Rendering.Ombra.Blend.Internal, Graphics.Rendering.Ombra.Stencil.Internal
 
   if flag(webgl)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.WebGL

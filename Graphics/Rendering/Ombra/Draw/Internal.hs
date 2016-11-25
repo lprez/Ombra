@@ -28,7 +28,7 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         drawGet
 ) where
 
-import qualified Graphics.Rendering.Ombra.Blend as Blend
+import qualified Graphics.Rendering.Ombra.Blend.Internal as Blend
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Geometry.Internal
 import Graphics.Rendering.Ombra.Layer.Internal
@@ -45,7 +45,7 @@ import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.GLSL
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Shader.ShaderVar
-import qualified Graphics.Rendering.Ombra.Stencil as Stencil
+import qualified Graphics.Rendering.Ombra.Stencil.Internal as Stencil
 
 import Data.Hashable (Hashable)
 import Data.Vect.Float
