@@ -9,13 +9,15 @@ module Graphics.Rendering.Ombra.Internal.Resource (
         newResMap,
         addResource,
         getResource,
-        removeResource
+        removeResource,
+        unloader
 ) where
 
 import Control.Monad.IO.Class
 import qualified Data.HashTable.IO as H
 import Data.Hashable
 import System.Mem.Weak
+import qualified System.Mem.Weak
 
 data ResMap r = ResMap (H.LinearHashTable Int (Either String r)) 
 
@@ -88,3 +90,6 @@ removeResource' mi i rmap@(ResMap map) =
                 Loaded r -> unloadResource mi r
                 _ -> return ()
            liftIO $ H.delete map i
+
+unloader :: (Resource i r m, EmbedIO m) => k -> Maybe i -> r -> m ()
+unloader k i r = embedIO (addFinalizer k) $ unloadResource i r
