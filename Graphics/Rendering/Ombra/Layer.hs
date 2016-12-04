@@ -34,7 +34,7 @@ module Graphics.Rendering.Ombra.Layer (
         buffersDepthToTexture,
         buffersStencilToTexture,
         -- ** Temporary textures
-        TTexture(..),
+        TTexture,
         withTTexture,
         permanent
 ) where
