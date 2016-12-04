@@ -22,6 +22,7 @@ module Graphics.Rendering.Ombra.Layer (
         buffersDepthSubLayer,
         buffersStencilSubLayer,
         -- * Layers with return values
+        -- $extlayers
         Layer',
         drawable,
         depthToTexture,
@@ -201,3 +202,9 @@ buffersStencilSubLayer :: Int                   -- ^ Textures width.
 buffersStencilSubLayer w h n l f = drawable $
         buffersStencilToTexture w h n (castDrawable l) >>=
                 \(_, bts) -> withTTextures bts f
+
+-- $extlayers
+-- Functions like 'subLayer' create temporary textures that usually have to be
+-- freed immediately after drawing the layer, otherwise they may waste a lot of
+-- GPU memory if @subLayer@ is called in every frame. The 'Layer'' type lets
+-- you extract those textures after having made permanent.

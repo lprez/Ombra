@@ -14,9 +14,8 @@ type Layer = Layer' Drawable () ()
 
 -- | A layer with a return value. It may also be 'NonDrawable', this means that
 -- there are some protected temporary resources and you have to call 'drawable'
--- to turn it into a normal layer. Extended layers let you extract those
--- temporary resources ('TTexture's in particular) after having made them
--- permanent to use them later.
+-- to turn it into a normal layer. The second parameter prevents the 'TTexture's
+-- from being returned by a @NonDrawable@ layer in a @drawable@ operation.
 --
 -- Note that layers are monads: @flip ('>>')@ is equivalent to 'over' for
 -- Drawable layers, while ('>>=') can be used to achieve the same effect of
