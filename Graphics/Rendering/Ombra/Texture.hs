@@ -4,7 +4,8 @@ module Graphics.Rendering.Ombra.Texture (
         mkTextureFloat,
         mkTextureRaw,
         Filter(..),
-        setFilter
+        setFilter,
+        colorTex
 ) where
 
 import Data.Hashable
@@ -58,3 +59,7 @@ setFilter min mag (TextureImage (TextureRaw c _ _ w h s)) =
 setFilter min mag (TextureImage (TextureFloat c _ _ w h s)) =
         TextureImage (TextureFloat c min mag w h s)
 setFilter _ _ t = t
+
+-- | Generate a 1x1 texture.
+colorTex :: GLES => Color -> Texture
+colorTex c = mkTexture 1 1 [ c ]

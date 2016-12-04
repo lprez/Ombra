@@ -23,15 +23,13 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         execDraw,
         evalDraw,
         gl,
-        renderLayer,
-        layerToTexture,
         drawGet
 ) where
 
 import qualified Graphics.Rendering.Ombra.Blend.Internal as Blend
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Geometry.Internal
-import Graphics.Rendering.Ombra.Layer.Internal
+import Graphics.Rendering.Ombra.Layer.Internal hiding (clear)
 import Graphics.Rendering.Ombra.Object.Internal
 import Graphics.Rendering.Ombra.Texture.Internal
 import Graphics.Rendering.Ombra.Backend (GLES)
@@ -193,14 +191,48 @@ removeProgram :: GLES => Program gs is -> Draw ()
 removeProgram = removeDrawResource gl programs
 
 -- | Draw a 'Layer'.
-drawLayer :: GLES => Layer -> Draw ()
-drawLayer (Layer prg grp) = setProgram prg >> drawObject grp
-drawLayer (SubLayer rl) =
-        do (layer, textures) <- renderLayer rl
-           drawLayer layer
-           mapM_ removeTexture textures
-drawLayer (OverLayer top behind) = drawLayer behind >> drawLayer top
-drawLayer (ClearLayer bufs l) = clearBuffers bufs >> drawLayer l
+drawLayer :: GLES => Layer' Drawable t a -> Draw a
+drawLayer = fmap fst . flip drawLayer' []
+
+drawLayer' :: GLES
+           => Layer' s t a
+           -> [TTexture t]
+           -> Draw (a, [TTexture t])
+drawLayer' (Layer prg grp) ts = do setProgram prg
+                                   drawObject grp
+                                   return ((), ts)
+drawLayer' (TextureLayer drawBufs stypes (w, h) (rx, ry, rw, rh)
+                         inspCol inspDepth layer) tts0 =
+        do (x, tts1, ts, mcol, mdepth) <-
+                layerToTexture drawBufs stypes w h layer
+                               (mayInspect inspCol) (mayInspect inspDepth) tts0
+           let tts2 = map (TTexture . LoadedTexture gw gh) ts
+           return ((x, tts2, mcol, mdepth), tts1 ++ tts2)
+        where (gw, gh) = (fromIntegral w, fromIntegral h)
+        
+              mayInspect :: Bool
+                         -> Either (Maybe [r])
+                                   ([r] -> Draw (Maybe [r]), Int, Int, Int, Int)
+              mayInspect True = Right (return . Just, rx, ry, rw, rh)
+              mayInspect False = Left Nothing
+drawLayer' (Permanent tt@(TTexture lt)) tts = 
+        do let t = TextureLoaded lt
+           gl $ unloader t (Nothing :: Maybe TextureImage) lt
+           return (t, filter (/= tt) tts)
+drawLayer' (WithTTextures ets f) tts =
+        do drawLayer . f $ map (\(TTexture lt) -> TextureLoaded lt) ets
+           return ((), tts)
+drawLayer' (Free layer) tts =
+        do (x, tts') <- drawLayer' layer []
+           mapM_ (\(TTexture lt) -> removeTexture $ TextureLoaded lt) tts'
+           return (x, tts)
+drawLayer' (Clear bufs) tts = clearBuffers bufs >> return ((), tts)
+drawLayer' (Cast layer) tts =
+        do (x, tts') <- drawLayer' layer $ map castTTexture tts
+           return (x, map castTTexture tts')
+drawLayer' (Bind lx f) tts0 = drawLayer' lx tts0 >>=
+                                \(x, tts1) -> drawLayer' (f x) tts1
+drawLayer' (Return x) tts = return (x, tts)
 
 -- | Draw an 'Object'.
 drawObject :: GLES => Object gs is -> Draw ()
@@ -305,28 +337,13 @@ getTextureImage = getDrawResource gl textureImages
 getProgram :: GLES => Program gs is -> Draw (Either String LoadedProgram)
 getProgram = getDrawResource gl programs
 
--- | Realize a 'RenderLayer'. It returns the list of allocated 'Texture's so
--- that you can free them if you want.
-renderLayer :: GLES => RenderLayer a -> Draw (a, [Texture])
-renderLayer (RenderLayer drawBufs stypes w h rx ry rw rh
-                         inspCol inspDepth layer f) =
-        do (ts, mcol, mdepth) <- layerToTexture drawBufs stypes w h layer
-                                                (mayInspect inspCol)
-                                                (mayInspect inspDepth)
-           return (f ts mcol mdepth, ts)
-        where mayInspect :: Bool
-                         -> Either (Maybe [r])
-                                   ([r] -> Draw (Maybe [r]), Int, Int, Int, Int)
-              mayInspect True = Right (return . Just, rx, ry, rw, rh)
-              mayInspect False = Left Nothing
-
 -- | Draw a 'Layer' on some textures.
 layerToTexture :: (GLES, Integral a)
                => Bool                                  -- ^ Draw buffers
                -> [LayerType]                           -- ^ Textures contents
                -> a                                     -- ^ Width
                -> a                                     -- ^ Height
-               -> Layer                                 -- ^ Layer to draw
+               -> Layer' s t x                          -- ^ Layer to draw
                -> Either b ( [Color] -> Draw b
                            , Int, Int, Int, Int)        -- ^ Color inspecting
                                                         -- function, start x,
@@ -335,16 +352,17 @@ layerToTexture :: (GLES, Integral a)
                -> Either c ( [Word8] -> Draw c
                            , Int, Int, Int, Int)        -- ^ Depth inspecting,
                                                         -- function, etc.
-               -> Draw ([Texture], b ,c)
-layerToTexture drawBufs stypes wp hp layer einspc einspd = do
-        (ts, (colRes, depthRes)) <- renderToTexture drawBufs (map arguments
-                                                    stypes) w h $
-                        do drawLayer layer
+               -> [TTexture t]
+               -> Draw (x, [TTexture t], [GL.Texture], b ,c)
+layerToTexture drawBufs stypes wp hp layer einspc einspd tts = do
+        (ts, (x, tts', colRes, depthRes)) <-
+                renderToTexture drawBufs (map arguments stypes) w h $
+                        do (x, tts') <- drawLayer' layer tts
                            colRes <- inspect einspc gl_RGBA wordsToColors 4
                            depthRes <- inspect einspd gl_DEPTH_COMPONENT id 1
-                           return (colRes, depthRes)
+                           return (x, tts', colRes, depthRes)
 
-        return (map (TextureLoaded . LoadedTexture w h) ts, colRes, depthRes)
+        return (x, tts', ts, colRes, depthRes)
 
         where (w, h) = (fromIntegral wp, fromIntegral hp)
               arguments stype =
