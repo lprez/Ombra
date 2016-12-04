@@ -24,6 +24,7 @@ module Graphics.Rendering.Ombra.Layer (
         -- * Layers with return values
         -- $extlayers
         Layer',
+        LayerStatus(..),
         drawable,
         depthToTexture,
         colorDepthToTexture,
