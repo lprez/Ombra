@@ -102,7 +102,7 @@ viewVP mf os = withFramebufferSize (\s -> View2 -= mf (tupleToVec s))
                :~> mconcat os
 
 -- | A 'Layer' with the standard 2D program.
-layerS :: IsObject2D gs is => Object gs is -> Layer
+layerS :: IsObject2D gs is => Object gs is -> Layer' s t ()
 layerS = layer defaultProgram2D
 
 -- | Translate a 2D 'Object'.

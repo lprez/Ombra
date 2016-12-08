@@ -113,7 +113,7 @@ viewVP mf o = withFramebufferSize (\s -> View3 -= mf (tupleToVec s))
         where tupleToVec (w, h) = Vec2 (fromIntegral w) (fromIntegral h)
 
 -- | A 'Layer' with the standard 3D program.
-layerS :: IsObject3D gs is => Object gs is -> Layer
+layerS :: IsObject3D gs is => Object gs is -> Layer' s t ()
 layerS = layer defaultProgram3D
 
 -- | Translate a 3D Object.
