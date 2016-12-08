@@ -18,8 +18,8 @@ type Layer = Layer' Drawable () ()
 -- from being returned by a @NonDrawable@ layer in a @drawable@ operation.
 --
 -- Note that layers are monads: @flip ('>>')@ is equivalent to 'over' for
--- Drawable layers, while ('>>=') can be used to achieve the same effect of
--- the subLayer functions.
+-- Drawable layers, while ('>>='), in combination with the *ToTexture functions,
+-- can be used to achieve the same effect of the subLayer functions.
 data Layer' (s :: LayerStatus) t a where
         Layer :: (Subset pi oi, Subset pg og)
               => Program pg pi
@@ -79,6 +79,10 @@ drawable = Free
 
 castDrawable :: Layer' Drawable t a -> Layer' Drawable t' a
 castDrawable = Cast
+
+-- | Make the type of a simple 'Layer' more generic.
+castLayer :: Layer -> Layer' Drawable t ()
+castLayer = castDrawable
 
 -- | Make a 'TTexture' permanent. Its lifetime is still bound to the 'Texture'
 -- returned.

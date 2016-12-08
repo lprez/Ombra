@@ -26,6 +26,12 @@ module Graphics.Rendering.Ombra.Layer (
         Layer',
         LayerStatus(..),
         drawable,
+        castLayer,
+        -- ** Temporary textures
+        TTexture,
+        withTTexture,
+        permanent,
+        -- ** Drawing to textures
         depthToTexture,
         colorDepthToTexture,
         colorStencilToTexture,
@@ -34,11 +40,7 @@ module Graphics.Rendering.Ombra.Layer (
         colorDepthToTexture',
         colorStencilToTexture',
         buffersDepthToTexture,
-        buffersStencilToTexture,
-        -- ** Temporary textures
-        TTexture,
-        withTTexture,
-        permanent
+        buffersStencilToTexture
 ) where
 
 import Data.Word (Word8)
@@ -82,7 +84,7 @@ depthSubLayer :: Int                         -- ^ Texture width.
               -> (Texture -> Layer)          -- ^ Layers using the texture.
               -> Layer
 depthSubLayer w h l f = drawable $
-        depthToTexture w h (castDrawable l) >>= \(_, t) -> withTTexture t f
+        depthToTexture w h (castLayer l) >>= \(_, t) -> withTTexture t f
 
 -- | Combination of 'colorSubLayer' and 'depthSubLayer'.
 colorDepthSubLayer :: Int                               -- ^ Texture width.
@@ -92,7 +94,7 @@ colorDepthSubLayer :: Int                               -- ^ Texture width.
                    -> (Texture -> Texture -> Layer)     -- ^ Color, depth.
                    -> Layer
 colorDepthSubLayer w h l f = drawable $
-        colorDepthToTexture w h (castDrawable l) >>=
+        colorDepthToTexture w h (castLayer l) >>=
                 \(_, ct, dt) -> withTTextures [ct, dt] $
                         \[ct', dt'] -> f ct' dt'
 
@@ -103,7 +105,7 @@ colorStencilSubLayer :: Int                     -- ^ Texture width.
                      -> (Texture -> Layer)      -- ^ Color.
                      -> Layer
 colorStencilSubLayer w h l f = drawable $
-        colorStencilToTexture w h (castDrawable l) >>= \(_, t) -> withTTexture t f
+        colorStencilToTexture w h (castLayer l) >>= \(_, t) -> withTTexture t f
 
 -- | Extended version of 'colorSubLayer' that reads and converts the Texture
 -- pixels.
@@ -118,7 +120,7 @@ colorSubLayer'
         -> (Texture -> [Color] -> Layer) -- ^ Function using the texture.
         -> Layer
 colorSubLayer' w h rx ry rw rh l f = drawable $
-        colorToTexture' w h rx ry rw rh (castDrawable l) >>=
+        colorToTexture' w h rx ry rw rh (castLayer l) >>=
                 \(_, t, c) -> withTTexture t $ flip f c
 
 -- | Extended version of 'depthSubLayer'. Not supported on WebGL.
@@ -133,7 +135,7 @@ depthSubLayer'
         -> (Texture -> [Word8] -> Layer) -- ^ Layers using the texture.
         -> Layer
 depthSubLayer' w h rx ry rw rh l f = drawable $
-        depthToTexture' w h rx ry rw rh (castDrawable l) >>=
+        depthToTexture' w h rx ry rw rh (castLayer l) >>=
                 \(_, t, d) -> withTTexture t $ flip f d
 
 -- | Extended version of 'colorDepthSubLayer'. Not supported on WebGL.
@@ -149,7 +151,7 @@ colorDepthSubLayer'
                                                                -- the texture.
         -> Layer
 colorDepthSubLayer' w h rx ry rw rh l f = drawable $
-        colorDepthToTexture' w h rx ry rw rh (castDrawable l) >>=
+        colorDepthToTexture' w h rx ry rw rh (castLayer l) >>=
                 \(_, ct, dt, c, d) -> withTTextures [ct, dt] $
                         \[ct', dt'] -> f ct' dt' c d
 
@@ -165,7 +167,7 @@ colorStencilSubLayer'
         -> (Texture -> [Color] -> Layer) -- ^ Function using the texture.
         -> Layer
 colorStencilSubLayer' w h rx ry rw rh l f = drawable $
-        colorStencilToTexture' w h rx ry rw rh (castDrawable l) >>=
+        colorStencilToTexture' w h rx ry rw rh (castLayer l) >>=
                 \(_, t, c) -> withTTexture t $ flip f c
 
 -- | Draw a 'Layer' with multiple floating point colors
@@ -189,7 +191,7 @@ buffersDepthSubLayer :: Int                             -- ^ Textures width.
                                                         -- the depth texture.
                    -> Layer
 buffersDepthSubLayer w h n l f = drawable $
-        buffersDepthToTexture w h n (castDrawable l) >>=
+        buffersDepthToTexture w h n (castLayer l) >>=
                 \(_, bts, dt) -> withTTextures (dt : bts) $
                         \(dt' : bts') -> f bts' dt'
 
@@ -201,7 +203,7 @@ buffersStencilSubLayer :: Int                   -- ^ Textures width.
                        -> ([Texture] -> Layer)  -- ^ Function using the texture.
                        -> Layer
 buffersStencilSubLayer w h n l f = drawable $
-        buffersStencilToTexture w h n (castDrawable l) >>=
+        buffersStencilToTexture w h n (castLayer l) >>=
                 \(_, bts) -> withTTextures bts f
 
 -- $extlayers
