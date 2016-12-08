@@ -1,10 +1,11 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, DataKinds #-}
 
 #ifdef __GHCJS__
 {-# LANGUAGE OverloadedStrings, JavaScriptFFI, InterruptibleFFI #-}
 #endif
 
 module Common (
+        play,
         animation,
         static,
         loadTexture
@@ -13,7 +14,7 @@ module Common (
 import Graphics.Rendering.Ombra
 import qualified Graphics.Rendering.Ombra.D2 as D2
 import Graphics.Rendering.Ombra.Draw
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class
 import Data.Hashable
 import Data.IORef
 
@@ -21,6 +22,7 @@ import Data.IORef
 
 import Data.String
 import Graphics.Rendering.Ombra.Backend.WebGL
+import GHCJS.Foreign.Callback
 import GHCJS.Types
 import JavaScript.TypedArray
 import JavaScript.TypedArray.Internal
@@ -53,19 +55,36 @@ foreign import javascript unsafe "$1.data" imgData :: JSVal -> IO Uint8Array
 foreign import javascript interruptible "window.requestAnimationFrame($c);"
         waitFrame :: IO Double
 
-animation :: (Float -> Layer) -> IO ()
-animation layer = do canvas <- query "#canvas"
-                     ctx <- makeContext canvas
-                     stateRef <- drawState 512 512 >>= newIORef
+foreign import javascript unsafe "$1.addEventListener($2, $3)"
+        addEventListener :: JSVal -> JSString -> Callback (JSVal -> IO ()) -> IO ()
+foreign import javascript unsafe "$1.clientX" clientX :: JSVal -> IO Int
+foreign import javascript unsafe "$1.clientY" clientY :: JSVal -> IO Int
 
-                     flip (refDrawCtx ctx) stateRef $
-                              do drawInit
-                                 loop $ \t ->
-                                     do clearBuffers [ColorBuffer, DepthBuffer]
-                                        drawLayer . layer $ realToFrac t
-                                        liftIO $ performMinorGC
+play :: MonadIO m
+     => (Float -> (Int, Int) -> m (Layer' Drawable t a))
+     -> (a -> m ())
+     -> m ()
+play getLayer layerRetf =
+        do cposRef <- liftIO $ newIORef (0, 0)
+           canvas <- liftIO $ query "#canvas"
+           ctx <- liftIO $ makeContext canvas
+           liftIO $ do callback <- asyncCallback1 $
+                                \ev -> ((,) <$> clientX ev <*> clientY ev) >>=
+                                        writeIORef cposRef
+                       addEventListener canvas "mousemove" callback
+           stateRef <- liftIO $ drawState 512 512 >>= newIORef
 
-                     return ()
+           let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
+           liftDraw drawInit
+           loop $ \t -> do cpos <- liftIO $ readIORef cposRef
+                           layer <- getLayer (realToFrac t) cpos
+                           layerRet <- liftDraw $
+                                do clearBuffers [ColorBuffer, DepthBuffer]
+                                   drawLayer layer
+                           layerRetf layerRet
+                           liftIO $ performMinorGC
+
+           return ()
         where loop a = do t <- liftIO waitFrame
                           a $ t / 1000
                           loop a
@@ -99,24 +118,26 @@ import Graphics.UI.GLFW hiding (Image)
 import qualified Graphics.UI.GLFW as G
 import System.Mem (performMinorGC)
 
-animation :: (Float -> Layer) -> IO ()
-animation layer =
-        do G.init
-           windowHint $ WindowHint'ClientAPI ClientAPI'OpenGL
-           windowHint $ WindowHint'ContextVersionMajor 2
-           windowHint $ WindowHint'ContextVersionMinor 1
-           windowHint $ WindowHint'StencilBits 8
-           mw@(Just w) <- createWindow 512 512 "" Nothing Nothing
-           makeContextCurrent mw
-           stateRef <- drawState 512 512 >>= newIORef
-           ctx <- makeContext
-           flip (refDrawCtx ctx) stateRef $
-                do drawInit
-                   t0 <- liftIO $ getCurrentTime
-                   loop t0 t0 $ \n -> do clearBuffers [ColorBuffer, DepthBuffer]
-                                         drawLayer (layer n)
-                                         liftIO performMinorGC
-                                         liftIO (swapBuffers w)
+play :: MonadIO m
+     => (Float -> (Int, Int) -> m (Layer' Drawable t a))
+     -> (a -> m ())
+     -> m ()
+play getLayer layerRetf =
+        do w <- liftIO $ initWindow
+           stateRef <- liftIO $ drawState 512 512 >>= newIORef
+           ctx <- liftIO $ makeContext
+           t0 <- liftIO $ getCurrentTime
+
+           let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
+           liftDraw drawInit
+           loop t0 t0 $ \n -> do (x, y) <- liftIO $ getCursorPos w
+                                 layer <- getLayer n (floor x, floor y)
+                                 layerRet <- liftDraw $
+                                   do clearBuffers [ColorBuffer, DepthBuffer]
+                                      drawLayer layer
+                                 layerRetf layerRet
+                                 liftIO $ do performMinorGC
+                                             swapBuffers w
            return ()
         where loop t0 tp a = do t <- liftIO $ getCurrentTime
                                 let dt = diffUTCTime t tp
@@ -125,7 +146,17 @@ animation layer =
                                 liftIO $ do print $ 1 / dt
                                             threadDelay delay
                                 loop t0 t a
+
               delay = 30000
+
+              initWindow = do G.init
+                              windowHint $ WindowHint'ClientAPI ClientAPI'OpenGL
+                              windowHint $ WindowHint'ContextVersionMajor 2
+                              windowHint $ WindowHint'ContextVersionMinor 1
+                              windowHint $ WindowHint'StencilBits 8
+                              Just w <- createWindow 512 512 "" Nothing Nothing
+                              makeContextCurrent $ Just w
+                              return w
 
 loadTexture :: FilePath -> IO Texture
 loadTexture path = do eimg <- readImage path
@@ -149,6 +180,9 @@ loadTexture path = do eimg <- readImage path
                                       )
                                       ([], [])
 #endif
+
+animation :: (Float -> Layer) -> IO ()
+animation f = play (\t _ -> return $ f t) (const $ return ()) 
 
 static :: Layer -> IO ()
 static = animation . const
