@@ -17,7 +17,6 @@ import Control.Monad.IO.Class
 import qualified Data.HashTable.IO as H
 import Data.Hashable
 import System.Mem.Weak
-import qualified System.Mem.Weak
 
 data ResMap r = ResMap (H.LinearHashTable Int (Either String r)) 
 
