@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, RebindableSyntax, DeriveGeneric, GADTs #-}
+{-# LANGUAGE DataKinds, DeriveGeneric, GADTs #-}
 
 module Graphics.Rendering.Ombra.Shader.Default2D where
 
@@ -8,28 +8,28 @@ type Uniforms = '[View2, Image, Depth, Transform2]
 type Attributes = '[Position2, UV]
 
 -- | An uniform that represents the texture used in the default 2D shader.
-data Image = Image Sampler2D deriving Generic
+data Image = Image GSampler2D deriving Generic
 
 -- | An uniform that represents the depth used in the default 2D shader.
-data Depth = Depth Float deriving Generic
+data Depth = Depth GFloat deriving Generic
 
 -- | An uniform that represents the transformation matrix used in the default
 -- 2D shader.
-data Transform2 = Transform2 Mat3 deriving Generic
+data Transform2 = Transform2 GMat3 deriving Generic
 -- | An uniform that represents the view matrix used in the default 2D shader.
-data View2 = View2 Mat3 deriving Generic
+data View2 = View2 GMat3 deriving Generic
 
-data Position2 = Position2 Vec2 deriving Generic
+data Position2 = Position2 GVec2 deriving Generic
 
-data UV = UV Vec2 deriving Generic
+data UV = UV GVec2 deriving Generic
 
 vertexShader :: VertexShader '[Transform2, View2, Depth]
                              '[Position2, UV] '[UV]
 vertexShader (Transform2 trans :- View2 view :- Depth z :- N)
-             (Position2 (Vec2 x y) :- uv@(UV _) :- N) =
-                let Vec3 x' y' _ = view * trans * Vec3 x y 1
-                in Vertex (Vec4 x' y' z 1) :- uv :- N
+             (Position2 (GVec2 x y) :- uv@(UV _) :- N) =
+                let GVec3 x' y' _ = view .*. trans .* GVec3 x y 1
+                in Vertex (GVec4 x' y' z 1) :- uv :- N
 
 fragmentShader :: FragmentShader '[Image] '[UV]
-fragmentShader (Image sampler :- N) (UV (Vec2 s t) :- N) =
-                Fragment (texture2D sampler (Vec2 s $ 1 - t)) :- N
+fragmentShader (Image sampler :- N) (UV (GVec2 s t) :- N) =
+                Fragment (texture2D sampler (GVec2 s $ 1 - t)) :- N

@@ -1,5 +1,5 @@
 name:                ombra
-version:             0.2.2.0
+version:             0.3.0.0
 synopsis:            Render engine.
 description:         Type-safe render engine, with a purely functional API and a shader EDSL. Ombra supports both OpenGL (2.0 with some extensions) and WebGL, through GHCJS.
 homepage:            https://github.com/ziocroc/Ombra
@@ -9,7 +9,7 @@ license-file:        LICENSE
 author:              Luca "ziocroc" Prezzavento
 maintainer:          ziocroc@gmail.com
 stability:           Experimental
-copyright:           Copyright © 2014-2016 Luca Prezzavento
+copyright:           Copyright © 2014-2017 Luca Prezzavento
 category:            Graphics
 build-type:          Simple
 extra-source-files:  README.md
@@ -27,19 +27,74 @@ flag webgl
   default:     False
 
 library
-  exposed-modules:     Graphics.Rendering.Ombra, Graphics.Rendering.Ombra.Blend, Graphics.Rendering.Ombra.Layer, Graphics.Rendering.Ombra.Object, Graphics.Rendering.Ombra.Texture, Graphics.Rendering.Ombra.Stencil, Graphics.Rendering.Ombra.Shader, Graphics.Rendering.Ombra.Transformation, Graphics.Rendering.Ombra.Draw, Graphics.Rendering.Ombra.D2, Graphics.Rendering.Ombra.Geometry, Graphics.Rendering.Ombra.D3, Graphics.Rendering.Ombra.Color, Graphics.Rendering.Ombra.Backend, Graphics.Rendering.Ombra.Shapes, Graphics.Rendering.Ombra.Internal.GL, Graphics.Rendering.Ombra.Shader.Default3D, Graphics.Rendering.Ombra.Shader.Default2D
-  other-modules:       Graphics.Rendering.Ombra.Internal.Resource, Graphics.Rendering.Ombra.Internal.TList, Graphics.Rendering.Ombra.Shader.ShaderVar, Graphics.Rendering.Ombra.Shader.GLSL, Graphics.Rendering.Ombra.Shader.Stages, Graphics.Rendering.Ombra.Shader.Program, Graphics.Rendering.Ombra.Shader.CPU, Graphics.Rendering.Ombra.Shader.Language.Types, Graphics.Rendering.Ombra.Shader.Language.Functions, Graphics.Rendering.Ombra.Draw.Internal, Graphics.Rendering.Ombra.Layer.Internal, Graphics.Rendering.Ombra.Object.Internal, Graphics.Rendering.Ombra.Geometry.Internal, Graphics.Rendering.Ombra.Texture.Internal, Graphics.Rendering.Ombra.Blend.Internal, Graphics.Rendering.Ombra.Stencil.Internal
+  exposed-modules:     Graphics.Rendering.Ombra,
+                       Graphics.Rendering.Ombra.Blend,
+                       Graphics.Rendering.Ombra.Layer,
+                       Graphics.Rendering.Ombra.Object,
+                       Graphics.Rendering.Ombra.Texture,
+                       Graphics.Rendering.Ombra.Stencil,
+                       Graphics.Rendering.Ombra.Shader,
+                       Graphics.Rendering.Ombra.Transformation,
+                       Graphics.Rendering.Ombra.Draw,
+                       Graphics.Rendering.Ombra.D2,
+                       Graphics.Rendering.Ombra.Geometry,
+                       Graphics.Rendering.Ombra.D3,
+                       Graphics.Rendering.Ombra.Color,
+                       Graphics.Rendering.Ombra.Backend,
+                       Graphics.Rendering.Ombra.Shapes,
+                       Graphics.Rendering.Ombra.Vector,
+                       Graphics.Rendering.Ombra.Internal.GL,
+                       Graphics.Rendering.Ombra.Shader.Default3D,
+                       Graphics.Rendering.Ombra.Shader.Default2D
+
+  other-modules:       Graphics.Rendering.Ombra.Internal.Resource,
+                       Graphics.Rendering.Ombra.Internal.TList,
+                       Graphics.Rendering.Ombra.Shader.ShaderVar,
+                       Graphics.Rendering.Ombra.Shader.GLSL,
+                       Graphics.Rendering.Ombra.Shader.Stages,
+                       Graphics.Rendering.Ombra.Shader.Program,
+                       Graphics.Rendering.Ombra.Shader.CPU,
+                       Graphics.Rendering.Ombra.Shader.Language.Types,
+                       Graphics.Rendering.Ombra.Shader.Language.Functions,
+                       Graphics.Rendering.Ombra.Draw.Internal,
+                       Graphics.Rendering.Ombra.Layer.Internal,
+                       Graphics.Rendering.Ombra.Object.Internal,
+                       Graphics.Rendering.Ombra.Geometry.Internal,
+                       Graphics.Rendering.Ombra.Texture.Internal,
+                       Graphics.Rendering.Ombra.Blend.Internal,
+                       Graphics.Rendering.Ombra.Stencil.Internal
 
   if flag(webgl)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.WebGL
-    other-modules:     Graphics.Rendering.Ombra.Backend.WebGL.Raw, Graphics.Rendering.Ombra.Backend.WebGL.Types, Graphics.Rendering.Ombra.Backend.WebGL.Const
+    other-modules:     Graphics.Rendering.Ombra.Backend.WebGL.Raw,
+                       Graphics.Rendering.Ombra.Backend.WebGL.Types,
+                       Graphics.Rendering.Ombra.Backend.WebGL.Const
 
   if flag(opengl) && !flag(webgl)
     exposed-modules:   Graphics.Rendering.Ombra.Backend.OpenGL
 
-  other-extensions:    TypeOperators, DataKinds, ConstraintKinds, MultiParamTypeClasses, TypeFamilies, FlexibleContexts, FlexibleInstances, RankNTypes, GADTs, TypeSynonymInstances, KindSignatures, UndecidableInstances, ExistentialQuantification, GeneralizedNewtypeDeriving, NullaryTypeClasses, PolyKinds, ScopedTypeVariables, FunctionalDependencies, DeriveDataTypeable, ImpredicativeTypes, RebindableSyntax
+  other-extensions:    TypeOperators,
+                       DataKinds,
+                       ConstraintKinds,
+                       MultiParamTypeClasses,
+                       TypeFamilies,
+                       FlexibleContexts,
+                       FlexibleInstances,
+                       RankNTypes,
+                       GADTs,
+                       TypeSynonymInstances,
+                       KindSignatures,
+                       UndecidableInstances,
+                       ExistentialQuantification,
+                       GeneralizedNewtypeDeriving,
+                       NullaryTypeClasses,
+                       PolyKinds,
+                       ScopedTypeVariables,
+                       FunctionalDependencies,
+                       DeriveDataTypeable,
+                       RebindableSyntax
 
-  build-depends:       base <5.0, vect <0.5, hashable <1.3, unordered-containers <0.3, transformers <0.6, hashtables <1.4
+  build-depends:       base <5.0, vector-space <0.11, hashable <1.3, unordered-containers <0.3, transformers <0.6, hashtables <1.4
 
   if flag(opengl) && !flag(webgl)
     build-depends:     gl <0.8

@@ -1,10 +1,12 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes, TypeFamilies #-}
+{-# LANGUAGE DataKinds, FlexibleContexts, RankNTypes, MultiParamTypeClasses,
+             TypeFamilyDependencies, TypeFamilies, FlexibleInstances,
+             UndecidableInstances #-}
 
 {-|
 An example of shader variable:
 
 @
-        data Transform2 = Transform2 Mat3 deriving Generic
+        data Transform2 = Transform2 GMat3 deriving Generic
 @
 
 An example of vertex shader:
@@ -21,198 +23,390 @@ An example of vertex shader:
         -- Set of uniforms:
                      (Transform2 trans :- View2 view :- Depth z :- N)
         -- Set of attributes:
-                     (Position2 (Vec2 x y) :- uv@(UV _) :- N) =
-        -- Matrix and vector multiplication:
-                        let Vec3 x' y' _ = view * trans * Vec3 x y 1
+                     (Position2 (GVec2 x y) :- uv@(UV _) :- N) =
+        -- GMatrix and vector multiplication:
+                        let GVec3 x' y' _ = view * trans * GVec3 x y 1
         -- Set of outputs:
-                        in Vertex (Vec4 x' y' z 1) -- Vertex position.
+                        in Vertex (GVec4 x' y' z 1) -- Vertex position.
                            :- uv :- N
-@
-
-Required extensions:
-
-@
-\{\-# LANGUAGE DataKinds, RebindableSyntax, DeriveGeneric, GADTs #\-\}
 @
 
 -}
 
--- TODO: Alternative version of the module that can be used without
--- RebindableSyntax and with Prelude functions. Use Num for scalars, vect
--- typeclasses for vectors and matrices, and prefixed functions for the other
--- clashing functions.
-
 module Graphics.Rendering.Ombra.Shader (
+        module Data.Boolean,
+        module Data.VectorSpace,
         -- * Types
-        Shader,
-        VertexShader,
-        FragmentShader,
-        VertexShaderOutput(Vertex),
-        FragmentShaderOutput(..),
-        ShaderVars,
-        VOShaderVars,
-        Uniform,
-        Attribute,
-        Generic,
-        SVList((:-), N),
+        Shader.Shader,
+        Shader.VertexShader,
+        Shader.FragmentShader,
+        Shader.VertexShaderOutput(..),
+        Shader.FragmentShaderOutput(..),
+        Shader.ShaderVars,
+        Shader.VOShaderVars,
+        Shader.Uniform,
+        Shader.Attribute,
+        Shader.Generic,
+        Shader.SVList(..),
         -- ** GPU types
-        Bool,
-        Float,
-        Int,
-        Sampler2D,
-        SamplerCube,
-        Vec2(..),
-        Vec3(..),
-        Vec4(..),
-        BVec2(..),
-        BVec3(..),
-        BVec4(..),
-        IVec2(..),
-        IVec3(..),
-        IVec4(..),
-        Mat2(..),
-        Mat3(..),
-        Mat4(..),
-        Array,
-        -- * Functions
-        loop,
-        store,
-        texture2D,
-        texture2DBias,
-        texture2DProj,
-        texture2DProjBias,
-        texture2DProj4,
-        texture2DProjBias4,
-        texture2DLod,
-        texture2DProjLod,
-        texture2DProjLod4,
-        arrayLength,
-        -- ** Math functions
-        radians,
-        degrees,
-        sin,
-        cos,
-        tan,
-        asin,
-        acos,
-        atan,
-        atan2,
-        exp,
-        log,
-        exp2,
-        log2,
-        sqrt,
-        inversesqrt,
-        abs,
-        sign,
-        floor,
-        ceil,
-        fract,
-        mod,
-        min,
-        max,
-        clamp,
-        mix,
-        step,
-        smoothstep,
-        length,
-        distance,
-        dot,
-        cross,
-        normalize,
-        faceforward,
-        reflect,
-        refract,
-        matrixCompMult,
+        Shader.GBool,
+        Shader.GFloat,
+        Shader.GInt,
+        Shader.GSampler2D,
+        Shader.GSamplerCube,
+        Shader.GVec2(..),
+        Shader.GVec3(..),
+        Shader.GVec4(..),
+        Shader.GBVec2(..),
+        Shader.GBVec3(..),
+        Shader.GBVec4(..),
+        Shader.GIVec2(..),
+        Shader.GIVec3(..),
+        Shader.GIVec4(..),
+        Shader.GMat2(..),
+        Shader.GMat3(..),
+        Shader.GMat4(..),
+        Shader.GArray,
+        -- * GPU functions
+        (Shader.!),
+        Shader.loop,
+        Shader.store,
+        Shader.texture2D,
+        Shader.texture2DBias,
+        Shader.texture2DProj,
+        Shader.texture2DProjBias,
+        Shader.texture2DProj4,
+        Shader.texture2DProjBias4,
+        Shader.texture2DLod,
+        Shader.texture2DProjLod,
+        Shader.texture2DProjLod4,
+        Shader.arrayLength,
+        -- ** Various math functions
+        Matrix(..),
+        minG,
+        maxG,
+        modG,
+        floorG,
+        ceilingG,
+        Shader.radians,
+        Shader.degrees,
+        Shader.exp2,
+        Shader.log2,
+        Shader.inversesqrt,
+        Shader.fract,
+        Shader.clamp,
+        Shader.mix,
+        Shader.step,
+        Shader.smoothstep,
+        Shader.distance, -- TODO: implement AffineSpace?
+        -- Shader.length,
+        Shader.faceforward,
+        Shader.reflect,
+        Shader.refract,
+        Shader.matrixCompMult,
         -- *** Vector relational functions
-        VecOrd,
-        VecEq,
-        lessThan,
-        lessThanEqual,
-        greaterThan,
-        greaterThanEqual,
-        equal,
-        notEqual,
-        BoolVector,
-        anyB,
-        allB,
-        notB,
+        Shader.VecOrd,
+        Shader.VecEq,
+        Shader.lessThan,
+        Shader.lessThanEqual,
+        Shader.greaterThan,
+        Shader.greaterThanEqual,
+        Shader.equal,
+        Shader.notEqual,
+        Shader.GBoolVector,
+        Shader.anyBV,
+        Shader.allBV,
+        Shader.notBV,
         -- ** Constructors
-        true,
-        false,
-        ToBool,
-        bool,
-        ToInt,
-        int,
-        ToFloat,
-        float,
-        Components,
-        CompList,
-        ToCompList,
-        (#),
-        ToVec2,
-        vec2,
-        ToVec3,
-        vec3,
-        ToVec4,
-        vec4,
-        ToBVec2,
-        bvec2,
-        ToBVec3,
-        bvec3,
-        ToBVec4,
-        bvec4,
-        ToIVec2,
-        ivec2,
-        ToIVec3,
-        ivec3,
-        ToIVec4,
-        ivec4,
-        ToMat2,
-        mat2,
-        ToMat3,
-        mat3,
-        ToMat4,
-        mat4,
-        -- ** Operators
-        (*),
-        (/),
-        (+),
-        (-),
-        (^),
-        (&&),
-        (||),
-        (==),
-        (>=),
-        (<=),
-        (<),
-        (>),
-        (!),
-        -- ** Rebinding functions
-        fromInteger,
-        fromRational,
-        ifThenElse,
-        negate,
-        -- ** Prelude functions
-        (.),
-        id,
-        const,
-        flip,
-        ($),
-        CPU.fst,
-        CPU.snd,
+        Shader.ToGBool,
+        Shader.bool,
+        Shader.ToGInt,
+        Shader.int,
+        Shader.ToGFloat,
+        Shader.float,
+        -- TODO: better vector constructors
+        {-
+        Shader.Components,
+        Shader.CompList,
+        Shader.ToCompList,
+        (Shader.#),
+        Shader.ToGVec2,
+        Shader.vec2,
+        Shader.ToGVec3,
+        Shader.vec3,
+        Shader.ToGVec4,
+        Shader.vec4,
+        Shader.ToGBVec2,
+        Shader.bvec2,
+        Shader.ToGBVec3,
+        Shader.bvec3,
+        Shader.ToGBVec4,
+        Shader.bvec4,
+        Shader.ToGIVec2,
+        Shader.ivec2,
+        Shader.ToGIVec3,
+        Shader.ivec3,
+        Shader.ToGIVec4,
+        Shader.ivec4,
+        Shader.ToGMat2,
+        Shader.mat2,
+        Shader.ToGMat3,
+        Shader.mat3,
+        Shader.ToGMat4,
+        Shader.mat4,
+        -}
         -- * Variables
-        position,
-        fragData,
-        fragCoord,
-        fragFrontFacing
+        Shader.position,
+        Shader.fragData,
+        Shader.fragCoord,
+        Shader.fragFrontFacing,
 ) where
 
+import Data.Proxy
 import GHC.Generics (Generic)
 import Graphics.Rendering.Ombra.Shader.CPU
-import Graphics.Rendering.Ombra.Shader.Language.Types
-import Graphics.Rendering.Ombra.Shader.Language.Functions
-import Graphics.Rendering.Ombra.Shader.ShaderVar
+import qualified Graphics.Rendering.Ombra.Shader.Language as Shader
+import Graphics.Rendering.Ombra.Shader.ShaderVar hiding (Shader)
 import Graphics.Rendering.Ombra.Shader.Stages
-import Prelude ((.), id, const, flip, ($))
-import qualified Prelude as CPU
+import Graphics.Rendering.Ombra.Vector
+
+import Data.Boolean
+import qualified Data.Boolean.Numbers as B
+import Data.Cross
+import Data.VectorSpace
+import Prelude
+
+type instance BooleanOf Shader.GBool = Shader.GBool
+type instance BooleanOf Shader.GFloat = Shader.GBool
+type instance BooleanOf Shader.GInt = Shader.GBool
+type instance BooleanOf Shader.GSampler2D = Shader.GBool
+type instance BooleanOf Shader.GSamplerCube = Shader.GBool
+type instance BooleanOf Shader.GVec2 = Shader.GBool
+type instance BooleanOf Shader.GVec3 = Shader.GBool
+type instance BooleanOf Shader.GVec4 = Shader.GBool
+type instance BooleanOf Shader.GBVec2 = Shader.GBool
+type instance BooleanOf Shader.GBVec3 = Shader.GBool
+type instance BooleanOf Shader.GBVec4 = Shader.GBool
+type instance BooleanOf Shader.GIVec2 = Shader.GBool
+type instance BooleanOf Shader.GIVec3 = Shader.GBool
+type instance BooleanOf Shader.GIVec4 = Shader.GBool
+type instance BooleanOf Shader.GMat2 = Shader.GBool
+type instance BooleanOf Shader.GMat3 = Shader.GBool
+type instance BooleanOf Shader.GMat4 = Shader.GBool
+type instance BooleanOf (Shader.GArray n t) = Shader.GBool
+
+instance Boolean Shader.GBool where
+        true = Shader.true
+        false = Shader.false
+        (&&*) = (Shader.&&)
+        (||*) = (Shader.||)
+        notB = Shader.not
+
+instance (Shader.ShaderType a, BooleanOf a ~ Shader.GBool) => IfB a where
+        ifB = Shader.ifThenElse
+
+instance (Shader.ShaderType a, BooleanOf a ~ Shader.GBool) => EqB a where
+        (==*) = (Shader.==)
+        (/=*) = (Shader./=)
+
+instance (Shader.ShaderType a, BooleanOf a ~ Shader.GBool) => OrdB a where
+        (<*) = (Shader.<)
+        (<=*) = (Shader.<=)
+        (>*) = (Shader.>)
+        (>=*) = (Shader.>=)
+        
+-- | Faster GPU 'max'/'B.maxB'.
+maxG :: Shader.GenTypeGFloat a b => a -> b -> a
+maxG = Shader.max
+
+-- | Faster GPU 'min'/'B.minB'.
+minG :: Shader.GenTypeGFloat a b => a -> b -> a
+minG = Shader.min
+
+instance Num Shader.GFloat where
+        (+) = (Shader.+)
+        (-) = (Shader.-)
+        (*) = (Shader.*)
+        abs = Shader.abs
+        signum = Shader.sign
+        fromInteger = Shader.fromInteger
+        negate = Shader.negate
+
+instance Num Shader.GInt where
+        (+) = (Shader.+)
+        (-) = (Shader.-)
+        (*) = (Shader.*)
+        abs = Shader.absI
+        signum = Shader.signI
+        fromInteger = Shader.fromInteger
+        negate = Shader.negateI
+
+instance B.NumB Shader.GFloat where
+        type IntegerOf Shader.GFloat = Shader.GInt
+        fromIntegerB = Shader.float
+
+instance B.NumB Shader.GInt where
+        type IntegerOf Shader.GInt = Shader.GInt
+        fromIntegerB = id
+
+instance AdditiveGroup Shader.GFloat where
+        zeroV = Shader.zero
+        (^+^) = (Shader.+)
+        (^-^) = (Shader.-)
+        negateV = Shader.negate
+
+-- | GPU 'mod' that can be used on floats and float vectors.
+modG :: Shader.GenType a => a -> a -> a
+modG = Shader.mod
+
+instance B.IntegralB Shader.GInt where
+        quotRem a b = let q = a Shader./ b in (q, a - b * q)
+        -- XXX: ???
+        divMod a b = let (q, r) = B.quotRem a b
+                         f = 1 - abs (signum r + signum b)
+                     in (q - f, r + b * f)
+        toIntegerB = id
+
+instance Fractional Shader.GFloat where
+        (/) = (Shader./)
+        fromRational = Shader.fromRational
+
+instance Floating Shader.GFloat where
+        pi = 3.1415926535897932384626433832795
+        exp = Shader.exp
+        log = Shader.log
+        sqrt = Shader.sqrt
+        (**) = (Shader.^)
+        sin = Shader.sin
+        cos = Shader.cos
+        tan = Shader.tan
+        asin = Shader.asin
+        acos = Shader.acos
+        atan = Shader.atan
+        -- TODO
+        sinh = error "Hyperbolic functions are not implemented."
+        cosh = error "Hyperbolic functions are not implemented."
+        asinh = error "Hyperbolic functions are not implemented."
+        acosh = error "Hyperbolic functions are not implemented."
+        atanh = error "Hyperbolic functions are not implemented."
+
+floatToInt :: (B.NumB b, B.IntegerOf b ~ Shader.GInt) => Shader.GFloat -> b
+floatToInt = B.fromIntegerB . Shader.int
+
+instance B.RealFracB Shader.GFloat where
+        properFraction x = let tx = signum x * floorG (abs x)
+                           in (floatToInt tx, x - tx)
+        -- truncate x = floatToInt $ signum x * floorG (abs x)
+        round x = floatToInt . floorG $ x + 0.5
+        ceiling = floatToInt . ceilingG
+        floor = floatToInt . floorG
+
+floorG :: Shader.GenType a => a -> a
+floorG = Shader.floor
+
+ceilingG :: Shader.GenType a => a -> a
+ceilingG = Shader.ceil
+
+instance B.RealFloatB Shader.GFloat where
+        isNaN = error "isNaN: not supported"
+        isInfinite = error "isInfinite: not supported"
+        isNegativeZero = error "isNegativeZero: not supported"
+        isIEEE = error "isIEEE: not supported"
+        atan2 = Shader.atan2
+
+-- Vectors
+
+instance AdditiveGroup Shader.GVec2 where
+        zeroV = Shader.zero
+        (^+^) = (Shader.+)
+        (^-^) = (Shader.-)
+        negateV = Shader.negate
+
+instance VectorSpace Shader.GVec2 where
+        type Scalar Shader.GVec2 = Shader.GFloat
+        (*^) = (Shader.*)
+
+instance InnerSpace Shader.GVec2 where
+        (<.>) = Shader.dot
+
+instance AdditiveGroup Shader.GVec3 where
+        zeroV = Shader.zero
+        (^+^) = (Shader.+)
+        (^-^) = (Shader.-)
+        negateV = Shader.negate
+
+instance VectorSpace Shader.GVec3 where
+        type Scalar Shader.GVec3 = Shader.GFloat
+        (*^) = (Shader.*)
+
+instance InnerSpace Shader.GVec3 where
+        (<.>) = Shader.dot
+
+instance HasCross3 Shader.GVec3 where
+        cross3 = Shader.cross
+
+instance AdditiveGroup Shader.GVec4 where
+        zeroV = Shader.zero
+        (^+^) = (Shader.+)
+        (^-^) = (Shader.-)
+        negateV = Shader.negate
+
+instance VectorSpace Shader.GVec4 where
+        type Scalar Shader.GVec4 = Shader.GFloat
+        (*^) = (Shader.*)
+
+instance InnerSpace Shader.GVec4 where
+        (<.>) = Shader.dot
+
+-- Matrices
+
+instance AdditiveGroup Shader.GMat2 where
+        zeroV = Shader.zero
+        (^+^) = (Shader.+)
+        (^-^) = (Shader.-)
+        negateV = Shader.negateM
+
+instance VectorSpace Shader.GMat2 where
+        type Scalar Shader.GMat2 = Shader.GFloat
+        (*^) = (Shader.*)
+
+instance AdditiveGroup Shader.GMat3 where
+        zeroV = Shader.zero
+        (^+^) = (Shader.+)
+        (^-^) = (Shader.-)
+        negateV = Shader.negateM
+
+instance Matrix Shader.GMat2 where
+        type Row Shader.GMat2 = Shader.GVec2
+        idmtx = Shader.mat2 (1.0 :: Shader.GFloat)
+        (.*.) = (Shader.*)
+        (.*) = (Shader.*)
+        (*.) = (Shader.*)
+
+instance VectorSpace Shader.GMat3 where
+        type Scalar Shader.GMat3 = Shader.GFloat
+        (*^) = (Shader.*)
+
+instance Matrix Shader.GMat3 where
+        type Row Shader.GMat3 = Shader.GVec3
+        idmtx = Shader.mat3 (1.0 :: Shader.GFloat)
+        (.*.) = (Shader.*)
+        (.*) = (Shader.*)
+        (*.) = (Shader.*)
+
+instance AdditiveGroup Shader.GMat4 where
+        zeroV = Shader.zero
+        (^+^) = (Shader.+)
+        (^-^) = (Shader.-)
+        negateV = Shader.negateM
+
+instance VectorSpace Shader.GMat4 where
+        type Scalar Shader.GMat4 = Shader.GFloat
+        (*^) = (Shader.*)
+
+instance Matrix Shader.GMat4 where
+        type Row Shader.GMat4 = Shader.GVec4
+        idmtx = Shader.mat4 (1.0 :: Shader.GFloat)
+        (.*.) = (Shader.*)
+        (.*) = (Shader.*)
+        (*.) = (Shader.*)

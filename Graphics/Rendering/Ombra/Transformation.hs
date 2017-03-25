@@ -14,7 +14,7 @@ module Graphics.Rendering.Ombra.Transformation (
         scaleMat3
 ) where
 
-import Data.Vect.Float
+import Graphics.Rendering.Ombra.Vector
 
 -- | 4x4 translation matrix.
 transMat4 :: Vec3 -> Mat4
@@ -48,10 +48,23 @@ rotZMat4 a = Mat4 (Vec4 (cos a) (- sin a) 0 0)
 rotMat4 :: Vec3         -- ^ Axis.
         -> Float        -- ^ Angle
         -> Mat4
-rotMat4 v a = let (Mat3 x y z) = rotMatrix3 v a
-              in Mat4 (extendZero x)
-                      (extendZero y)
-                      (extendZero z)
+-- TODO: test
+rotMat4 v a = let Vec3 x y z = normalized v
+                  c = cos a
+                  nc = 1 - c
+                  s = sin a
+              in Mat4 (Vec4 (c + x * x * nc)
+                            (x * y * nc - z * s)
+                            (y * s + x * z * nc)
+                            0)
+                      (Vec4 (z * s + x * y * nc)
+                            (c + y * y * nc)
+                            (- x * s + y * z * nc)
+                            0)
+                      (Vec4 (- y * s + x * z * nc)
+                            (x * s + y * z * nc)
+                            (c + z * z * nc)
+                            0)
                       (Vec4 0 0 0 1)
 
 -- | 4x4 scale matrix.
@@ -97,7 +110,7 @@ cameraMat4 eye pitch yaw =
         Mat4 (Vec4 xx yx zx 0)
              (Vec4 xy yy zy 0)
              (Vec4 xz yz zz 0)
-             (Vec4 (- dotprod xv eye) (- dotprod yv eye) (- dotprod zv eye) 1)
+             (Vec4 (- xv <.> eye) (- yv <.> eye) (- zv <.> eye) 1)
         where cosPitch = cos pitch
               sinPitch = sin pitch
               cosYaw = cos yaw
@@ -117,10 +130,10 @@ lookAtMat4 eye target up =
         Mat4 (Vec4 xx yx zx 0)
              (Vec4 xy yy zy 0)
              (Vec4 xz yz zz 0)
-             (Vec4 (- dotprod xv eye) (- dotprod yv eye) (- dotprod zv eye) 1)
-        where zv@(Vec3 zx zy zz) = normalize $ eye &- target
-              xv@(Vec3 xx xy xz) = normalize $ crossprod up zv
-              yv@(Vec3 yx yy yz) = crossprod zv xv
+             (Vec4 (- xv <.> eye) (- yv <.> eye) (- zv <.> eye) 1)
+        where zv@(Vec3 zx zy zz) = normalized $ eye ^-^ target
+              xv@(Vec3 xx xy xz) = normalized $ cross3 up zv
+              yv@(Vec3 yx yy yz) = cross3 zv xv
 
 -- | 3x3 translation matrix.
 transMat3 :: Vec2 -> Mat3

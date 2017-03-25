@@ -4,16 +4,12 @@ module Graphics.Rendering.Ombra.Backend where
 
 import Control.Concurrent (ThreadId)
 import Data.Bits (Bits)
-import Data.Vect.Float
 import Data.Int
 import Data.Word
 import Foreign.Storable
 import Foreign.Ptr (castPtr)
 import Graphics.Rendering.Ombra.Color
-
-data IVec2 = IVec2 !Int32 !Int32 
-data IVec3 = IVec3 !Int32 !Int32 !Int32
-data IVec4 = IVec4 !Int32 !Int32 !Int32 !Int32
+import Graphics.Rendering.Ombra.Vector
 
 -- Mixed OpenGL ES 2.0/WebGL 1.0/OpenGL 2.0 API, with VAOs and FBOs.
 -- | Backend API.
@@ -550,33 +546,3 @@ class ( Integral GLEnum
         gl_RENDERBUFFER_BINDING :: GLEnum
         gl_MAX_RENDERBUFFER_SIZE :: GLEnum
         gl_INVALID_FRAMEBUFFER_OPERATION :: GLEnum
-
-instance Storable IVec2 where
-        sizeOf _ = 8
-        alignment _ = 4
-        peek ptr = IVec2 <$> peekElemOff (castPtr ptr) 0
-                         <*> peekElemOff (castPtr ptr) 1
-        poke ptr (IVec2 x y) = do pokeElemOff (castPtr ptr) 0 x
-                                  pokeElemOff (castPtr ptr) 1 y
-
-instance Storable IVec3 where
-        sizeOf _ = 12
-        alignment _ = 4
-        peek ptr = IVec3 <$> peekElemOff (castPtr ptr) 0
-                         <*> peekElemOff (castPtr ptr) 1
-                         <*> peekElemOff (castPtr ptr) 2
-        poke ptr (IVec3 x y z) = do pokeElemOff (castPtr ptr) 0 x
-                                    pokeElemOff (castPtr ptr) 1 y
-                                    pokeElemOff (castPtr ptr) 2 z
-
-instance Storable IVec4 where
-        sizeOf _ = 16
-        alignment _ = 4
-        peek ptr = IVec4 <$> peekElemOff (castPtr ptr) 0
-                         <*> peekElemOff (castPtr ptr) 1
-                         <*> peekElemOff (castPtr ptr) 2
-                         <*> peekElemOff (castPtr ptr) 3
-        poke ptr (IVec4 x y z w) = do pokeElemOff (castPtr ptr) 0 x
-                                      pokeElemOff (castPtr ptr) 1 y
-                                      pokeElemOff (castPtr ptr) 2 z
-                                      pokeElemOff (castPtr ptr) 3 w

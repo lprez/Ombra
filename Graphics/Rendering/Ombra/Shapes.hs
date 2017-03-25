@@ -1,8 +1,8 @@
 module Graphics.Rendering.Ombra.Shapes where
 
-import Data.Vect.Float
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Internal.GL (GLES)
+import Graphics.Rendering.Ombra.Vector
 
 rectGeometry :: GLES => Geometry Geometry2D
 rectGeometry = mkGeometry2DInd [ (Vec2 (-0.5) (-0.5), Vec2 0 0)

@@ -8,23 +8,23 @@ import Graphics.Rendering.Ombra.Shader.Language.Types
 
 import GHC.TypeLits
 import Text.Printf
-import Prelude (String, (.), ($), error)
+import Prelude (String, (.), ($), error, Int, Integer, Float)
 import qualified Prelude
 
 -- TODO: memoized versions of the functions
 
 class Base a b | a -> b
-instance Base Int Int
-instance Base IVec2 Int
-instance Base IVec3 Int
-instance Base IVec4 Int
-instance Base Float Float
-instance Base Vec2 Float
-instance Base Vec3 Float
-instance Base Vec4 Float
-instance Base Mat2 Float
-instance Base Mat3 Float
-instance Base Mat4 Float
+instance Base GInt GInt
+instance Base GIVec2 GInt
+instance Base GIVec3 GInt
+instance Base GIVec4 GInt
+instance Base GFloat GFloat
+instance Base GVec2 GFloat
+instance Base GVec3 GFloat
+instance Base GVec4 GFloat
+instance Base GMat2 GFloat
+instance Base GMat3 GFloat
+instance Base GMat4 GFloat
 
 class (Base a aBase, Base b bBase) =>
       Arithmetic aBase bBase a b result | a b -> result
@@ -32,36 +32,36 @@ class (Base a aBase, Base b bBase) =>
                                         , a -> aBase bBase
                                         , result -> aBase bBase
 
-instance Arithmetic Float Float Float Float Float
-instance Arithmetic Float Float Vec2 Vec2 Vec2
-instance Arithmetic Float Float Vec3 Vec3 Vec3
-instance Arithmetic Float Float Vec4 Vec4 Vec4
-instance Arithmetic Float Float Vec2 Float Vec2
-instance Arithmetic Float Float Vec3 Float Vec3
-instance Arithmetic Float Float Vec4 Float Vec4
-instance Arithmetic Float Float Float Vec2 Vec2
-instance Arithmetic Float Float Float Vec3 Vec3
-instance Arithmetic Float Float Float Vec4 Vec4
-instance Arithmetic Float Float Mat2 Mat2 Mat2
-instance Arithmetic Float Float Mat3 Mat3 Mat3
-instance Arithmetic Float Float Mat4 Mat4 Mat4
-instance Arithmetic Float Float Mat2 Float Mat2
-instance Arithmetic Float Float Mat3 Float Mat3
-instance Arithmetic Float Float Mat4 Float Mat4
-instance Arithmetic Float Float Float Mat2 Mat2
-instance Arithmetic Float Float Float Mat3 Mat3
-instance Arithmetic Float Float Float Mat4 Mat4
+instance Arithmetic GFloat GFloat GFloat GFloat GFloat
+instance Arithmetic GFloat GFloat GVec2 GVec2 GVec2
+instance Arithmetic GFloat GFloat GVec3 GVec3 GVec3
+instance Arithmetic GFloat GFloat GVec4 GVec4 GVec4
+instance Arithmetic GFloat GFloat GVec2 GFloat GVec2
+instance Arithmetic GFloat GFloat GVec3 GFloat GVec3
+instance Arithmetic GFloat GFloat GVec4 GFloat GVec4
+instance Arithmetic GFloat GFloat GFloat GVec2 GVec2
+instance Arithmetic GFloat GFloat GFloat GVec3 GVec3
+instance Arithmetic GFloat GFloat GFloat GVec4 GVec4
+instance Arithmetic GFloat GFloat GMat2 GMat2 GMat2
+instance Arithmetic GFloat GFloat GMat3 GMat3 GMat3
+instance Arithmetic GFloat GFloat GMat4 GMat4 GMat4
+instance Arithmetic GFloat GFloat GMat2 GFloat GMat2
+instance Arithmetic GFloat GFloat GMat3 GFloat GMat3
+instance Arithmetic GFloat GFloat GMat4 GFloat GMat4
+instance Arithmetic GFloat GFloat GFloat GMat2 GMat2
+instance Arithmetic GFloat GFloat GFloat GMat3 GMat3
+instance Arithmetic GFloat GFloat GFloat GMat4 GMat4
 
-instance Arithmetic Int Int Int Int Int
-instance Arithmetic Int Int IVec2 IVec2 IVec2
-instance Arithmetic Int Int IVec3 IVec3 IVec3
-instance Arithmetic Int Int IVec4 IVec4 IVec4
-instance Arithmetic Int Int IVec2 Int IVec2
-instance Arithmetic Int Int IVec3 Int IVec3
-instance Arithmetic Int Int IVec4 Int IVec4
-instance Arithmetic Int Int Int IVec2 IVec2
-instance Arithmetic Int Int Int IVec3 IVec3
-instance Arithmetic Int Int Int IVec4 IVec4
+instance Arithmetic GInt GInt GInt GInt GInt
+instance Arithmetic GInt GInt GIVec2 GIVec2 GIVec2
+instance Arithmetic GInt GInt GIVec3 GIVec3 GIVec3
+instance Arithmetic GInt GInt GIVec4 GIVec4 GIVec4
+instance Arithmetic GInt GInt GIVec2 GInt GIVec2
+instance Arithmetic GInt GInt GIVec3 GInt GIVec3
+instance Arithmetic GInt GInt GIVec4 GInt GIVec4
+instance Arithmetic GInt GInt GInt GIVec2 GIVec2
+instance Arithmetic GInt GInt GInt GIVec3 GIVec3
+instance Arithmetic GInt GInt GInt GIVec4 GIVec4
 
 -- | Types that can be multiplied.
 class (Base a aBase, Base b bBase) =>
@@ -69,32 +69,32 @@ class (Base a aBase, Base b bBase) =>
                                  , b -> aBase bBase
                                  , a -> aBase bBase
                                  , result -> aBase bBase
-instance Mul Float Float Mat2 Vec2 Vec2
-instance Mul Float Float Mat3 Vec3 Vec3
-instance Mul Float Float Mat4 Vec4 Vec4
-instance Mul Float Float Vec2 Mat2 Vec2
-instance Mul Float Float Vec3 Mat3 Vec3
-instance Mul Float Float Vec4 Mat4 Vec4
+instance Mul GFloat GFloat GMat2 GVec2 GVec2
+instance Mul GFloat GFloat GMat3 GVec3 GVec3
+instance Mul GFloat GFloat GMat4 GVec4 GVec4
+instance Mul GFloat GFloat GVec2 GMat2 GVec2
+instance Mul GFloat GFloat GVec3 GMat3 GVec3
+instance Mul GFloat GFloat GVec4 GMat4 GVec4
 instance {-# OVERLAPPABLE #-} 
          ( Arithmetic aBase bBase a b result
          , Base a aBase, Base b bBase) =>
          Mul aBase bBase a b result
 
-class (ShaderType a, Base a Float) => FloatVec a
-instance FloatVec Vec2
-instance FloatVec Vec3
-instance FloatVec Vec4
+class (ShaderType a, Base a GFloat) => GFloatVec a
+instance GFloatVec GVec2
+instance GFloatVec GVec3
+instance GFloatVec GVec4
 
--- | Floats or vectors.
+-- | GFloats or vectors.
 class ShaderType a => GenType a
-instance {-# OVERLAPS #-} GenType Float
-instance {-# OVERLAPPABLE #-} (FloatVec a, ShaderType a) => GenType a
+instance {-# OVERLAPS #-} GenType GFloat
+instance {-# OVERLAPPABLE #-} (GFloatVec a, ShaderType a) => GenType a
 
-type family GenTypeFloatConstr a b where
-        GenTypeFloatConstr a Float = GenType a
-        GenTypeFloatConstr a a = GenType a
+type family GenTypeGFloatConstr a b where
+        GenTypeGFloatConstr a GFloat = GenType a
+        GenTypeGFloatConstr a a = GenType a
 
-type GenTypeFloat a b = (GenTypeFloatConstr a b, ShaderType a, ShaderType b)
+type GenTypeGFloat a b = (GenTypeGFloatConstr a b, ShaderType a, ShaderType b)
 
 infixl 7 *
 (*) :: (Mul aBase bBase a b c, ShaderType a, ShaderType b, ShaderType c)
@@ -121,109 +121,115 @@ infixr 8 ^
 (^) = fun2 "pow"
 
 infixr 3 &&
-(&&) :: Bool -> Bool -> Bool
+(&&) :: GBool -> GBool -> GBool
 (&&) = op2 "&&"
 
 infixr 2 ||
-(||) :: Bool -> Bool -> Bool
+(||) :: GBool -> GBool -> GBool
 (||) = op2 "||"
 
 infix 4 ==
-(==) :: ShaderType a => a -> a -> Bool
+(==) :: ShaderType a => a -> a -> GBool
 (==) = op2 "=="
 
 infix 4 /=
-(/=) :: ShaderType a => a -> a -> Bool
+(/=) :: ShaderType a => a -> a -> GBool
 (/=) = op2 "!="
 
 infix 4 >=
-(>=) :: ShaderType a => a -> a -> Bool
+(>=) :: ShaderType a => a -> a -> GBool
 (>=) = op2 ">="
 
 infix 4 <=
-(<=) :: ShaderType a => a -> a -> Bool
+(<=) :: ShaderType a => a -> a -> GBool
 (<=) = op2 "<="
 
 infix 4 <
-(<) :: ShaderType a => a -> a -> Bool
+(<) :: ShaderType a => a -> a -> GBool
 (<) = op2 "<"
 
 infix 4 >
-(>) :: ShaderType a => a -> a -> Bool
+(>) :: ShaderType a => a -> a -> GBool
 (>) = op2 ">"
 
 class ShaderType a => VecOrd a
-instance VecOrd Vec2
-instance VecOrd Vec3
-instance VecOrd Vec4
-instance VecOrd IVec2
-instance VecOrd IVec3
-instance VecOrd IVec4
+instance VecOrd GVec2
+instance VecOrd GVec3
+instance VecOrd GVec4
+instance VecOrd GIVec2
+instance VecOrd GIVec3
+instance VecOrd GIVec4
 
 class ShaderType a => VecEq a
-instance VecEq Vec2
-instance VecEq Vec3
-instance VecEq Vec4
-instance VecEq IVec2
-instance VecEq IVec3
-instance VecEq IVec4
-instance VecEq BVec2
-instance VecEq BVec3
-instance VecEq BVec4
+instance VecEq GVec2
+instance VecEq GVec3
+instance VecEq GVec4
+instance VecEq GIVec2
+instance VecEq GIVec3
+instance VecEq GIVec4
+instance VecEq GBVec2
+instance VecEq GBVec3
+instance VecEq GBVec4
 
-lessThan :: VecOrd a => a -> a -> Bool
+lessThan :: VecOrd a => a -> a -> GBool
 lessThan = fun2 "lessThan"
 
-lessThanEqual :: VecOrd a => a -> a -> Bool
+lessThanEqual :: VecOrd a => a -> a -> GBool
 lessThanEqual = fun2 "lessThanEqual"
 
-greaterThan :: VecOrd a => a -> a -> Bool
+greaterThan :: VecOrd a => a -> a -> GBool
 greaterThan = fun2 "greaterThan"
 
-greaterThanEqual :: VecOrd a => a -> a -> Bool
+greaterThanEqual :: VecOrd a => a -> a -> GBool
 greaterThanEqual = fun2 "greaterThanEqual"
 
-equal :: VecEq a => a -> a -> Bool
+equal :: VecEq a => a -> a -> GBool
 equal = fun2 "equal"
 
-notEqual :: VecEq a => a -> a -> Bool
+notEqual :: VecEq a => a -> a -> GBool
 notEqual = fun2 "notEqual"
 
-class ShaderType a => BoolVector a
-instance BoolVector BVec2
-instance BoolVector BVec3
-instance BoolVector BVec4
+class ShaderType a => GBoolVector a
+instance GBoolVector GBVec2
+instance GBoolVector GBVec3
+instance GBoolVector GBVec4
 
-anyB :: BoolVector a => a -> Bool
-anyB = fun1 "any"
+anyBV :: GBoolVector a => a -> GBool
+anyBV = fun1 "any"
 
-allB :: BoolVector a => a -> Bool
-allB = fun1 "all"
+allBV :: GBoolVector a => a -> GBool
+allBV = fun1 "all"
 
-notB :: BoolVector a => a -> Bool
-notB = fun1 "not"
+notBV :: GBoolVector a => a -> GBool
+notBV = fun1 "not"
 
 negate :: GenType a => a -> a
 negate = op1 "-"
 
-not :: GenType a => a -> a
+negateM :: GMatrix a => a -> a
+negateM = op1 "-"
+
+negateI :: GInt -> GInt
+negateI = op1 "-"
+
+not :: GBool -> GBool
 not = op1 "!"
 
 class (ShaderType a, Base a a) => Num a where
-        fromInteger :: Prelude.Integer -> a
+        fromInteger :: Integer -> a
 
-instance Num Float where
+instance Num GFloat where
         fromInteger = fromRational . Prelude.fromInteger
 
-instance Num Int where
-        fromInteger = Int . Literal
-                          . (printf "%d" :: Prelude.Integer -> String)
-                          . Prelude.fromInteger
+instance Num GInt where
+        fromInteger = GInt . Literal
+                           . (printf "%d" :: Integer -> String)
+                           . Prelude.fromInteger
 
-fromRational :: Prelude.Rational -> Float
-fromRational = Float . Literal
-                     . (printf "%f" :: Prelude.Float -> String)
-                     . Prelude.fromRational
+fromRational :: Prelude.Rational -> GFloat
+fromRational = GFloat . Literal
+                      . (printf "%f" :: Float -> String)
+                      . Prelude.fromRational
 
 radians :: GenType a => a -> a
 radians = fun1 "radians"
@@ -273,8 +279,15 @@ inversesqrt = fun1 "inversesqrt"
 abs :: GenType a => a -> a
 abs = fun1 "abs"
 
+-- XXX: ???
+absI :: GInt -> GInt
+absI = fun1 "abs"
+
 sign :: GenType a => a -> a
 sign = fun1 "sign"
+
+signI :: GInt -> GInt
+signI = fun1 "sign"
 
 floor :: GenType a => a -> a
 floor = fun1 "floor"
@@ -285,43 +298,43 @@ ceil = fun1 "ceil"
 fract :: GenType a => a -> a
 fract = fun1 "fract"
 
-mod :: GenTypeFloat a b => a -> b -> a
+mod :: GenTypeGFloat a b => a -> b -> a
 mod = fun2 "mod"
 
-min :: GenTypeFloat a b => a -> b -> a
+min :: GenTypeGFloat a b => a -> b -> a
 min = fun2 "min"
 
-max :: GenTypeFloat a b => a -> b -> a
+max :: GenTypeGFloat a b => a -> b -> a
 max = fun2 "max"
 
-clamp :: GenTypeFloat a b => a -> b -> b -> a
+clamp :: GenTypeGFloat a b => a -> b -> b -> a
 clamp = fun3 "clamp"
 
-mix :: GenTypeFloat a b => a -> a -> b -> a
+mix :: GenTypeGFloat a b => a -> a -> b -> a
 mix = fun3 "mix"
 
-step :: GenTypeFloat a b => b -> a -> a
+step :: GenTypeGFloat a b => b -> a -> a
 step = fun2 "step"
 
-smoothstep :: GenTypeFloat a b => b -> b -> a -> a
+smoothstep :: GenTypeGFloat a b => b -> b -> a -> a
 smoothstep = fun3 "smoothstep"
 
-length :: GenType a => a -> Float
+length :: GenType a => a -> GFloat
 length = fun1 "length"
 
-arrayLength :: (ShaderType t, KnownNat n) => Array n t -> Int
+arrayLength :: (ShaderType t, KnownNat n) => GArray n t -> GInt
 arrayLength = fun1 "length"
 
-(!) :: (ShaderType t, KnownNat n) => Array n t -> Int -> t
+(!) :: (ShaderType t, KnownNat n) => GArray n t -> GInt -> t
 arr ! i = fromExpr $ ArrayIndex (toExpr arr) (toExpr i)
 
-distance :: GenType a => a -> a -> Float
+distance :: GenType a => a -> a -> GFloat
 distance = fun2 "distance"
 
-dot :: GenType a => a -> a -> Float
+dot :: GenType a => a -> a -> GFloat
 dot = fun2 "dot"
 
-cross :: Vec3 -> Vec3 -> Vec3
+cross :: GVec3 -> GVec3 -> GVec3
 cross = fun2 "cross"
 
 normalize :: GenType a => a -> a
@@ -333,16 +346,15 @@ faceforward = fun3 "faceforward"
 reflect :: GenType a => a -> a -> a
 reflect = fun2 "reflect"
 
-refract :: GenType a => a -> a -> Float -> a
+refract :: GenType a => a -> a -> GFloat -> a
 refract = fun3 "refract"
 
-class ShaderType a => Matrix a
-instance Matrix Mat2
-instance Matrix Mat3
-instance Matrix Mat4
+class ShaderType a => GMatrix a
+instance GMatrix GMat2
+instance GMatrix GMat3
+instance GMatrix GMat4
 
--- TODO: unsafe
-matrixCompMult :: (Matrix a, Matrix b, Matrix c) => a -> b -> c
+matrixCompMult :: (GMatrix a, GMatrix b, GMatrix c) => a -> b -> c
 matrixCompMult = fun2 "matrixCompMult"
 
 -- | Avoid evaluating the expression of the argument more than one time.
@@ -350,226 +362,225 @@ matrixCompMult = fun2 "matrixCompMult"
 store :: ShaderType a => a -> a
 store x = fromExpr . Action $ Store (typeName x) (toExpr x)
 
-true :: Bool
-true = Bool $ Literal "true"
+true :: GBool
+true = GBool $ Literal "true"
 
-false :: Bool
-false = Bool $ Literal "false"
+false :: GBool
+false = GBool $ Literal "false"
 
 -- | Rebound if. You don't need to use this function, with -XRebindableSyntax.
-ifThenElse :: ShaderType a => Bool -> a -> a -> a
+ifThenElse :: ShaderType a => GBool -> a -> a -> a
 ifThenElse b t f = fromExpr . Action $ If (toExpr b) (typeName t)
                                           (toExpr t) (toExpr f)
 
 loop :: ShaderType a 
-     => Int -- ^ Maximum number of iterations (should be as low as possible, must be an integer literal)
+     => Int -- ^ Maximum number of iterations (should be as low as possible)
      -> a -- ^ Initial value
-     -> (Int -> a -> (a, Bool)) -- ^ Iteration -> Old value -> (Next, Stop)
+     -> (GInt -> a -> (a, GBool)) -- ^ Iteration -> Old value -> (Next, Stop)
      -> a
-loop (Int (Literal iters)) iv f =
+loop iters iv f =
         fromExpr . Action $
-                For (Prelude.read iters :: Prelude.Int)
+                For iters
                     (typeName iv)
                     (toExpr iv)
                     (\ie ve -> let (next, stop) = f (fromExpr ie) (fromExpr ve)
                                in (toExpr next, toExpr stop))
-loop _ _ _ = error "loop: iteration number is not a literal."
 
-texture2D :: Sampler2D -> Vec2 -> Vec4
+texture2D :: GSampler2D -> GVec2 -> GVec4
 texture2D = fun2 "texture2D"
 
-texture2DBias :: Sampler2D -> Vec2 -> Float -> Vec4
+texture2DBias :: GSampler2D -> GVec2 -> GFloat -> GVec4
 texture2DBias = fun3 "texture2DBias"
 
-texture2DProj :: Sampler2D -> Vec3 -> Vec4
+texture2DProj :: GSampler2D -> GVec3 -> GVec4
 texture2DProj = fun2 "texture2DProj"
 
-texture2DProjBias :: Sampler2D -> Vec3 -> Float -> Vec4
+texture2DProjBias :: GSampler2D -> GVec3 -> GFloat -> GVec4
 texture2DProjBias = fun3 "texture2DProj"
 
-texture2DProj4 :: Sampler2D -> Vec4 -> Vec4
+texture2DProj4 :: GSampler2D -> GVec4 -> GVec4
 texture2DProj4 = fun2 "texture2DProj"
 
-texture2DProjBias4 :: Sampler2D -> Vec4 -> Float -> Vec4
+texture2DProjBias4 :: GSampler2D -> GVec4 -> GFloat -> GVec4
 texture2DProjBias4 = fun3 "texture2DProj"
 
-texture2DLod :: Sampler2D -> Vec2 -> Float -> Vec4
+texture2DLod :: GSampler2D -> GVec2 -> GFloat -> GVec4
 texture2DLod = fun3 "texture2DLod"
 
-texture2DProjLod :: Sampler2D -> Vec3 -> Float -> Vec4
+texture2DProjLod :: GSampler2D -> GVec3 -> GFloat -> GVec4
 texture2DProjLod = fun3 "texture2DProjLod"
 
-texture2DProjLod4 :: Sampler2D -> Vec4 -> Float -> Vec4
+texture2DProjLod4 :: GSampler2D -> GVec4 -> GFloat -> GVec4
 texture2DProjLod4 = fun3 "texture3DProjLod"
 
-textureCube :: SamplerCube -> Vec3 -> Vec4
+textureCube :: GSamplerCube -> GVec3 -> GVec4
 textureCube = fun2 "textureCube"
 
-textureCubeBias :: SamplerCube -> Vec3 -> Float -> Vec4
+textureCubeBias :: GSamplerCube -> GVec3 -> GFloat -> GVec4
 textureCubeBias = fun3 "textureCube"
 
-textureCubeLod :: SamplerCube -> Vec3 -> Float -> Vec4
+textureCubeLod :: GSamplerCube -> GVec3 -> GFloat -> GVec4
 textureCubeLod = fun3 "textureCubeLod"
 
 -- | The position of the vertex (only works in the vertex shader).
-position :: Vec4
+position :: GVec4
 position = fromExpr $ Read "gl_Position"
 
 -- | The data of the fragment (only works in the fragment shader).
-fragData :: Array 16 Vec4
+fragData :: GArray 16 GVec4
 fragData = fromExpr $ Read "gl_FragData"
 
 -- | The coordinates of the fragment (only works in the fragment shader).
-fragCoord :: Vec4
+fragCoord :: GVec4
 fragCoord = fromExpr $ Read "gl_FragCoord"
 
 -- | If the fragment belongs to a front-facing primitive (only works in the
 -- fragment shader).
-fragFrontFacing :: Bool
+fragFrontFacing :: GBool
 fragFrontFacing = fromExpr $ Read "gl_FrontFacing"
 
-class ShaderType t => ToInt t
-instance ToInt Float
-instance ToInt Bool
-instance ToInt Int
+class ShaderType t => ToGInt t
+instance ToGInt GFloat
+instance ToGInt GBool
+instance ToGInt GInt
 
-int :: ToInt t => t -> Int
+int :: ToGInt t => t -> GInt
 int = fun1 "int"
 
-class ShaderType t => ToBool t
-instance ToBool Float
-instance ToBool Bool
-instance ToBool Int
+class ShaderType t => ToGBool t
+instance ToGBool GFloat
+instance ToGBool GBool
+instance ToGBool GInt
 
-bool :: ToBool t => t -> Bool
+bool :: ToGBool t => t -> GBool
 bool = fun1 "bool"
 
-class ShaderType t => ToFloat t
-instance ToFloat Float
-instance ToFloat Bool
-instance ToFloat Int
+class ShaderType t => ToGFloat t
+instance ToGFloat GFloat
+instance ToGFloat GBool
+instance ToGFloat GInt
 
-float :: ToFloat t => t -> Float
+float :: ToGFloat t => t -> GFloat
 float = fun1 "float"
 
-class ToVec2 t where
-        vec2 :: t -> Vec2
+class ToGVec2 t where
+        vec2 :: t -> GVec2
 
-instance {-# OVERLAPPING #-} ToVec2 Float where
+instance {-# OVERLAPPING #-} ToGVec2 GFloat where
         vec2 = fun1 "vec2"
 
 instance {-# OVERLAPPABLE #-}
-         (Components Vec2 <= n, ToCompList t n) => ToVec2 t where
+         (Components GVec2 <= n, ToCompList t n) => ToGVec2 t where
         vec2 = funCompList "vec2"
 
-class ToVec3 t where
-        vec3 :: t -> Vec3
+class ToGVec3 t where
+        vec3 :: t -> GVec3
 
-instance {-# OVERLAPPING #-} ToVec3 Float where
+instance {-# OVERLAPPING #-} ToGVec3 GFloat where
         vec3 = fun1 "vec3"
 
 instance {-# OVERLAPPABLE #-}
-         (Components Vec3 <= n, ToCompList t n) => ToVec3 t where
+         (Components GVec3 <= n, ToCompList t n) => ToGVec3 t where
         vec3 = funCompList "vec3"
 
-class ToVec4 t where
-        vec4 :: t -> Vec4
+class ToGVec4 t where
+        vec4 :: t -> GVec4
 
-instance {-# OVERLAPPING #-} ToVec4 Float where
+instance {-# OVERLAPPING #-} ToGVec4 GFloat where
         vec4 = fun1 "vec4"
 
 instance {-# OVERLAPPABLE #-}
-         (Components Vec4 <= n, ToCompList t n) => ToVec4 t where
+         (Components GVec4 <= n, ToCompList t n) => ToGVec4 t where
         vec4 = funCompList "vec4"
 
-class ToIVec2 t where
-        ivec2 :: t -> IVec2
+class ToGIVec2 t where
+        ivec2 :: t -> GIVec2
 
-instance {-# OVERLAPPING #-} ToIVec2 Float where
+instance {-# OVERLAPPING #-} ToGIVec2 GFloat where
         ivec2 = fun1 "ivec2"
 
 instance {-# OVERLAPPABLE #-}
-         (Components IVec2 <= n, ToCompList t n) => ToIVec2 t where
+         (Components GIVec2 <= n, ToCompList t n) => ToGIVec2 t where
         ivec2 = funCompList "ivec2"
 
-class ToIVec3 t where
-        ivec3 :: t -> IVec3
+class ToGIVec3 t where
+        ivec3 :: t -> GIVec3
 
-instance {-# OVERLAPPING #-} ToIVec3 Float where
+instance {-# OVERLAPPING #-} ToGIVec3 GFloat where
         ivec3 = fun1 "ivec3"
 
 instance {-# OVERLAPPABLE #-}
-         (Components IVec3 <= n, ToCompList t n) => ToIVec3 t where
+         (Components GIVec3 <= n, ToCompList t n) => ToGIVec3 t where
         ivec3 = funCompList "ivec3"
 
-class ToIVec4 t where
-        ivec4 :: t -> IVec4
+class ToGIVec4 t where
+        ivec4 :: t -> GIVec4
 
-instance {-# OVERLAPPING #-} ToIVec4 Float where
+instance {-# OVERLAPPING #-} ToGIVec4 GFloat where
         ivec4 = fun1 "ivec4"
 
 instance {-# OVERLAPPABLE #-}
-         (Components IVec4 <= n, ToCompList t n) => ToIVec4 t where
+         (Components GIVec4 <= n, ToCompList t n) => ToGIVec4 t where
         ivec4 = funCompList "ivec4"
 
-class ToBVec2 t where
-        bvec2 :: t -> BVec2
+class ToGBVec2 t where
+        bvec2 :: t -> GBVec2
 
-instance {-# OVERLAPPING #-} ToBVec2 Float where
+instance {-# OVERLAPPING #-} ToGBVec2 GFloat where
         bvec2 = fun1 "bvec2"
 
 instance {-# OVERLAPPABLE #-}
-         (Components BVec2 <= n, ToCompList t n) => ToBVec2 t where
+         (Components GBVec2 <= n, ToCompList t n) => ToGBVec2 t where
         bvec2 = funCompList "bvec2"
 
-class ToBVec3 t where
-        bvec3 :: t -> BVec3
+class ToGBVec3 t where
+        bvec3 :: t -> GBVec3
 
-instance {-# OVERLAPPING #-} ToBVec3 Float where
+instance {-# OVERLAPPING #-} ToGBVec3 GFloat where
         bvec3 = fun1 "bvec3"
 
 instance {-# OVERLAPPABLE #-}
-         (Components BVec3 <= n, ToCompList t n) => ToBVec3 t where
+         (Components GBVec3 <= n, ToCompList t n) => ToGBVec3 t where
         bvec3 = funCompList "bvec3"
 
-class ToBVec4 t where
-        bvec4 :: t -> BVec4
+class ToGBVec4 t where
+        bvec4 :: t -> GBVec4
 
-instance {-# OVERLAPPING #-} ToBVec4 Float where
+instance {-# OVERLAPPING #-} ToGBVec4 GFloat where
         bvec4 = fun1 "bvec4"
 
 instance {-# OVERLAPPABLE #-}
-         (Components BVec4 <= n, ToCompList t n) => ToBVec4 t where
+         (Components GBVec4 <= n, ToCompList t n) => ToGBVec4 t where
         bvec4 = funCompList "bvec4"
 
-class ToMat2 t where
-        mat2 :: t -> Mat2
+class ToGMat2 t where
+        mat2 :: t -> GMat2
 
-instance {-# OVERLAPPING #-} ToMat2 Float where
+instance {-# OVERLAPPING #-} ToGMat2 GFloat where
         mat2 = fun1 "mat2"
 
 instance {-# OVERLAPPABLE #-}
-         (Components Mat2 <= n, ToCompList t n) => ToMat2 t where
+         (Components GMat2 <= n, ToCompList t n) => ToGMat2 t where
         mat2 = funCompList "mat2"
 
-class ToMat3 t where
-        mat3 :: t -> Mat3
+class ToGMat3 t where
+        mat3 :: t -> GMat3
 
-instance {-# OVERLAPPING #-} ToMat3 Float where
+instance {-# OVERLAPPING #-} ToGMat3 GFloat where
         mat3 = fun1 "mat3"
 
 instance {-# OVERLAPPABLE #-}
-         (Components Mat3 <= n, ToCompList t n) => ToMat3 t where
+         (Components GMat3 <= n, ToCompList t n) => ToGMat3 t where
         mat3 = funCompList "mat3"
 
-class ToMat4 t where
-        mat4 :: t -> Mat4
+class ToGMat4 t where
+        mat4 :: t -> GMat4
 
-instance {-# OVERLAPPING #-} ToMat4 Float where
+instance {-# OVERLAPPING #-} ToGMat4 GFloat where
         mat4 = fun1 "mat4"
 
 instance {-# OVERLAPPABLE #-}
-         (Components Mat4 <= n, ToCompList t n) => ToMat4 t where
+         (Components GMat4 <= n, ToCompList t n) => ToGMat4 t where
         mat4 = funCompList "mat4"
 
 -- | Useful type for constructing vectors and matrices from scalars, vectors and
@@ -594,33 +605,33 @@ instance {-# OVERLAPPABLE #-}
 -- Examples:
 --
 -- > vec2 0
--- > mat2 $ Vec2 2 4 # Vec2 1 3
+-- > mat2 $ GVec2 2 4 # GVec2 1 3
 -- > vec4 $ mat2 (0 # 1 # vec2 2) # 9  -- 9 is discarded
--- > mat4 $ 5 # vec2 5 # Vec3 1 2 3 # Mat2 (vec2 0) (Vec2 1 2) # mat3 0
+-- > mat4 $ 5 # vec2 5 # GVec3 1 2 3 # GMat2 (vec2 0) (GVec2 1 2) # mat3 0
 -- > vec4 $ 1 # vec2 0 -- Not enough components, fails with "Couldn't match type
 -- >                   -- ‘'Prelude.False’ with 'Prelude.True’" (because
--- >                   -- Components Vec4 <=? 3 ~ False).
+-- >                   -- Components GVec4 <=? 3 ~ False).
 (#) :: (ToCompList x xn, ToCompList y yn) => x -> y -> CompList (xn + yn)
 x # y = CLAppend (toCompList x) (toCompList y)
 
 infixr 5 #
 
 type family Components (t :: *) :: Nat where
-        Components Int = 1
-        Components Float = 1
-        Components Bool = 1
-        Components Vec2 = 2
-        Components IVec2 = 2
-        Components BVec2 = 2
-        Components Vec3 = 3
-        Components IVec3 = 3
-        Components BVec3 = 3
-        Components Vec4 = 4
-        Components IVec4 = 4
-        Components BVec4 = 4
-        Components Mat2 = 4
-        Components Mat3 = 9
-        Components Mat4 = 16
+        Components GInt = 1
+        Components GFloat = 1
+        Components GBool = 1
+        Components GVec2 = 2
+        Components GIVec2 = 2
+        Components GBVec2 = 2
+        Components GVec3 = 3
+        Components GIVec3 = 3
+        Components GBVec3 = 3
+        Components GVec4 = 4
+        Components GIVec4 = 4
+        Components GBVec4 = 4
+        Components GMat2 = 4
+        Components GMat3 = 9
+        Components GMat4 = 16
         Components x = 0
 
 op1 :: (ShaderType a, ShaderType b) => String -> a -> b

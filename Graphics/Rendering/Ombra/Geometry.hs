@@ -27,7 +27,6 @@ import Control.Monad.ST
 import Data.Foldable (foldrM)
 import Data.Hashable
 import Data.Proxy
-import Data.Vect.Float
 import Data.Word (Word16)
 import qualified Data.HashTable.ST.Basic as H
 import Graphics.Rendering.Ombra.Backend (GLES)
@@ -38,6 +37,7 @@ import Graphics.Rendering.Ombra.Shader.Default2D (Position2)
 import Graphics.Rendering.Ombra.Shader.Default3D (Position3, Normal3)
 import qualified Graphics.Rendering.Ombra.Shader.Default2D as D2
 import qualified Graphics.Rendering.Ombra.Shader.Default3D as D3
+import Graphics.Rendering.Ombra.Vector
 
 data Triangle a = Triangle a a a
 

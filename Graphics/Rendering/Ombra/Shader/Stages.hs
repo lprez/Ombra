@@ -23,35 +23,35 @@ type VOShaderVars o = (ShaderVars o, ShaderVars (VertexShaderOutput ': o))
 type FragmentShader g i = Shader g i (FragmentShaderOutput ': '[])
 
 -- | The position of the vertex.
-data VertexShaderOutput = Vertex Vec4 deriving Generic
+data VertexShaderOutput = Vertex GVec4 deriving Generic
 
 -- | The RGBA color of the fragment (1.0 = #FF), or the data of the draw
 -- buffers.
 data FragmentShaderOutput = Fragment0
-                          | Fragment Vec4
-                          | Fragment2 Vec4 Vec4
-                          | Fragment3 Vec4 Vec4 Vec4
-                          | Fragment4 Vec4 Vec4 Vec4 Vec4
-                          | Fragment5 Vec4 Vec4 Vec4 Vec4 Vec4
-                          | Fragment6 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                          | Fragment7 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                          | Fragment8 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                          | Fragment9 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                                      Vec4
-                          | Fragment10 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                                       Vec4 Vec4
-                          | Fragment11 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                                       Vec4 Vec4 Vec4
-                          | Fragment12 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                                       Vec4 Vec4 Vec4 Vec4
-                          | Fragment13 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                                       Vec4 Vec4 Vec4 Vec4 Vec4
-                          | Fragment14 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                                       Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                          | Fragment15 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                                       Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                          | Fragment16 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
-                                       Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4 Vec4
+                          | Fragment GVec4
+                          | Fragment2 GVec4 GVec4
+                          | Fragment3 GVec4 GVec4 GVec4
+                          | Fragment4 GVec4 GVec4 GVec4 GVec4
+                          | Fragment5 GVec4 GVec4 GVec4 GVec4 GVec4
+                          | Fragment6 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                          | Fragment7 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                          | Fragment8 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                          | Fragment9 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                                      GVec4
+                          | Fragment10 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                                       GVec4 GVec4
+                          | Fragment11 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                                       GVec4 GVec4 GVec4
+                          | Fragment12 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                                       GVec4 GVec4 GVec4 GVec4
+                          | Fragment13 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                                       GVec4 GVec4 GVec4 GVec4 GVec4
+                          | Fragment14 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                                       GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                          | Fragment15 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                                       GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                          | Fragment16 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
+                                       GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4 GVec4
 
 instance {-# OVERLAPPING #-} ShaderVar FragmentShaderOutput where
         varPreName _ = "FragmentShaderOutput"

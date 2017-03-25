@@ -37,7 +37,6 @@ module Graphics.Rendering.Ombra.D2 (
         View2(..),
 ) where
 
-import Data.Vect.Float
 import Graphics.Rendering.Ombra.Backend hiding (Texture, Program)
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Draw
@@ -49,6 +48,7 @@ import Graphics.Rendering.Ombra.Shader.Default2D (Image(..), Depth(..), Transfor
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Texture
 import Graphics.Rendering.Ombra.Transformation
+import Graphics.Rendering.Ombra.Vector
 
 type Uniforms2D = '[Image, Depth, Transform2]
 

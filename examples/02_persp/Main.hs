@@ -2,6 +2,7 @@ module Main where
 
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
+import Graphics.Rendering.Ombra.Vector
 import Common
 
 -- This is similiar to the scene of the previous example, but with perspective

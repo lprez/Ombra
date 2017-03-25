@@ -45,7 +45,6 @@ module Graphics.Rendering.Ombra.D3 (
         View3(..),
 ) where
 
-import Data.Vect.Float
 import Graphics.Rendering.Ombra.Backend hiding (Texture, Program)
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
@@ -53,6 +52,7 @@ import Graphics.Rendering.Ombra.Draw
 import Graphics.Rendering.Ombra.Layer
 import Graphics.Rendering.Ombra.Object
 import Graphics.Rendering.Ombra.Shapes
+import Graphics.Rendering.Ombra.Vector
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.Default3D (Texture2(..), Transform3(..), View3(..))
 import Graphics.Rendering.Ombra.Shader.Program hiding (program)

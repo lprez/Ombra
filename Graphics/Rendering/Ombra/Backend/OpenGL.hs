@@ -3,10 +3,10 @@
 module Graphics.Rendering.Ombra.Backend.OpenGL (makeContext) where
         
 import Data.Word
-import Data.Vect.Float
 import Foreign
 import Foreign.C.String
 import Graphics.Rendering.Ombra.Backend
+import Graphics.Rendering.Ombra.Vector
 import qualified Graphics.GL.Standard20 as GL
 import qualified Graphics.GL.Ext.ARB.FramebufferObject as GL
 import qualified Graphics.GL.Ext.ARB.TextureFloat as GL
@@ -100,7 +100,8 @@ instance GLES where
         noUInt8Array = fmap ((,) 0) $ newForeignPtr_ nullPtr
         noFloat32Array = fmap ((,) 0) $ newForeignPtr_ nullPtr
 
-        encodeMat2 (Mat2 (Vec2 a1 a2) (Vec2 b1 b2)) = mkArray [ a1, a2, b1, b2 ]
+        encodeMat2 (Mat2 (Vec2 a1 a2) (Vec2 b1 b2)) =
+                mkArray [ a1, a2, b1, b2 ]
 
         encodeMat3 (Mat3 (Vec3 a1 a2 a3)
                          (Vec3 b1 b2 b3)

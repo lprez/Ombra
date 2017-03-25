@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs, DataKinds, FlexibleContexts, TypeSynonymInstances,
              FlexibleInstances, MultiParamTypeClasses, KindSignatures,
-             GeneralizedNewtypeDeriving #-}
+             GeneralizedNewtypeDeriving, PolyKinds #-}
 
 module Graphics.Rendering.Ombra.Draw.Internal (
         Draw,
@@ -26,6 +26,7 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         drawGet
 ) where
 
+import Data.Proxy
 import qualified Graphics.Rendering.Ombra.Blend.Internal as Blend
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Geometry.Internal
@@ -258,8 +259,9 @@ stateReset getOld set new act = do old <- getOld <$> Draw get
                                    return b
 
 withGlobal :: GLES => Global g -> Draw () -> Draw ()
-withGlobal (Single g c) a = uniform single (g undefined) c >> a
-withGlobal (Mirror g c) a = uniform mirror (varBuild (const undefined) g) c >> a
+withGlobal (Single g c) a = uniform (Proxy :: Proxy 'S)  (g undefined) c >> a
+withGlobal (Mirror g c) a = uniform (Proxy :: Proxy 'M)
+                                    (varBuild (const undefined) g) c >> a
 withGlobal (WithTexture t gf) a = withActiveTexture t $ flip withGlobal a . gf
 withGlobal (WithTextureSize t gf) a = textureSize t >>= flip withGlobal a . gf
 withGlobal (WithFramebufferSize gf) a = viewportSize <$> drawGet >>=
