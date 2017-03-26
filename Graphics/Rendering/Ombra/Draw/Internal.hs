@@ -45,9 +45,9 @@ import Graphics.Rendering.Ombra.Shader.GLSL
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Shader.ShaderVar
 import qualified Graphics.Rendering.Ombra.Stencil.Internal as Stencil
+import Graphics.Rendering.Ombra.Vector
 
 import Data.Hashable (Hashable)
-import Data.Vect.Float
 import Data.Word (Word8)
 import Control.Monad (when)
 import Control.Monad.IO.Class

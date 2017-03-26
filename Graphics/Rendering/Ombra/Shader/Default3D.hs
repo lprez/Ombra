@@ -25,7 +25,7 @@ vertexShader :: VertexShader '[ Transform3, View3 ]
 vertexShader (Transform3 modelGMatrix :- View3 viewGMatrix :- N)
              (Position3 (GVec3 x y z) :- uv :- Normal3 (GVec3 nx ny nz) :- N) =
              let worldPos@(GVec4 wx wy wz _) =
-                     modelGMatrix .* GVec4 x y z 1.0
+                     store $ modelGMatrix .* GVec4 x y z 1.0
                  viewPos = viewGMatrix .* worldPos
                  (GVec4 wnx wny wnz _) = modelGMatrix .* GVec4 nx ny nz 0
              in Vertex viewPos :- Position3 (GVec3 wx wy wz) :-
@@ -33,4 +33,4 @@ vertexShader (Transform3 modelGMatrix :- View3 viewGMatrix :- N)
 
 fragmentShader :: FragmentShader '[ Texture2 ] [ Position3, UV, Normal3 ]
 fragmentShader (Texture2 sampler :- N) (_ :- UV (GVec2 s t) :- _ :- N) =
-                Fragment (texture2D sampler $ GVec2 s (1 - t)) :- N
+        Fragment (texture2D sampler $ GVec2 s (1 - t)) :- N

@@ -21,7 +21,6 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
 import qualified Data.Hashable as H
 import Data.Typeable
-import Data.Vect.Float hiding (Normal3)
 import Data.Word (Word16)
 import Unsafe.Coerce
 
@@ -33,6 +32,7 @@ import Graphics.Rendering.Ombra.Shader.Default3D (Position3, Normal3)
 import qualified Graphics.Rendering.Ombra.Shader.Default2D as D2
 import qualified Graphics.Rendering.Ombra.Shader.Default3D as D3
 import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType(size))
+import Graphics.Rendering.Ombra.Vector
 
 -- | A heterogeneous list of attributes.
 data AttrList (is :: [*]) where
@@ -185,12 +185,3 @@ loadBuffer ty bufData =
            bufferData ty bufData gl_STATIC_DRAW
            bindBuffer ty noBuffer
            return buffer
-
-instance H.Hashable Vec2 where
-        hashWithSalt s (Vec2 x y) = H.hashWithSalt s (x, y)
-
-instance H.Hashable Vec3 where
-        hashWithSalt s (Vec3 x y z) = H.hashWithSalt s (x, y, z)
-
-instance H.Hashable Vec4 where
-        hashWithSalt s (Vec4 x y z w) = H.hashWithSalt s (x, y, z, w)

@@ -2,6 +2,7 @@ module Main where
 
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
+import Graphics.Rendering.Ombra.Vector
 import ProgramCommon
 import Program3D
 import qualified Graphics.Rendering.Ombra.D2 as D2

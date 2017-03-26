@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, RebindableSyntax, DeriveGeneric, GADTs #-}
+{-# LANGUAGE DataKinds, DeriveGeneric, GADTs #-}
 
 -- A program consists of a vertex shader and a fragment shader.
 module Program (
@@ -35,16 +35,16 @@ fragmentShader (Texture2 sampler :- N)  -- The texture of the object to draw.
                (Position3 _ :-   -- The world coordinates of the pixel. We
                                  -- don't need them, but we add it to match the
                                  -- output of the standard vertex shader.
-                UV (Vec2 s t) :- -- The UV coordinates of the current fragment,
-                                 -- we use them to get the right pixel from the
-                                 -- texture.
+                UV (GVec2 s t) :- -- The UV coordinates of the current fragment,
+                                  -- we use them to get the right pixel from the
+                                  -- texture.
                 _)
-                = let (Vec4 x y z _) = fragCoord -- The coordinates of the
-                                                 -- current pixel, we use them
-                                                 -- to vary the color of the
-                                                 -- effect.
+                = let (GVec4 x y z _) = fragCoord -- The coordinates of the
+                                                  -- current pixel, we use them
+                                                  -- to vary the color of the
+                                                  -- effect.
                       effectOpacity = abs $ sin (s * 6 + t * 2 + z * 10) / 2
                                           + cos (t * 7 - s * 5 + z * 10)
-                      effectColor = normalize $ Vec4 x y (x - y) 1
-                      texColor = texture2D sampler $ Vec2 s (1 - t)
+                      effectColor = normalized $ GVec4 x y (x - y) 1
+                      texColor = texture2D sampler $ GVec2 s (1 - t)
                   in Fragment (mix texColor effectColor effectOpacity) :- N

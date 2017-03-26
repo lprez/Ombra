@@ -27,7 +27,7 @@ import GHCJS.Types
 import JavaScript.TypedArray
 import JavaScript.TypedArray.Internal
 import JavaScript.TypedArray.DataView
-import System.Mem (performMinorGC)
+import System.Mem (performGC)
 
 foreign import javascript unsafe "document.querySelector($1)"
         query :: JSString -> IO JSVal
@@ -82,7 +82,7 @@ play getLayer layerRetf =
                                 do clearBuffers [ColorBuffer, DepthBuffer]
                                    drawLayer layer
                            layerRetf layerRet
-                           liftIO $ performMinorGC
+                           liftIO $ performGC
 
            return ()
         where loop a = do t <- liftIO waitFrame

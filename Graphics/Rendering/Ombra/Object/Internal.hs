@@ -5,7 +5,6 @@ module Graphics.Rendering.Ombra.Object.Internal where
 
 import Data.Proxy (Proxy)
 import Data.Monoid
-import Data.Vect.Float
 import qualified Graphics.Rendering.Ombra.Blend as Blend
 import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 import Graphics.Rendering.Ombra.Geometry

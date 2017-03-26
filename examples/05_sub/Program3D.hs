@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, RebindableSyntax, DeriveGeneric, GADTs #-}
+{-# LANGUAGE DataKinds, DeriveGeneric, GADTs #-}
 
 -- A program consists of a vertex shader and a fragment shader.
 module Program3D (
@@ -20,9 +20,9 @@ fragmentShader :: FragmentShader '[ Time, NoiseTexture, Texture2 ]
 fragmentShader (Time time :-
                 NoiseTexture noiseSampler :-
                 Texture2 sampler :- N)
-               (_ :- UV (Vec2 s t) :- _)
-                = let Vec4 value _ _ _ = texture2D noiseSampler $ Vec2 s t
+               (_ :- UV (GVec2 s t) :- _)
+                = let GVec4 value _ _ _ = texture2D noiseSampler $ GVec2 s t
                       intensity = fract $ value + time
-                      color = Vec4 0.5 0.6 0 1
-                      texColor = texture2D sampler $ Vec2 s (1 - t)
+                      color = GVec4 0.5 0.6 0 1
+                      texColor = texture2D sampler $ GVec2 s (1 - t)
                   in Fragment (mix texColor color intensity) :- N

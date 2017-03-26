@@ -2,9 +2,9 @@
 
 module Main where
 
-import Data.Vect.Float
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
+import Graphics.Rendering.Ombra.Vector
 
 import Common
 import Program
@@ -47,13 +47,13 @@ splitCube n = mkGeometry3DInd (concat vertices)
                               (concat floors ++ concat walls)
 
         where -- We don't need normals and UV coordinates in this example so we
-              -- just use the 'zero' vector. Alternatively we could have used
+              -- just use the 'zeroV' vector. Alternatively we could have used
               -- our own Geometry type without those attributes. It would be
               -- more efficient but also more complex.
-              vertices = [ [ (Vec3 (-1) y (-1), zero, zero)
-                           , (Vec3 1    y (-1), zero, zero)
-                           , (Vec3 (-1) y 1, zero, zero)
-                           , (Vec3 1    y 1, zero, zero)
+              vertices = [ [ (Vec3 (-1) y (-1), zeroV, zeroV)
+                           , (Vec3 1    y (-1), zeroV, zeroV)
+                           , (Vec3 (-1) y 1, zeroV, zeroV)
+                           , (Vec3 1    y 1, zeroV, zeroV)
                            ]
                          | y <- [-1, -1 + 2 / (fromIntegral n - 1) .. 1] ]
                         

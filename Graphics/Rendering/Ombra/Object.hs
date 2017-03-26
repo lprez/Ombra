@@ -45,7 +45,6 @@ module Graphics.Rendering.Ombra.Object (
 
 import Data.Typeable
 import Data.Type.Equality
-import Data.Vect.Float
 import Data.Word (Word8)
 import Graphics.Rendering.Ombra.Backend (GLES)
 import qualified Graphics.Rendering.Ombra.Blend as Blend

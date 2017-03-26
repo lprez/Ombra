@@ -24,8 +24,8 @@ An example of vertex shader:
                      (Transform2 trans :- View2 view :- Depth z :- N)
         -- Set of attributes:
                      (Position2 (GVec2 x y) :- uv@(UV _) :- N) =
-        -- GMatrix and vector multiplication:
-                        let GVec3 x' y' _ = view * trans * GVec3 x y 1
+        -- Matrix and vector multiplication:
+                        let GVec3 x' y' _ = view .*. trans .* GVec3 x y 1
         -- Set of outputs:
                         in Vertex (GVec4 x' y' z 1) -- Vertex position.
                            :- uv :- N
@@ -382,6 +382,8 @@ instance Matrix Shader.GMat2 where
         (.*.) = (Shader.*)
         (.*) = (Shader.*)
         (*.) = (Shader.*)
+        transpose (Shader.GMat2 (Shader.GVec2 a b) (Shader.GVec2 c d)) =
+                Shader.GMat2 (Shader.GVec2 a c) (Shader.GVec2 b d)
 
 instance VectorSpace Shader.GMat3 where
         type Scalar Shader.GMat3 = Shader.GFloat
@@ -393,6 +395,12 @@ instance Matrix Shader.GMat3 where
         (.*.) = (Shader.*)
         (.*) = (Shader.*)
         (*.) = (Shader.*)
+        transpose (Shader.GMat3 (Shader.GVec3 a b c)
+                                (Shader.GVec3 d e f)
+                                (Shader.GVec3 g h i)) =
+                        Shader.GMat3 (Shader.GVec3 a d g)
+                                     (Shader.GVec3 b e h)
+                                     (Shader.GVec3 c f i)
 
 instance AdditiveGroup Shader.GMat4 where
         zeroV = Shader.zero
@@ -410,3 +418,11 @@ instance Matrix Shader.GMat4 where
         (.*.) = (Shader.*)
         (.*) = (Shader.*)
         (*.) = (Shader.*)
+        transpose (Shader.GMat4 (Shader.GVec4 a b c d)
+                                (Shader.GVec4 e f g h)
+                                (Shader.GVec4 i j k l)
+                                (Shader.GVec4 m n o p)) =
+                        Shader.GMat4 (Shader.GVec4 a e i m)
+                                     (Shader.GVec4 b f j n)
+                                     (Shader.GVec4 c g k o)
+                                     (Shader.GVec4 d h l p)

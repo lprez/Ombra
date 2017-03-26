@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, RebindableSyntax, DeriveGeneric, GADTs #-}
+{-# LANGUAGE DataKinds, DeriveGeneric, GADTs #-}
 
 module ProgramDistort (
         module Graphics.Rendering.Ombra.Shader.Default2D,
@@ -20,17 +20,17 @@ type Uniforms = '[View2, Time, NoiseTexture, Image, Depth, Transform2]
 
 fragmentShader :: FragmentShader '[Time, NoiseTexture, Image] '[UV]
 fragmentShader (Time time :- NoiseTexture noise :- Image sampler :- N)
-               (UV (Vec2 s t) :- N) =
+               (UV (GVec2 s t) :- N) =
                 let -- You should use the 'store' function when you use the
                     -- same variable more than one time, to avoid recalculating
                     -- it at every occurrence.
-                    Vec4 value _ _ _ = store $
+                    GVec4 value _ _ _ = store $
                                         texture2D noise
-                                                  (Vec2 s (fract $ t + time))
+                                                  (GVec2 s (fract $ t + time))
 
                     -- Functions in the shaders are analogous to macros.
-                    dist :: Float -> Float -> Float
+                    dist :: GFloat -> GFloat -> GFloat
                     dist x fac = fract $ x + value / fac
 
-                    texCol = texture2D sampler $ Vec2 (dist s 10) (dist t 20)
+                    texCol = texture2D sampler $ GVec2 (dist s 10) (dist t 20)
                 in Fragment texCol :- N

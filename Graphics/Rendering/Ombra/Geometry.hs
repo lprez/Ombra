@@ -106,9 +106,10 @@ mkGeometryInd (vs :: [Vertex is]) ts =
         
 addAttrList :: Vertex is -> AttrList is -> AttrList is
 addAttrList (Attr _ x) (AttrListCons (AttrData xs h) rest) =
-        AttrListCons (AttrData (x : xs) $ hashWithSalt (hash x) h) rest
+        --- XXX: ???
+        AttrListCons (AttrData (x : xs) $ hashWithSalt (hash x + h) h) rest
 addAttrList (Attr _ x :~ v') (AttrListCons (AttrData xs h) rest) =
-        AttrListCons (AttrData (x : xs) $ hashWithSalt (hash x) h) $
+        AttrListCons (AttrData (x : xs) $ hashWithSalt (hash x + h) h) $
                 addAttrList v' rest
 
 -- | Create a 3D 'Geometry'.

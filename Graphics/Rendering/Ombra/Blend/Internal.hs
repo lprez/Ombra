@@ -1,8 +1,7 @@
 module Graphics.Rendering.Ombra.Blend.Internal where
 
-import Data.Vect.Float (Vec4(..))
-import Data.Vect.Float.Instances ()
 import Graphics.Rendering.Ombra.Internal.GL
+import Graphics.Rendering.Ombra.Vector
 
 -- | Blend mode
 data Mode = Mode {

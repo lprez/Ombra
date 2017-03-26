@@ -9,11 +9,11 @@ module Graphics.Rendering.Ombra.Texture (
 ) where
 
 import Data.Hashable
-import Data.Vect.Float
 import Graphics.Rendering.Ombra.Backend (GLES)
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Internal.GL hiding (Texture)
 import Graphics.Rendering.Ombra.Texture.Internal
+import Graphics.Rendering.Ombra.Vector
 
 -- | Creates a 'Texture' from a list of pixels.
 mkTexture :: GLES

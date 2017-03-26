@@ -23,19 +23,35 @@ import Foreign.Storable
 import Foreign.Ptr (castPtr)
 import GHC.Generics
 
-data Vec2 = Vec2 !Float !Float deriving Generic
-data Vec3 = Vec3 !Float !Float !Float deriving Generic
-data Vec4 = Vec4 !Float !Float !Float !Float deriving Generic
+data Vec2 = Vec2 {-# UNPACK #-} !Float
+                 {-# UNPACK #-} !Float
+                 deriving (Generic, Show, Eq)
+data Vec3 = Vec3 {-# UNPACK #-} !Float
+                 {-# UNPACK #-} !Float
+                 {-# UNPACK #-} !Float
+                 deriving (Generic, Show, Eq)
+data Vec4 = Vec4 {-# UNPACK #-} !Float
+                 {-# UNPACK #-} !Float
+                 {-# UNPACK #-} !Float
+                 {-# UNPACK #-} !Float
+                 deriving (Generic, Show, Eq)
 
-data Mat2 = Mat2 !Vec2 !Vec2 deriving Generic
-data Mat3 = Mat3 !Vec3 !Vec3 !Vec3 deriving Generic
-data Mat4 = Mat4 !Vec4 !Vec4 !Vec4 !Vec4 deriving Generic
+data Mat2 = Mat2 !Vec2 !Vec2 deriving (Generic, Show, Eq)
+data Mat3 = Mat3 !Vec3 !Vec3 !Vec3 deriving (Generic, Show, Eq)
+data Mat4 = Mat4 !Vec4 !Vec4 !Vec4 !Vec4 deriving (Generic, Show, Eq)
 
-data IVec2 = IVec2 !Int32 !Int32 deriving Generic
-data IVec3 = IVec3 !Int32 !Int32 !Int32 deriving Generic
-data IVec4 = IVec4 !Int32 !Int32 !Int32 !Int32 deriving Generic
-
--- TODO: gvec expr
+data IVec2 = IVec2 {-# UNPACK #-} !Int32
+                   {-# UNPACK #-} !Int32
+                   deriving (Generic, Show, Eq)
+data IVec3 = IVec3 {-# UNPACK #-} !Int32
+                   {-# UNPACK #-} !Int32
+                   {-# UNPACK #-} !Int32
+                   deriving (Generic, Show, Eq)
+data IVec4 = IVec4 {-# UNPACK #-} !Int32
+                   {-# UNPACK #-} !Int32
+                   {-# UNPACK #-} !Int32
+                   {-# UNPACK #-} !Int32
+                   deriving (Generic, Show, Eq)
 
 infixl 7 .*.
 infixl 7 .*
@@ -50,11 +66,7 @@ class Matrix a where
         (*.) :: Row a -> a -> Row a
         v *. m = transpose m .* v
 
-instance Matrix Mat2
-instance Matrix Mat3
-
-
--- ? Num/Fractional/Floating instances?
+-- TODO: ? Num/Fractional/Floating instances?
 
 instance AdditiveGroup Vec2 where
         zeroV = Vec2 0 0
@@ -136,7 +148,88 @@ instance Storable Vec4 where
                                      pokeElemOff (castPtr ptr) 2 z
                                      pokeElemOff (castPtr ptr) 3 w
 
--- TODO: additivegroup, vectorspace, mat2, mat3
+instance AdditiveGroup Mat2 where
+        zeroV = Mat2 zeroV zeroV
+        (^+^) (Mat2 x1 y1) (Mat2 x2 y2) = Mat2 (x1 ^+^ x2) (y1 ^+^ y2)
+        (^-^) (Mat2 x1 y1) (Mat2 x2 y2) = Mat2 (x1 ^-^ x2) (y1 ^-^ y2)
+        negateV (Mat2 x y) = Mat2 (negateV x) (negateV y)
+
+instance VectorSpace Mat2 where
+        type Scalar Mat2 = Float
+        (*^) s (Mat2 x y) = Mat2 (s *^ x) (s *^ y)
+
+instance Matrix Mat2 where
+        type Row Mat2 = Vec2
+        idmtx = Mat2 (Vec2 1 0) (Vec2 0 1)
+        transpose (Mat2 (Vec2 a b) (Vec2 c d)) = Mat2 (Vec2 a c) (Vec2 b d)
+        (.*.) (Mat2 (Vec2 a11 a12) (Vec2 a21 a22))
+              (Mat2 (Vec2 b11 b12) (Vec2 b21 b22)) =
+                Mat2 (Vec2 (a11 * b11 + a12 * b21) (a11 * b12 + a12 * b22))
+                     (Vec2 (a21 * b11 + a22 * b21) (a21 * b12 + a22 * b22))
+
+        (.*) (Mat2 (Vec2 a b) (Vec2 c d)) (Vec2 x y) =
+                Vec2 (a * x + b * y) (c * x + d * y)
+
+
+instance AdditiveGroup Mat3 where
+        zeroV = Mat3 zeroV zeroV zeroV
+        (^+^) (Mat3 x1 y1 z1) (Mat3 x2 y2 z2) =
+                Mat3 (x1 ^+^ x2) (y1 ^+^ y2) (z1 ^+^ z2)
+        (^-^) (Mat3 x1 y1 z1) (Mat3 x2 y2 z2) =
+                Mat3 (x1 ^-^ x2) (y1 ^-^ y2) (z1 ^-^ z2)
+        negateV (Mat3 x y z) = Mat3 (negateV x) (negateV y) (negateV z)
+
+instance VectorSpace Mat3 where
+        type Scalar Mat3 = Float
+        (*^) s (Mat3 x y z) = Mat3 (s *^ x) (s *^ y) (s *^ z)
+
+instance Matrix Mat3 where
+        type Row Mat3 = Vec3
+        idmtx = Mat3 (Vec3 1 0 0) (Vec3 0 1 0) (Vec3 0 0 1)
+        transpose (Mat3 (Vec3 a b c)
+                        (Vec3 d e f)
+                        (Vec3 g h i)) = Mat3 (Vec3 a d g)
+                                             (Vec3 b e h)
+                                             (Vec3 c f i)
+        (.*.) (Mat3 (Vec3 a11 a12 a13)
+                    (Vec3 a21 a22 a23)
+                    (Vec3 a31 a32 a33))
+              (Mat3 (Vec3 b11 b12 b13)
+                    (Vec3 b21 b22 b23)
+                    (Vec3 b31 b32 b33)) =
+                Mat3 (Vec3 (a11 * b11 + a12 * b21 + a13 * b31)
+                           (a11 * b12 + a12 * b22 + a13 * b32)
+                           (a11 * b13 + a12 * b23 + a13 * b33))
+
+                     (Vec3 (a21 * b11 + a22 * b21 + a23 * b31)
+                           (a21 * b12 + a22 * b22 + a23 * b32)
+                           (a21 * b13 + a22 * b23 + a23 * b33))
+
+                     (Vec3 (a31 * b11 + a32 * b21 + a33 * b31)
+                           (a31 * b12 + a32 * b22 + a33 * b32)
+                           (a31 * b13 + a32 * b23 + a33 * b33))
+
+        (.*) (Mat3 (Vec3 a b c)
+                   (Vec3 d e f)
+                   (Vec3 g h i))
+             (Vec3 x y z) = Vec3 (a * x + b * y + c * z)
+                                 (d * x + e * y + f * z)
+                                 (g * x + h * y + i * z)
+
+
+instance AdditiveGroup Mat4 where
+        zeroV = Mat4 zeroV zeroV zeroV zeroV
+        (^+^) (Mat4 x1 y1 z1 w1) (Mat4 x2 y2 z2 w2) =
+                Mat4 (x1 ^+^ x2) (y1 ^+^ y2) (z1 ^+^ z2) (w1 ^+^ w2)
+        (^-^) (Mat4 x1 y1 z1 w1) (Mat4 x2 y2 z2 w2) =
+                Mat4 (x1 ^-^ x2) (y1 ^-^ y2) (z1 ^-^ z2) (w1 ^-^ w2)
+        negateV (Mat4 x y z w) = Mat4 (negateV x) (negateV y)
+                                      (negateV z) (negateV w)
+
+instance VectorSpace Mat4 where
+        type Scalar Mat4 = Float
+        (*^) s (Mat4 x y z w) = Mat4 (s *^ x) (s *^ y) (s *^ z) (s *^ w)
+
 instance Matrix Mat4 where
         type Row Mat4 = Vec4
         idmtx = Mat4 (Vec4 1 0 0 0) (Vec4 0 1 0 0) (Vec4 0 0 1 0) (Vec4 0 0 0 1)
@@ -215,12 +308,31 @@ instance Storable IVec4 where
                                       pokeElemOff (castPtr ptr) 2 z
                                       pokeElemOff (castPtr ptr) 3 w
 
-instance Hashable Vec2
-instance Hashable Vec3
-instance Hashable Vec4
-instance Hashable Mat2
-instance Hashable Mat3
-instance Hashable Mat4
-instance Hashable IVec2
-instance Hashable IVec3
-instance Hashable IVec4
+-- TODO: ??
+
+instance Hashable Vec2 where
+        hashWithSalt s (Vec2 x y) = hashWithSalt s (x, y)
+
+instance Hashable Vec3 where
+        hashWithSalt s (Vec3 x y z) = hashWithSalt s (x, y, z)
+
+instance Hashable Vec4 where
+        hashWithSalt s (Vec4 x y z w) = hashWithSalt s (x, y, z, w)
+
+instance Hashable Mat2 where
+        hashWithSalt s (Mat2 x y) = hashWithSalt s (x, y)
+
+instance Hashable Mat3 where
+        hashWithSalt s (Mat3 x y z) = hashWithSalt s (x, y, z)
+
+instance Hashable Mat4 where
+        hashWithSalt s (Mat4 x y z w) = hashWithSalt s (x, y, z, w)
+
+instance Hashable IVec2 where
+        hashWithSalt s (IVec2 x y) = hashWithSalt s (x, y)
+
+instance Hashable IVec3 where
+        hashWithSalt s (IVec3 x y z) = hashWithSalt s (x, y, z)
+
+instance Hashable IVec4 where
+        hashWithSalt s (IVec4 x y z w) = hashWithSalt s (x, y, z, w)

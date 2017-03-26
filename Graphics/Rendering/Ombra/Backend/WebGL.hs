@@ -15,13 +15,13 @@ import Data.Int (Int32)
 import Data.IORef
 import Data.List (unfoldr)
 import Data.JSString (JSString, pack)
-import Data.Vect.Float
 import Data.Word
 import Graphics.Rendering.Ombra.Backend
 import qualified Graphics.Rendering.Ombra.Backend.WebGL.Const as JS
 import qualified Graphics.Rendering.Ombra.Backend.WebGL.Raw as JS
 import qualified Graphics.Rendering.Ombra.Backend.WebGL.Types as JS
 import Graphics.Rendering.Ombra.Color
+import Graphics.Rendering.Ombra.Vector
 import GHCJS.Foreign hiding (Object)
 import GHCJS.Types
 import GHCJS.Marshal
