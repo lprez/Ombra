@@ -54,6 +54,7 @@ library
                        Graphics.Rendering.Ombra.Shader.Stages,
                        Graphics.Rendering.Ombra.Shader.Program,
                        Graphics.Rendering.Ombra.Shader.CPU,
+                       Graphics.Rendering.Ombra.Shader.Language,
                        Graphics.Rendering.Ombra.Shader.Language.Types,
                        Graphics.Rendering.Ombra.Shader.Language.Functions,
                        Graphics.Rendering.Ombra.Draw.Internal,
