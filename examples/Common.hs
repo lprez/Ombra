@@ -104,7 +104,7 @@ loadTexture path = do img <- loadImage $ fromString path
                                         0x36d1615b7400a4
                                         [ 0 .. l - 1 ]
 
-                      return . mkTextureRaw w h arr $ hash (w, h, pxhash)
+                      return . mkTextureRaw w h True [arr] $ hash (w, h, pxhash)
 
 #else
 
@@ -170,8 +170,9 @@ loadTexture path = do eimg <- readImage path
                                                 hash = hash ...
                                             in mkTextureRaw ...
                                         -}
-                                        Image w h v -> return . mkTexture w h $
-                                                        colList v
+                                        Image w h v -> return .
+                                                        mkTexture w h True
+                                                                $ [colList v]
         where colList = fst . V.foldr (\x (l, cs) ->
                                         case cs of
                                              [g, b, a] -> ( Color x g b a : l
