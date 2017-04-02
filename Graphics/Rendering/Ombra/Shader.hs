@@ -83,6 +83,7 @@ module Graphics.Rendering.Ombra.Shader (
         Shader.arrayLength,
         -- ** Various math functions
         Matrix(..),
+        Ext(..),
         minG,
         maxG,
         modG,
@@ -165,6 +166,7 @@ module Graphics.Rendering.Ombra.Shader (
 import Data.Proxy
 import GHC.Generics (Generic)
 import Graphics.Rendering.Ombra.Shader.CPU
+import Graphics.Rendering.Ombra.Shader.Language ((#))
 import qualified Graphics.Rendering.Ombra.Shader.Language as Shader
 import Graphics.Rendering.Ombra.Shader.ShaderVar hiding (Shader)
 import Graphics.Rendering.Ombra.Shader.Stages
@@ -329,6 +331,12 @@ instance VectorSpace Shader.GVec2 where
 instance InnerSpace Shader.GVec2 where
         (<.>) = Shader.dot
 
+instance Ext Shader.GVec2 where
+        type Extended Shader.GVec2 = Shader.GVec3
+        v ^| z = Shader.vec3 $ v # z
+        v ^|^ Shader.GVec3 _ _ z = Shader.vec3 $ v # z
+        extract = Shader.vec2
+
 instance AdditiveGroup Shader.GVec3 where
         zeroV = Shader.zero
         (^+^) = (Shader.+)
@@ -344,6 +352,12 @@ instance InnerSpace Shader.GVec3 where
 
 instance HasCross3 Shader.GVec3 where
         cross3 = Shader.cross
+
+instance Ext Shader.GVec3 where
+        type Extended Shader.GVec3 = Shader.GVec4
+        v ^| w = Shader.vec4 $ v # w
+        v ^|^ Shader.GVec4 _ _ _ w = Shader.vec4 $ v # w
+        extract = Shader.vec3
 
 instance AdditiveGroup Shader.GVec4 where
         zeroV = Shader.zero
@@ -376,6 +390,13 @@ instance AdditiveGroup Shader.GMat3 where
         (^-^) = (Shader.-)
         negateV = Shader.negateM
 
+instance Ext Shader.GMat2 where
+        type Extended Shader.GMat2 = Shader.GMat3
+        v ^| z = Shader.mat3 $ v # z # z # z # z # z
+        Shader.GMat2 x y ^|^ Shader.GMat3 x' y' z' =
+                Shader.GMat3 (x ^|^ x') (y ^|^ y') z'
+        extract = Shader.mat2
+
 instance Matrix Shader.GMat2 where
         type Row Shader.GMat2 = Shader.GVec2
         idmtx = Shader.mat2 (1.0 :: Shader.GFloat)
@@ -388,6 +409,13 @@ instance Matrix Shader.GMat2 where
 instance VectorSpace Shader.GMat3 where
         type Scalar Shader.GMat3 = Shader.GFloat
         (*^) = (Shader.*)
+
+instance Ext Shader.GMat3 where
+        type Extended Shader.GMat3 = Shader.GMat4
+        v ^| z = Shader.mat4 $ v # z # z # z # z # z # z # z
+        Shader.GMat3 x y z ^|^ Shader.GMat4 x' y' z' w' =
+                Shader.GMat4 (x ^|^ x') (y ^|^ y') (z ^|^ z') w'
+        extract = Shader.mat3
 
 instance Matrix Shader.GMat3 where
         type Row Shader.GMat3 = Shader.GVec3

@@ -23,13 +23,12 @@ vertexShader :: VertexShader '[ Transform3, View3 ]
                              '[ Position3, UV, Normal3 ]
                              '[ Position3, UV, Normal3 ]
 vertexShader (Transform3 modelGMatrix :- View3 viewGMatrix :- N)
-             (Position3 (GVec3 x y z) :- uv :- Normal3 (GVec3 nx ny nz) :- N) =
-             let worldPos@(GVec4 wx wy wz _) =
-                     store $ modelGMatrix .* GVec4 x y z 1.0
+             (Position3 pos :- uv :- Normal3 norm :- N) =
+             let worldPos = store $ modelGMatrix .* (pos ^| 1.0)
                  viewPos = viewGMatrix .* worldPos
-                 (GVec4 wnx wny wnz _) = modelGMatrix .* GVec4 nx ny nz 0
-             in Vertex viewPos :- Position3 (GVec3 wx wy wz) :-
-                uv :- Normal3 (GVec3 wnx wny wnz) :- N
+                 worldNorm = extract $ modelGMatrix .* (norm ^| 0)
+             in Vertex viewPos :- Position3 (extract worldPos) :-
+                uv :- Normal3 worldNorm :- N
 
 fragmentShader :: FragmentShader '[ Texture2 ] [ Position3, UV, Normal3 ]
 fragmentShader (Texture2 sampler :- N) (_ :- UV (GVec2 s t) :- _ :- N) =

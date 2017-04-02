@@ -26,8 +26,8 @@ data UV = UV GVec2 deriving Generic
 vertexShader :: VertexShader '[Transform2, View2, Depth]
                              '[Position2, UV] '[UV]
 vertexShader (Transform2 trans :- View2 view :- Depth z :- N)
-             (Position2 (GVec2 x y) :- uv@(UV _) :- N) =
-                let GVec3 x' y' _ = view .*. trans .* GVec3 x y 1
+             (Position2 pos :- uv@(UV _) :- N) =
+                let GVec3 x' y' _ = view .*. trans .* (pos ^| 1)
                 in Vertex (GVec4 x' y' z 1) :- uv :- N
 
 fragmentShader :: FragmentShader '[Image] '[UV]

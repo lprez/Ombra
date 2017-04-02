@@ -12,7 +12,8 @@ module Graphics.Rendering.Ombra.Vector (
         IVec2(..),
         IVec3(..),
         IVec4(..),
-        Matrix(..)
+        Matrix(..),
+        Ext(..)
 ) where
 
 import Data.Cross
@@ -53,6 +54,23 @@ data IVec4 = IVec4 {-# UNPACK #-} !Int32
                    {-# UNPACK #-} !Int32
                    deriving (Generic, Show, Eq)
 
+infixr 5 ^|
+infixr 5 ^|^
+class VectorSpace v => Ext v where
+        type Extended v = w | w -> v
+        -- | Extend the vector with a specified scalar.
+        (^|) :: v -> Scalar v -> Extended v
+        -- | Extend the first vector using the components of the second vector.
+        --
+        -- For instance:
+        -- @
+        -- Mat2 (Vec2 x y) (Vec2 z w) ^|^ idmtx =
+        -- Mat3 (Vec3 x y 0) (Vec3 z w 0) (Vec3 0 0 1)
+        -- @
+        (^|^) :: v -> Extended v -> Extended v
+        -- | Extract a smaller vector.
+        extract :: Extended v -> v
+
 infixl 7 .*.
 infixl 7 .*
 infixr 7 *.
@@ -81,6 +99,12 @@ instance VectorSpace Vec2 where
 instance InnerSpace Vec2 where
         (<.>) (Vec2 x1 y1) (Vec2 x2 y2) = x1 * x2 + y1 * y2
 
+instance Ext Vec2 where
+        type Extended Vec2 = Vec3
+        Vec2 x y ^| z = Vec3 x y z
+        Vec2 x y ^|^ Vec3 _ _ z = Vec3 x y z
+        extract (Vec3 x y z) = Vec2 x y
+
 instance Storable Vec2 where
         sizeOf _ = 8
         alignment _ = 4
@@ -108,6 +132,12 @@ instance InnerSpace Vec3 where
 instance HasCross3 Vec3 where
         cross3 (Vec3 x1 y1 z1) (Vec3 x2 y2 z2) =
                 Vec3 (y1 * z2 - y2 * z1) (z1 * x2 - z2 * x1) (x1 * y2 - x2 * y1)
+
+instance Ext Vec3 where
+        type Extended Vec3 = Vec4
+        Vec3 x y z ^| w = Vec4 x y z w
+        Vec3 x y z ^|^ Vec4 _ _ _ w = Vec4 x y z w
+        extract (Vec4 x y z w) = Vec3 x y z
 
 instance Storable Vec3 where
         sizeOf _ = 12
@@ -158,6 +188,12 @@ instance VectorSpace Mat2 where
         type Scalar Mat2 = Float
         (*^) s (Mat2 x y) = Mat2 (s *^ x) (s *^ y)
 
+instance Ext Mat2 where
+        type Extended Mat2 = Mat3
+        Mat2 x y ^| a = Mat3 (x ^| a) (y ^| a) (Vec3 a a a)
+        Mat2 x y ^|^ Mat3 x' y' z' = Mat3 (x ^|^ x') (y ^|^ y') z'
+        extract (Mat3 x y z) = Mat2 (extract x) (extract y)
+
 instance Matrix Mat2 where
         type Row Mat2 = Vec2
         idmtx = Mat2 (Vec2 1 0) (Vec2 0 1)
@@ -182,6 +218,13 @@ instance AdditiveGroup Mat3 where
 instance VectorSpace Mat3 where
         type Scalar Mat3 = Float
         (*^) s (Mat3 x y z) = Mat3 (s *^ x) (s *^ y) (s *^ z)
+
+instance Ext Mat3 where
+        type Extended Mat3 = Mat4
+        Mat3 x y z ^| a = Mat4 (x ^| a) (y ^| a) (z ^| a) (Vec4 a a a a)
+        Mat3 x y z ^|^ Mat4 x' y' z' w' = Mat4 (x ^|^ x') (y ^|^ y')
+                                               (z ^|^ z') w'
+        extract (Mat4 x y z w) = Mat3 (extract x) (extract y) (extract z)
 
 instance Matrix Mat3 where
         type Row Mat3 = Vec3
