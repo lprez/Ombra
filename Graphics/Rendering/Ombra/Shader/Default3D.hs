@@ -1,6 +1,17 @@
 {-# LANGUAGE DataKinds, DeriveGeneric, GADTs #-}
 
-module Graphics.Rendering.Ombra.Shader.Default3D where
+module Graphics.Rendering.Ombra.Shader.Default3D (
+        Uniforms,
+        Attributes,
+        Texture2(..),
+        Transform3(..),
+        View3(..),
+        Position3(..),
+        UV(..),
+        Normal3(..),
+        vertexShader,
+        fragmentShader
+) where
 
 import Graphics.Rendering.Ombra.Shader
 
@@ -16,8 +27,6 @@ data View3 = View3 GMat4 deriving Generic
 data Position3 = Position3 GVec3 deriving Generic
 
 data Normal3 = Normal3 GVec3 deriving Generic
-
-data UV = UV GVec2 deriving Generic
 
 vertexShader :: VertexShader '[ Transform3, View3 ]
                              '[ Position3, UV, Normal3 ]

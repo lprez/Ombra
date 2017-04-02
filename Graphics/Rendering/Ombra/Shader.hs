@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, FlexibleContexts, RankNTypes, MultiParamTypeClasses,
              TypeFamilyDependencies, TypeFamilies, FlexibleInstances,
-             UndecidableInstances #-}
+             UndecidableInstances, DeriveGeneric #-}
 
 {-|
 An example of shader variable:
@@ -156,11 +156,13 @@ module Graphics.Rendering.Ombra.Shader (
         Shader.ToGMat4,
         Shader.mat4,
         -}
-        -- * Variables
+        -- ** Other
         Shader.position,
         Shader.fragData,
         Shader.fragCoord,
         Shader.fragFrontFacing,
+        -- * Common shader variables
+        UV(..)
 ) where
 
 import Data.Proxy
@@ -177,6 +179,8 @@ import qualified Data.Boolean.Numbers as B
 import Data.Cross
 import Data.VectorSpace
 import Prelude
+
+data UV = UV Shader.GVec2 deriving Generic
 
 type instance BooleanOf Shader.GBool = Shader.GBool
 type instance BooleanOf Shader.GFloat = Shader.GBool
