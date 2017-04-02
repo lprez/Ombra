@@ -68,9 +68,10 @@ instance Monad (Layer' s t) where
         return = Return
 
 -- TODO: document buffers.
--- | Clear some buffers before drawing a Layer.
-clear :: [Buffer] -> Layer' s t a -> Layer' s t a
-clear bs = (Clear bs >>)
+-- | Layer that clear some buffers. For instance, @clear ['ColorBuffer']@ fills
+-- the screen with a black rectangle, without affecting the depth buffer.
+clear :: [Buffer] -> Layer' s t ()
+clear = Clear
 
 -- | Free the temporary resources associated with a NonDrawable layer, before
 -- drawing it.
