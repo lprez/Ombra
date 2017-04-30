@@ -13,7 +13,7 @@ import Graphics.Rendering.Ombra.Shader.Default3D
 
 import ProgramCommon
 
-type Uniforms = '[ Time, NoiseTexture, View3, Transform3, Texture2 ]
+type Uniforms = '[ Time, NoiseTexture, Project3, View3, Transform3, Texture2 ]
 
 fragmentShader :: FragmentShader '[ Time, NoiseTexture, Texture2 ]
                                  '[ Position3, UV, Normal3 ]

@@ -15,7 +15,7 @@ import Common
 data NoiseTexture = NoiseTexture GSampler2D deriving Generic
 data Time = Time GFloat deriving Generic
 
-type Uniforms = '[ Time, NoiseTexture, View3, Transform3, Texture2 ]
+type Uniforms = '[ Time, NoiseTexture, Project3, View3, Transform3, Texture2 ]
 
 scene :: Texture -> Texture -> Float -> Layer
 scene tex noiseTex time =

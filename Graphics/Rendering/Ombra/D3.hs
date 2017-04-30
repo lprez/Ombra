@@ -20,9 +20,10 @@ module Graphics.Rendering.Ombra.D3 (
         transform,
         -- * Layers
         view,
+        proj,
         viewPersp,
         viewOrtho,
-        viewVP,
+        viewProj,
         layerS,
         -- * Matrices
         -- ** View matrices
@@ -43,6 +44,7 @@ module Graphics.Rendering.Ombra.D3 (
         Texture2(..),
         Transform3(..),
         View3(..),
+        Project3(..)
 ) where
 
 import Graphics.Rendering.Ombra.Backend hiding (Texture, Program)
@@ -54,19 +56,22 @@ import Graphics.Rendering.Ombra.Object
 import Graphics.Rendering.Ombra.Shapes
 import Graphics.Rendering.Ombra.Vector
 import Graphics.Rendering.Ombra.Internal.TList
-import Graphics.Rendering.Ombra.Shader.Default3D (Texture2(..), Transform3(..), View3(..))
+import Graphics.Rendering.Ombra.Shader.Default3D
+        (Texture2(..), Transform3(..), View3(..), Project3(..))
 import Graphics.Rendering.Ombra.Shader.Program hiding (program)
 import Graphics.Rendering.Ombra.Texture
 import Graphics.Rendering.Ombra.Transformation
 
 type Uniforms3D = '[Transform3, Texture2]
 
--- | A standard 3D object, without the 'View3' matrix.
+-- | A standard 3D object, without the 'View3' and 'Project3' matrix.
 type Object3D = Object Uniforms3D Geometry3D
 
 -- | 3D objects compatible with the standard 3D shader program.
-type IsObject3D gs is = ( Subset Geometry3D is, Subset (View3 ': Uniforms3D) gs
-                        , ShaderVars is, ShaderVars gs )
+type IsObject3D gs is = ( Subset Geometry3D is
+                        , Subset (Project3 ': View3 ': Uniforms3D) gs
+                        , ShaderVars is
+                        , ShaderVars gs )
 
 -- | A cube with a specified 'Texture'.
 cube :: GLES => Texture -> Object3D
@@ -76,10 +81,17 @@ cube = flip mesh cubeGeometry
 mesh :: GLES => Texture -> Geometry is -> Object Uniforms3D is
 mesh t g = Transform3 -= idmtx :~> withTexture t (Texture2 -=) :~> geom g
 
--- | Create a group of objects with a view matrix.
+-- | Create a group of objects with a view matrix and use the identity matrix as
+-- a projection matrix.
 view :: (GLES, ShaderVars gs, ShaderVars is)
-     => Mat4 -> [Object gs is] -> Object (View3 ': gs) is
-view m = viewVP $ const m
+     => Mat4 -> [Object gs is] -> Object (Project3 ': View3 ': gs) is
+view m = viewProj (const m) (const idmtx)
+
+-- | Create a group of objects with a projection matrix and use the identity
+-- matrix as a view matrix.
+proj :: (GLES, ShaderVars gs, ShaderVars is)
+     => Mat4 -> [Object gs is] -> Object (Project3 ': View3 ': gs) is
+proj m = viewProj (const idmtx) (const m)
 
 -- | Create a group of objects with a view matrix and perspective projection.
 viewPersp :: (GLES, ShaderVars gs, ShaderVars is)
@@ -88,8 +100,8 @@ viewPersp :: (GLES, ShaderVars gs, ShaderVars is)
           -> Float      -- ^ FOV
           -> Mat4       -- ^ View matrix
           -> [Object gs is]
-          -> Object (View3 ': gs) is
-viewPersp n f fov m = viewVP $ \s -> m .*. perspectiveMat4Size n f fov s
+          -> Object (Project3 ': View3 ': gs) is
+viewPersp n f fov m = viewProj (const m) (perspectiveMat4Size n f fov)
 
 -- | Create a group of objects with a view matrix and orthographic projection.
 viewOrtho :: (GLES, ShaderVars gs, ShaderVars is)
@@ -101,15 +113,19 @@ viewOrtho :: (GLES, ShaderVars gs, ShaderVars is)
           -> Float      -- ^ Top
           -> Mat4       -- ^ View matrix
           -> [Object gs is]
-          -> Object (View3 ': gs) is
-viewOrtho n f l r b t m = view $ m .*. orthoMat4 n f l r b t
+          -> Object (Project3 ': View3 ': gs) is
+viewOrtho n f l r b t m = viewProj (const m) (const $ orthoMat4 n f l r b t)
 
--- | Create a group of objects with a view matrix, depending on the size of the
--- framebuffer.
-viewVP :: (GLES, ShaderVars gs, ShaderVars is)
-       => (Vec2 -> Mat4) -> [Object gs is] -> Object (View3 ': gs) is
-viewVP mf o = withFramebufferSize (\s -> View3 -= mf (tupleToVec s))
-              :~> mconcat o
+-- | Create a group of objects with a view matrix and a projection matrix,
+-- depending on the size of the framebuffer.
+viewProj :: (GLES, ShaderVars gs, ShaderVars is)
+         => (Vec2 -> Mat4)      -- ^ View matrix
+         -> (Vec2 -> Mat4)      -- ^ Projection matrix
+         -> [Object gs is]
+         -> Object (Project3 ': View3 ': gs) is
+viewProj v p o =     withFramebufferSize (\s -> Project3 -= p (tupleToVec s))
+                 :~> withFramebufferSize (\s -> View3 -= v (tupleToVec s))
+                 :~> mconcat o
         where tupleToVec (w, h) = Vec2 (fromIntegral w) (fromIntegral h)
 
 -- | A 'Layer' with the standard 3D program.
