@@ -54,8 +54,8 @@ data IVec4 = IVec4 {-# UNPACK #-} !Int32
                    {-# UNPACK #-} !Int32
                    deriving (Generic, Show, Eq)
 
-infixr 5 ^|
-infixr 5 ^|^
+infixl 5 ^|
+infixl 5 ^|^
 class VectorSpace v => Ext v where
         type Extended v = w | w -> v
         -- | Extend the vector with a specified scalar.
