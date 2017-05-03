@@ -7,8 +7,13 @@
 module Common (
         play,
         animation,
+        animation',
         static,
-        loadTexture
+        loadTexture,
+#ifdef __GHCJS__
+        query,
+        waitFrame
+#endif
 ) where
 
 import Graphics.Rendering.Ombra
@@ -61,12 +66,13 @@ foreign import javascript unsafe "$1.clientX" clientX :: JSVal -> IO Int
 foreign import javascript unsafe "$1.clientY" clientY :: JSVal -> IO Int
 
 play :: MonadIO m
-     => (Float -> (Int, Int) -> m (Layer' Drawable t a))
+     => Draw ()
+     -> (Float -> (Int, Int) -> m (Layer' Drawable t a))
      -> (a -> m ())
      -> m ()
-play getLayer layerRetf =
+play initialization getLayer layerRetf =
         do cposRef <- liftIO $ newIORef (0, 0)
-           canvas <- liftIO $ query "#canvas"
+           canvas <- liftIO $ query "canvas"
            ctx <- liftIO $ makeContext canvas
            liftIO $ do callback <- asyncCallback1 $
                                 \ev -> ((,) <$> clientX ev <*> clientY ev) >>=
@@ -75,7 +81,7 @@ play getLayer layerRetf =
            stateRef <- liftIO $ drawState 512 512 >>= newIORef
 
            let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
-           liftDraw drawInit
+           liftDraw $ drawInit >> initialization
            loop $ \t -> do cpos <- liftIO $ readIORef cposRef
                            layer <- getLayer (realToFrac t) cpos
                            layerRet <- liftDraw $
@@ -119,17 +125,18 @@ import qualified Graphics.UI.GLFW as G
 import System.Mem (performMinorGC)
 
 play :: MonadIO m
-     => (Float -> (Int, Int) -> m (Layer' Drawable t a))
+     => Draw ()
+     -> (Float -> (Int, Int) -> m (Layer' Drawable t a))
      -> (a -> m ())
      -> m ()
-play getLayer layerRetf =
+play initialization getLayer layerRetf =
         do w <- liftIO $ initWindow
            stateRef <- liftIO $ drawState 512 512 >>= newIORef
            ctx <- liftIO $ makeContext
            t0 <- liftIO $ getCurrentTime
 
            let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
-           liftDraw drawInit
+           liftDraw $ drawInit >> initialization
            loop t0 t0 $ \n -> do (x, y) <- liftIO $ getCursorPos w
                                  layer <- getLayer n (floor x, floor y)
                                  layerRet <- liftDraw $
@@ -182,8 +189,11 @@ loadTexture path = do eimg <- readImage path
                                       ([], [])
 #endif
 
+animation' :: Draw () -> (Float -> Layer) -> IO ()
+animation' init f = play init (\t _ -> return $ f t) (const $ return ()) 
+
 animation :: (Float -> Layer) -> IO ()
-animation f = play (\t _ -> return $ f t) (const $ return ()) 
+animation = animation' $ return ()
 
 static :: Layer -> IO ()
 static = animation . const
