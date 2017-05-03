@@ -9,6 +9,7 @@ module Graphics.Rendering.Ombra.Shader.GLSL (
         uniformName
 ) where
 
+import Data.List (find)
 import Data.Hashable (hash) -- TODO: use ST hashtables
 import qualified Data.HashMap.Strict as H
 import Data.Typeable
@@ -41,9 +42,14 @@ vertexToGLSL = fst . vertexToGLSLAttr
 
 fragmentToGLSL :: (ShaderVars g, ShaderVars i) => FragmentShader g i -> String
 fragmentToGLSL v =
-        shaderToGLSL "#version 100\nprecision mediump float;"
-                     "varying" "" (vars True v)
-                      [ ("hvFragmentShaderOutput0", "gl_FragData[0]")
+        let r@(SV _ _ os) = vars True v
+            header | Just _ <- find (\(_, n, _) -> requiresMRT n) os = 
+                    "#extension GL_EXT_draw_buffers : require\n"
+                   | otherwise = ""
+        in shaderToGLSL ("#version 100\n" ++ header ++
+                         "precision mediump float;")
+                        "varying" "" (vars True v) subst
+        where subst = [ ("hvFragmentShaderOutput0", "gl_FragData[0]")
                       , ("hvFragmentShaderOutput1", "gl_FragData[1]")
                       , ("hvFragmentShaderOutput2", "gl_FragData[2]")
                       , ("hvFragmentShaderOutput3", "gl_FragData[3]")
@@ -59,6 +65,8 @@ fragmentToGLSL v =
                       , ("hvFragmentShaderOutput13", "gl_FragData[13]")
                       , ("hvFragmentShaderOutput14", "gl_FragData[14]")
                       , ("hvFragmentShaderOutput15", "gl_FragData[15]") ]
+              requiresMRT "hvFragmentShaderOutput0" = False
+              requiresMRT _ = True
 
 shaderToGLSL :: String -> String -> String -> SV -> [(String, String)] -> String
 shaderToGLSL header ins outs (SV gs is os) predec = concat
