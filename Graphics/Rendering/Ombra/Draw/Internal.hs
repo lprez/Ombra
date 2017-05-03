@@ -445,7 +445,7 @@ renderToTexture drawBufs infos w h act = do
 
         (ts, attchs, buffersToClear) <- fmap unzip3 . gl . flip mapM infos $
                 \(internalFormat, format, pixelType, attachment, buffer) ->
-                        do t <- emptyTexture (Linear, Nothing) Linear
+                        do t <- emptyTexture (Nearest, Nothing) Nearest
                            bindTexture gl_TEXTURE_2D t
                            if pixelType == gl_FLOAT
                            then liftIO noFloat32Array >>=
