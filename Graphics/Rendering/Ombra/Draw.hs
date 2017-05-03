@@ -21,6 +21,9 @@ module Graphics.Rendering.Ombra.Draw (
         removeGeometry,
         removeTexture,
         removeProgram,
+        checkGeometry,
+        checkTexture,
+        checkProgram,
         -- *
         gl
 ) where
@@ -57,4 +60,6 @@ evalDrawCtx ctx d = flip evalGL ctx . evalDraw d
 -- alive by their corresponding CPU resources. Specifically, these resources are
 -- Geometries, Textures and Programs. This means that, when a CPU resource is
 -- garbage collected, the GPU resource is also removed. The functions below let
--- you manage allocation and deallocation manually.
+-- you manage allocation and deallocation manually. Note that if you try to use
+-- a resource that was deallocated with the remove* functions it will be
+-- allocated again.

@@ -56,9 +56,11 @@ class ( Integral GLEnum
 
         true :: GLBool
         false :: GLBool
+        isTrue :: GLBool -> Bool
         nullGLPtr :: GLPtr
         -- arrayGLPtr :: Array -> (GLPtr -> IO a) -> IO a
         toGLString :: String -> GLString
+        fromGLString :: GLString -> String
         noBuffer :: Buffer
         noTexture :: Texture
         noVAO :: VertexArrayObject
@@ -152,7 +154,7 @@ class ( Integral GLEnum
         -- glGetFramebufferAttachmentParameter :: Ctx -> GLEnum -> GLEnum -> IO Word
         glGetProgramInfoLog :: Ctx -> Program -> IO GLString
         -- glGetRenderbufferParameter :: Ctx -> Word -> Word -> IO (JSRef a)
-        -- glGetShaderParameter :: Ctx -> Shader -> Word -> IO (JSRef a)
+        glGetShaderParameterBool :: Ctx -> Shader -> GLEnum -> IO GLBool
         -- glGetShaderPrecisionFormat :: Ctx -> GLEnum -> GLEnum -> IO ShaderPrecisionFormat
         glGetShaderInfoLog :: Ctx -> Shader -> IO GLString
         glGetShaderSource :: Ctx -> Shader -> IO GLString

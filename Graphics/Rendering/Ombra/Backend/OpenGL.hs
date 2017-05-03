@@ -92,8 +92,10 @@ instance GLES where
 
         true = 1
         false = 0
+        isTrue = (== 1)
         nullGLPtr = nullPtr
         toGLString = id
+        fromGLString = id
         noBuffer = 0
         noTexture = 0
         noVAO = 0
@@ -202,6 +204,11 @@ instance GLES where
         glGetProgramInfoLog = getString GL.glGetProgramInfoLog
         glGetShaderInfoLog = getString GL.glGetShaderInfoLog
         glGetShaderSource = getString GL.glGetShaderSource
+        glGetShaderParameterBool _ a b = do ptr <- malloc
+                                            GL.glGetShaderiv a b ptr
+                                            value <- peek ptr
+                                            free ptr
+                                            return $ fromIntegral value
         glGetUniformLocation _ a b = withCString b $ GL.glGetUniformLocation a
         glHint = const GL.glHint
         glIsBuffer = const GL.glIsBuffer

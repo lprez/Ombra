@@ -5,6 +5,7 @@
 module Graphics.Rendering.Ombra.Draw.Internal (
         Draw,
         DrawState,
+        ResStatus(..),
         drawState,
         drawInit,
         clearBuffers,
@@ -16,6 +17,9 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         removeGeometry,
         removeTexture,
         removeProgram,
+        checkGeometry,
+        checkTexture,
+        checkProgram,
         textureSize,
         setProgram,
         resizeViewport,
@@ -165,19 +169,24 @@ clearBuffers = mapM_ $ gl . clear . buffer
               buffer DepthBuffer = gl_DEPTH_BUFFER_BIT
               buffer StencilBuffer = gl_STENCIL_BUFFER_BIT
 
--- | Manually allocate a 'Geometry' in the GPU.
-preloadGeometry :: GLES => Geometry is -> Draw ()
-preloadGeometry g = () <$ getGeometry g
+left :: Either String a -> Maybe String
+left (Left x) = Just x
+left _ = Nothing
+
+-- | Manually allocate a 'Geometry' in the GPU. Eventually returns an error
+-- string.
+preloadGeometry :: GLES => Geometry is -> Draw (Maybe String)
+preloadGeometry g = left <$> getGeometry g
 
 -- | Manually allocate a 'Texture' in the GPU.
-preloadTexture :: GLES => Texture -> Draw ()
-preloadTexture t = () <$ getTexture t
+preloadTexture :: GLES => Texture -> Draw (Maybe String)
+preloadTexture t = left <$> getTexture t
 
 -- | Manually allocate a 'Program' in the GPU.
-preloadProgram :: GLES => Program gs is -> Draw ()
-preloadProgram p = () <$ getProgram p
+preloadProgram :: GLES => Program gs is -> Draw (Maybe String)
+preloadProgram p = left <$> getProgram p
 
--- | Manually delete a 'Geometry' from the GPU. Note that if you try to draw it, it will be allocated again.
+-- | Manually delete a 'Geometry' from the GPU.
 removeGeometry :: GLES => Geometry is -> Draw ()
 removeGeometry g = removeDrawResource id geometries g
 
@@ -190,6 +199,21 @@ removeTexture (TextureLoaded l) = gl $ unloadResource
 -- | Manually delete a 'Program' from the GPU.
 removeProgram :: GLES => Program gs is -> Draw ()
 removeProgram = removeDrawResource gl programs
+
+-- | Check if a 'Geometry' failed to load.
+checkGeometry :: GLES => Geometry is -> Draw (ResStatus ())
+checkGeometry g = fmap (const ()) <$> checkDrawResource id geometries g
+
+-- | Check if a 'Texture' failed to load. Eventually returns the texture width
+-- and height.
+checkTexture :: (GLES, Num a) => Texture -> Draw (ResStatus (a, a))
+checkTexture (TextureImage i) =
+        fmap loadedTextureSize <$> checkDrawResource gl textureImages i
+checkTexture (TextureLoaded l) = return $ Loaded (loadedTextureSize l)
+
+-- | Check if a 'Program' failed to load.
+checkProgram :: GLES => Program gs is -> Draw (ResStatus ())
+checkProgram p = fmap (const ()) <$> checkDrawResource gl programs p
 
 -- | Draw a 'Layer'.
 drawLayer :: GLES => Layer' Drawable t a -> Draw a
@@ -293,9 +317,11 @@ makeActive t f = do atn <- activeTextures <$> Draw get
 
 -- | Get the dimensions of a 'Texture'.
 textureSize :: (GLES, Num a) => Texture -> Draw (a, a)
-textureSize tex = withRes (getTexture tex) (return (0, 0))
-                          $ \(LoadedTexture w h _) -> return ( fromIntegral w
-                                                             , fromIntegral h)
+textureSize tex = withRes (getTexture tex) (return (0, 0)) $
+                        return . loadedTextureSize
+
+loadedTextureSize :: (GLES, Num a) => LoadedTexture -> (a, a)
+loadedTextureSize (LoadedTexture w h _) = (fromIntegral w, fromIntegral h)
 
 -- | Set the program.
 setProgram :: GLES => Program g i -> Draw ()
@@ -558,6 +584,15 @@ getDrawResource :: Resource i r m
 getDrawResource lft mg i = do
         map <- mg <$> Draw get
         lft $ getResource i map
+
+checkDrawResource :: Resource i r m
+                  => (m (ResStatus r) -> Draw (ResStatus r))
+                  -> (DrawState -> ResMap r)
+                  -> i
+                  -> Draw (ResStatus r)
+checkDrawResource lft mg i = do
+        map <- mg <$> Draw get
+        lft $ checkResource i map
 
 removeDrawResource :: (Resource i r m, Hashable i)
                    => (m () -> Draw ())

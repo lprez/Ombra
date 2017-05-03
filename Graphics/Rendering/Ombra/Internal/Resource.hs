@@ -9,6 +9,7 @@ module Graphics.Rendering.Ombra.Internal.Resource (
         newResMap,
         addResource,
         getResource,
+        checkResource,
         removeResource,
         unloader
 ) where
@@ -92,3 +93,8 @@ removeResource' mi i rmap@(ResMap map) =
 
 unloader :: (Resource i r m, EmbedIO m) => k -> Maybe i -> r -> m ()
 unloader k i r = embedIO (addFinalizer k) $ unloadResource i r
+
+instance Functor ResStatus where
+        fmap f (Loaded r) = Loaded (f r)
+        fmap _ Unloaded = Unloaded
+        fmap _ (Error s) = Error s

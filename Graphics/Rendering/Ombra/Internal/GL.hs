@@ -69,6 +69,7 @@ module Graphics.Rendering.Ombra.Internal.GL (
         getError,
         getProgramInfoLog,
         -- getShaderPrecisionFormat,
+        getShaderParameterBool,
         getShaderInfoLog,
         getShaderSource,
         getUniformLocation,
@@ -357,8 +358,8 @@ getProgramInfoLog a = getCtx >>= \ctx -> liftIO $ glGetProgramInfoLog ctx a
 -- glGetRenderbufferParameter :: GLES => Word -> Word -> GL (JSRef a)
 -- getRenderbufferParameter a b = getCtx >>= \ctx -> liftIO $ glGetRenderbufferParameter ctx a b
 
--- glGetShaderParameter :: GLES => Shader -> Word -> GL (JSRef a)
--- getShaderParameter a b = getCtx >>= \ctx -> liftIO $ glGetShaderParameter ctx a b
+getShaderParameterBool :: GLES => Shader -> GLEnum -> GL GLBool
+getShaderParameterBool a b = getCtx >>= \ctx -> liftIO $ glGetShaderParameterBool ctx a b
 
 -- getShaderPrecisionFormat :: GLES => GLEnum -> GLEnum -> GL ShaderPrecisionFormat
 -- getShaderPrecisionFormat a b = getCtx >>= \ctx -> liftIO $ glGetShaderPrecisionFormat ctx a b

@@ -66,7 +66,7 @@ instance Eq LoadedProgram where
 
 instance GLES => Resource (Program g i) LoadedProgram GL where
         -- TODO: err check!
-        loadResource i = Right <$> loadProgram i
+        loadResource i = loadProgram i
         unloadResource _ (LoadedProgram p _ _) = deleteProgram p
 
 -- | Compatible shaders.
@@ -100,30 +100,46 @@ defaultProgram3D = program Default3D.vertexShader Default3D.fragmentShader
 defaultProgram2D :: Program DefaultUniforms2D DefaultAttributes2D
 defaultProgram2D = program Default2D.vertexShader Default2D.fragmentShader
 
-loadProgram :: GLES => Program g i -> GL LoadedProgram
+loadProgram :: GLES => Program g i -> GL (Either String LoadedProgram)
 loadProgram (Program (vss, attrs) fss h) =
         do glp <- createProgram
   
            vs <- loadSource gl_VERTEX_SHADER vss
            fs <- loadSource gl_FRAGMENT_SHADER fss
-           attachShader glp vs
-           attachShader glp fs
+
+           vsStatus <- getShaderParameterBool vs gl_COMPILE_STATUS
+           fsStatus <- getShaderParameterBool fs gl_COMPILE_STATUS
+
+           if isTrue vsStatus && isTrue fsStatus
+           then do attachShader glp vs
+                   attachShader glp fs
   
-           locs <- bindAttribs glp 0 attrs []
-           linkProgram glp
+                   locs <- bindAttribs glp 0 attrs []
+                   linkProgram glp
+
+                   -- TODO: error check
   
-           -- TODO: ??
-           {-
-           detachShader glp vs
-           detachShader glp fs
-           -}
+                   -- TODO: ??
+                   {-
+                   detachShader glp vs
+                   detachShader glp fs
+                   -}
   
-           return $ LoadedProgram glp (H.fromList locs) h
+                   return . Right $ LoadedProgram glp (H.fromList locs) h
+           else do vsError <- shaderError vs vsStatus "Vertex shader"
+                   fsError <- shaderError fs fsStatus "Fragment shader"
+
+                   return . Left $ vsError ++ fsError
 
         where bindAttribs _ _ [] r = return r
               bindAttribs glp i ((nm, sz) : xs) r =
                         bindAttribLocation glp (fromIntegral i) (toGLString nm)
                         >> bindAttribs glp (i + sz) xs ((nm, i) : r)
+
+              shaderError :: GLES => Shader -> GLBool -> String -> GL String
+              shaderError _ b _ | isTrue b = return ""
+              shaderError s _ name = getShaderInfoLog s >>= \err ->
+                        return $ name ++ " error:" ++ fromGLString err ++ "\n"
 
 loadSource :: GLES => GLEnum -> String -> GL Shader
 loadSource ty src =

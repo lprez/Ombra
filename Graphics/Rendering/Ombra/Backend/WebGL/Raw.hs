@@ -204,7 +204,7 @@ foreign import javascript unsafe "$1.getRenderbufferParameter($2, $3)"
         glGetRenderbufferParameter :: Ctx -> Word -> Word -> IO JSVal
 
 foreign import javascript unsafe "$1.getShaderParameter($2, $3)"
-        glGetShaderParameter :: Ctx -> Shader -> Word -> IO JSVal
+        glGetShaderParameterBool :: Ctx -> Shader -> Word -> IO Bool
 
 foreign import javascript unsafe "$1.getShaderPrecisionFormat($2, $3)"
         glGetShaderPrecisionFormat :: Ctx -> Word -> Word -> IO ShaderPrecisionFormat

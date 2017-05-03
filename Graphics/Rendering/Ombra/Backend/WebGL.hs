@@ -14,7 +14,7 @@ import qualified Data.HashMap.Strict as H
 import Data.Int (Int32)
 import Data.IORef
 import Data.List (unfoldr)
-import Data.JSString (JSString, pack)
+import Data.JSString (JSString, pack, unpack)
 import Data.Word
 import Graphics.Rendering.Ombra.Backend
 import qualified Graphics.Rendering.Ombra.Backend.WebGL.Const as JS
@@ -127,8 +127,10 @@ instance GLES where
 
         true = True
         false = False
+        isTrue = id
         nullGLPtr = 0
         toGLString = pack
+        fromGLString = unpack
         noBuffer = JS.noBuffer
         noTexture = TagTex (-1) JS.noTexture
         noUInt8Array = nullUInt8Array
@@ -294,7 +296,7 @@ instance GLES where
         -- glGetFramebufferAttachmentParameter = JS.glGetFramebufferAttachmentParameter . snd
         glGetProgramInfoLog = JS.glGetProgramInfoLog . snd
         -- glGetRenderbufferParameter = JS.glGetRenderbufferParameter . snd
-        -- glGetShaderParameter = JS.glGetShaderParameter . snd
+        glGetShaderParameterBool = JS.glGetShaderParameterBool . snd
         -- glGetShaderPrecisionFormat = JS.glGetShaderPrecisionFormat . snd
         glGetShaderInfoLog = JS.glGetShaderInfoLog . snd
         glGetShaderSource = JS.glGetShaderSource . snd
