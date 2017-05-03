@@ -15,7 +15,8 @@ import qualified Graphics.GL.Ext.EXT.BlendColor as GL
 import Graphics.GL.Types as GL
 
 makeContext :: IO Ctx
-makeContext = return ()
+makeContext =
+        words <$> (GL.glGetString GL.GL_EXTENSIONS >>= peekCString . castPtr)
 
 genToCreate :: Storable a => (GLsizei -> Ptr a -> IO ()) -> ctx -> IO a
 genToCreate gen _ = do ptr <- malloc
@@ -66,7 +67,7 @@ mkArray xs = do arr <- mallocForeignPtrArray len
               size = len * sizeOf (head xs)
 
 instance GLES where
-        type Ctx = ()
+        type Ctx = [String]
         type GLEnum = GLenum
         type GLUInt = GLuint
         type GLInt = GLint
@@ -135,6 +136,10 @@ instance GLES where
         fromUInt16Array (size, fptr) = (size, castForeignPtr fptr)
         fromUInt8Array (size, fptr) = (size, castForeignPtr fptr)
         decodeBytes (s, f) = arrayToList (s, castForeignPtr f)
+
+        hasVertexArrayObjects = return . elem "GL_ARB_vertex_array_object"
+        hasFloatTextures = return . elem "GL_ARB_texture_float"
+        hasDrawBuffers = return . const True
 
         glActiveTexture = const GL.glActiveTexture
         glAttachShader = const GL.glAttachShader

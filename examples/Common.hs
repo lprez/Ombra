@@ -22,6 +22,7 @@ import Graphics.Rendering.Ombra.Draw
 import Control.Monad.IO.Class
 import Data.Hashable
 import Data.IORef
+import System.Exit (exitFailure)
 
 #ifdef __GHCJS__
 
@@ -60,20 +61,30 @@ foreign import javascript unsafe "$1.data" imgData :: JSVal -> IO Uint8Array
 foreign import javascript interruptible "window.requestAnimationFrame($c);"
         waitFrame :: IO Double
 
+foreign import javascript unsafe "alert" alert :: JSString -> IO ()
+
 foreign import javascript unsafe "$1.addEventListener($2, $3)"
         addEventListener :: JSVal -> JSString -> Callback (JSVal -> IO ()) -> IO ()
 foreign import javascript unsafe "$1.clientX" clientX :: JSVal -> IO Int
 foreign import javascript unsafe "$1.clientY" clientY :: JSVal -> IO Int
 
 play :: MonadIO m
-     => Draw ()
+     => Bool
+     -> Draw ()
      -> (Float -> (Int, Int) -> m (Layer' Drawable t a))
      -> (a -> m ())
      -> m ()
-play initialization getLayer layerRetf =
+play requireBuffers initialization getLayer layerRetf =
         do cposRef <- liftIO $ newIORef (0, 0)
            canvas <- liftIO $ query "canvas"
            ctx <- liftIO $ makeContext canvas
+
+           mextError <- liftIO $ checkExtensions requireBuffers ctx
+           case mextError of
+                Just extError -> liftIO $ alert (fromString extError) >>
+                                          exitFailure
+                Nothing -> return ()
+
            liftIO $ do callback <- asyncCallback1 $
                                 \ev -> ((,) <$> clientX ev <*> clientY ev) >>=
                                         writeIORef cposRef
@@ -125,15 +136,21 @@ import qualified Graphics.UI.GLFW as G
 import System.Mem (performMinorGC)
 
 play :: MonadIO m
-     => Draw ()
+     => Bool
+     -> Draw ()
      -> (Float -> (Int, Int) -> m (Layer' Drawable t a))
      -> (a -> m ())
      -> m ()
-play initialization getLayer layerRetf =
+play requireBuffers initialization getLayer layerRetf =
         do w <- liftIO $ initWindow
            stateRef <- liftIO $ drawState 512 512 >>= newIORef
            ctx <- liftIO $ makeContext
            t0 <- liftIO $ getCurrentTime
+
+           mextError <- liftIO $ checkExtensions requireBuffers ctx
+           case mextError of
+                Just extError -> liftIO $ putStrLn extError >> exitFailure
+                Nothing -> return ()
 
            let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
            liftDraw $ drawInit >> initialization
@@ -189,11 +206,27 @@ loadTexture path = do eimg <- readImage path
                                       ([], [])
 #endif
 
-animation' :: Draw () -> (Float -> Layer) -> IO ()
-animation' init f = play init (\t _ -> return $ f t) (const $ return ()) 
+checkExtensions :: GLES => Bool -> Ctx -> IO (Maybe String)
+checkExtensions requireBuffers ctx =
+        do vaoExt <- hasVertexArrayObjects ctx
+           floatTexExt <- hasFloatTextures ctx
+           drawBufsExt <- hasDrawBuffers ctx
+
+           let e1 = [ "\nVertex array objects are not supported." | not vaoExt ]
+               e2 = [ "\nFloat textures are not supported."
+                    | requireBuffers && not floatTexExt ]
+               e3 = [ "\nMRT are not supported."
+                    | requireBuffers && not drawBufsExt ]
+           
+           return $ case concat [e1, e2, e3] of
+                         [] -> Nothing
+                         errs -> Just $ "ERROR:" ++ concat errs
+
+animation' :: Bool -> Draw () -> (Float -> Layer) -> IO ()
+animation' ext init f = play ext init (\t _ -> return $ f t) (const $ return ()) 
 
 animation :: (Float -> Layer) -> IO ()
-animation = animation' $ return ()
+animation = animation' False $ return ()
 
 static :: Layer -> IO ()
 static = animation . const

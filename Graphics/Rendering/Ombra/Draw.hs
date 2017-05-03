@@ -24,6 +24,10 @@ module Graphics.Rendering.Ombra.Draw (
         checkGeometry,
         checkTexture,
         checkProgram,
+        -- * Extensions
+        hasVertexArrayObjects,
+        hasFloatTextures,
+        hasDrawBuffers,
         -- *
         gl
 ) where
