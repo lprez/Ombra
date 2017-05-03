@@ -32,12 +32,12 @@ data Position3 = Position3 GVec3 deriving Generic
 data Normal3 = Normal3 GVec3 deriving Generic
 
 -- | The output position and normal are in view space.
-vertexShader :: VertexShader '[ Project3, Transform3, View3 ]
-                             '[ Position3, UV, Normal3 ]
+vertexShader :: VertexShader '[ Project3, View3, Transform3 ]
+                             Attributes
                              '[ Position3, UV, Normal3 ]
 vertexShader (  Project3 projMatrix
-             :- Transform3 modelMatrix
              :- View3 viewMatrix
+             :- Transform3 modelMatrix
              :- N)
              (Position3 pos :- uv :- Normal3 norm :- N) =
              let worldPos = modelMatrix .* (pos ^| 1.0)
