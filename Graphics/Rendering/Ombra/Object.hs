@@ -102,7 +102,7 @@ nothing :: Object '[] '[]
 nothing = NoMesh
 
 -- | An object with a specified 'Geometry'.
-geom :: Geometry i -> Object '[] i
+geom :: Geometry (i ': is) -> Object '[] (i ': is)
 geom = Mesh
 
 -- TODO: Either (CPU 'S g) (CPU 'M g) ???
@@ -139,18 +139,20 @@ globalApply f g = g
 
 infixr 2 ~~>
 
-class RemoveGlobal g gs gs' where
+class RemoveGlobal g gs' where
         -- | Remove a global from an 'Object'.
-        (*~>) :: (a -> g) -> Object gs is -> Object gs' is
+        (*~>) :: (a -> g) -> Object gs' is -> Object (Remove g gs') is
 
-instance {-# OVERLAPPING #-} RemoveGlobal g (g ': gs) gs where
+instance {-# OVERLAPPING #-} Remove g (g : gs') ~ gs' =>
+        RemoveGlobal g (g ': gs') where
         _ *~> (_ :~> o) = o
         r *~> (Prop p o) = Prop p $ r *~> o
         r *~> (Append o o') = Append (r *~> o) (r *~> o')
         r *~> NoMesh = NoMesh
 
-instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, RemoveGlobal g gs gs') =>
-         RemoveGlobal g (g1 ': gs) (g1 ': gs') where
+instance {-# OVERLAPPABLE #-} ( Remove g (g' ': gs') ~ (g' ': Remove g gs')
+                              , RemoveGlobal g gs'
+                              ) => RemoveGlobal g (g' ': gs') where
         r *~> (g :~> o) = g :~> (r *~> o)
         r *~> (Prop p o) = Prop p $ r *~> o
         r *~> (Append o o') = Append (r *~> o) (r *~> o')
@@ -159,8 +161,8 @@ instance {-# OVERLAPPABLE #-} ((g == g1) ~ False, RemoveGlobal g gs gs') =>
 infixr 2 *~>
 
 -- | Modify the geometry of an 'Object'.
-modifyGeometry :: (Geometry (i ': is) -> Geometry is')
-               -> Object gs (i ': is) -> Object gs is'
+modifyGeometry :: (Geometry (i ': is) -> Geometry (i' : is'))
+               -> Object gs (i ': is) -> Object gs (i' : is')
 modifyGeometry fg (g :~> o) = g :~> modifyGeometry fg o
 modifyGeometry fg (Mesh g) = Mesh $ fg g
 modifyGeometry fg (Prop p o) = Prop p $ modifyGeometry fg o
