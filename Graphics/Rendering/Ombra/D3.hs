@@ -78,7 +78,7 @@ cube :: GLES => Texture -> Object3D
 cube = flip mesh cubeGeometry
 
 -- | A 3D object with a specified 'Geometry'.
-mesh :: GLES => Texture -> Geometry is -> Object Uniforms3D is
+mesh :: GLES => Texture -> Geometry (i ': is) -> Object Uniforms3D (i ': is)
 mesh t g = Transform3 -= idmtx :~> withTexture t (Texture2 -=) :~> geom g
 
 -- | Create a group of objects with a view matrix and use the identity matrix as

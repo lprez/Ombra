@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs, DataKinds, FlexibleContexts, TypeSynonymInstances,
              FlexibleInstances, MultiParamTypeClasses, KindSignatures,
-             GeneralizedNewtypeDeriving, PolyKinds #-}
+             GeneralizedNewtypeDeriving, PolyKinds, TypeOperators #-}
 
 module Graphics.Rendering.Ombra.Draw.Internal (
         Draw,
@@ -34,6 +34,7 @@ import Data.Proxy
 import qualified Graphics.Rendering.Ombra.Blend.Internal as Blend
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Geometry.Internal
+import Graphics.Rendering.Ombra.Geometry.Types
 import Graphics.Rendering.Ombra.Layer.Internal hiding (clear)
 import Graphics.Rendering.Ombra.Object.Internal
 import Graphics.Rendering.Ombra.Texture.Internal
@@ -175,7 +176,7 @@ left _ = Nothing
 
 -- | Manually allocate a 'Geometry' in the GPU. Eventually returns an error
 -- string.
-preloadGeometry :: GLES => Geometry is -> Draw (Maybe String)
+preloadGeometry :: GLES => Geometry (i ': is) -> Draw (Maybe String)
 preloadGeometry g = left <$> getGeometry g
 
 -- | Manually allocate a 'Texture' in the GPU.
@@ -187,7 +188,7 @@ preloadProgram :: GLES => Program gs is -> Draw (Maybe String)
 preloadProgram p = left <$> getProgram p
 
 -- | Manually delete a 'Geometry' from the GPU.
-removeGeometry :: GLES => Geometry is -> Draw ()
+removeGeometry :: GLES => Geometry (i ': is) -> Draw ()
 removeGeometry g = removeDrawResource id geometries g
 
 -- | Manually delete a 'Texture' from the GPU.
@@ -201,7 +202,7 @@ removeProgram :: GLES => Program gs is -> Draw ()
 removeProgram = removeDrawResource gl programs
 
 -- | Check if a 'Geometry' failed to load.
-checkGeometry :: GLES => Geometry is -> Draw (ResStatus ())
+checkGeometry :: GLES => Geometry (i ': is) -> Draw (ResStatus ())
 checkGeometry g = fmap (const ()) <$> checkDrawResource id geometries g
 
 -- | Check if a 'Texture' failed to load. Eventually returns the texture width
@@ -351,7 +352,7 @@ getUniform name = do mprg <- loadedProgram <$> Draw get
                           Just prg -> getDrawResource gl uniforms (prg, name)
                           Nothing -> return $ Left "No loaded program."
 
-getGeometry :: GLES => Geometry is -> Draw (Either String LoadedGeometry)
+getGeometry :: GLES => Geometry (i ': is) -> Draw (Either String LoadedGeometry)
 getGeometry = getDrawResource id geometries
 
 getTexture :: GLES => Texture -> Draw (Either String LoadedTexture)
@@ -620,7 +621,7 @@ instance GLES => Resource (LoadedProgram, String) UniformLocation GL where
                    return . Right $ UniformLocation loc
         unloadResource _ _ = return ()
 
-instance GLES => Resource (Geometry is) LoadedGeometry Draw where
+instance GLES => Resource (Geometry (i ': is)) LoadedGeometry Draw where
         loadResource = runExceptT .
                        loadGeometry (ExceptT . getDrawResource gl attributes)
                                     (ExceptT . getDrawResource gl elemBuffers)

@@ -64,7 +64,7 @@ rect :: GLES => Texture -> Object2D
 rect = flip poly rectGeometry
 
 -- | A 2D object with a specified 'Geometry'.
-poly :: GLES => Texture -> Geometry is -> Object Uniforms2D is
+poly :: GLES => Texture -> Geometry (i ': is) -> Object Uniforms2D (i ': is)
 poly t g = withTexture t (Image -=) :~>
            Depth -= 0 :~>
            Transform2 -= idmtx :~>

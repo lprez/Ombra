@@ -19,7 +19,7 @@ import Graphics.Rendering.Ombra.Texture
 data Object (gs :: [*]) (is :: [*]) where
         -- | Add a Global to an Object.
         (:~>) :: Global g -> Object gs is -> Object (g ': gs) is
-        Mesh :: Geometry is -> Object '[] is
+        Mesh :: ((i : is') ~ is) => Geometry (i : is') -> Object '[] is
         NoMesh :: Object gs is
         Prop :: ObjProp -> Object gs is -> Object gs is
         Append :: Object gs is -> Object gs is -> Object gs is

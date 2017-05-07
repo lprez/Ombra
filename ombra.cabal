@@ -61,6 +61,7 @@ library
                        Graphics.Rendering.Ombra.Layer.Internal,
                        Graphics.Rendering.Ombra.Object.Internal,
                        Graphics.Rendering.Ombra.Geometry.Internal,
+                       Graphics.Rendering.Ombra.Geometry.Types,
                        Graphics.Rendering.Ombra.Texture.Internal,
                        Graphics.Rendering.Ombra.Blend.Internal,
                        Graphics.Rendering.Ombra.Stencil.Internal

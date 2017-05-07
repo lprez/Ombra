@@ -2,6 +2,8 @@
 
 module Main where
 
+import Control.Applicative
+import Control.Monad (forM_)
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
 import Graphics.Rendering.Ombra.Vector
@@ -43,28 +45,32 @@ Generate a cube where the lateral quads are split vertically into n rectangles.
 This lets us deform the object horizontally.
 -}
 splitCube :: GLES => Int -> Geometry Geometry3D
-splitCube n = mkGeometry3DInd (concat vertices)
-                              (concat floors ++ concat walls)
+splitCube n = buildGeometry $
+        do vertices <- mapM verticesAt floors
+
+           quad $ head vertices
+           quad $ last vertices
+
+           forM_ (zip vertices (tail vertices)) $
+                   \( (bottomNW, bottomNE, bottomSW, bottomSE)
+                    , (topNW, topNE, topSW, topSE)
+                    ) ->
+                            do quad (bottomNW, bottomNE, topNW, topNE)
+                               quad (bottomNE, bottomSE, topNE, topSE)
+                               quad (bottomSE, bottomSW, topSE, topSW)
+                               quad (bottomSW, bottomNW, topSW, topNW)
 
         where -- We don't need normals and UV coordinates in this example so we
               -- just use the 'zeroV' vector. Alternatively we could have used
               -- our own Geometry type without those attributes. It would be
               -- more efficient but also more complex.
-              vertices = [ [ (Vec3 (-1) y (-1), zeroV, zeroV)
-                           , (Vec3 1    y (-1), zeroV, zeroV)
-                           , (Vec3 (-1) y 1, zeroV, zeroV)
-                           , (Vec3 1    y 1, zeroV, zeroV)
-                           ]
-                         | y <- [-1, -1 + 2 / (fromIntegral n - 1) .. 1] ]
-                        
-              walls = [ quadToTriangle (y + l) (y + r) (y + 4 + l) (y + 4 + r)
-                      | (l, r) <- [(0, 1), (1, 3), (3, 2), (2, 0)]
-                      , y <- [0, 4 .. (fromIntegral n - 2) * 4] ]
-
-              floors = [ quadToTriangle y (y + 1) (y + 2) (y + 3)
-                       | y <- [0, fromIntegral (n - 1) * 4] ]
-
-              quadToTriangle a b c d = [Triangle a b c, Triangle b c d]
+              verticesAt y = (,,,) <$> vertex3D (Vec3 (-1) y (-1)) zeroV zeroV
+                                   <*> vertex3D (Vec3 1    y (-1)) zeroV zeroV
+                                   <*> vertex3D (Vec3 (-1) y 1   ) zeroV zeroV
+                                   <*> vertex3D (Vec3 1    y 1   ) zeroV zeroV
+              floors = [-1, -1 + 2 / (fromIntegral n - 1) .. 1]
+              floorCouples = zip floors (tail floors)
+              quad (a, b, c, d) = triangle a b c >> triangle b c d
 
 main :: IO ()
 main = animation scene
