@@ -36,6 +36,7 @@ An example of vertex shader:
 module Graphics.Rendering.Ombra.Shader (
         module Data.Boolean,
         module Data.VectorSpace,
+        module Data.Cross,
         -- * Types
         Shader.Shader,
         Shader.VertexShader,
