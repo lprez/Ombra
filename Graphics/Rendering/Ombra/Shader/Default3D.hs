@@ -2,7 +2,7 @@
 
 module Graphics.Rendering.Ombra.Shader.Default3D (
         Uniforms,
-        Attributes,
+        Geometry3D,
         Texture2(..),
         Transform3(..),
         View3(..),
@@ -17,7 +17,9 @@ module Graphics.Rendering.Ombra.Shader.Default3D (
 import Graphics.Rendering.Ombra.Shader
 
 type Uniforms = '[Project3, View3, Transform3, Texture2]
-type Attributes = '[Position3, UV, Normal3]
+
+-- | A 3D geometry.
+type Geometry3D = '[Position3, UV, Normal3]
 
 data Texture2 = Texture2 GSampler2D deriving Generic
 
@@ -33,7 +35,7 @@ data Normal3 = Normal3 GVec3 deriving Generic
 
 -- | The output position and normal are in view space.
 vertexShader :: VertexShader '[ Project3, View3, Transform3 ]
-                             Attributes
+                             Geometry3D
                              '[ Position3, UV, Normal3 ]
 vertexShader (  Project3 projMatrix
              :- View3 viewMatrix

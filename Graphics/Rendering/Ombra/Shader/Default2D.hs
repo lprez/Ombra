@@ -2,7 +2,7 @@
 
 module Graphics.Rendering.Ombra.Shader.Default2D (
         Uniforms,
-        Attributes,
+        Geometry2D,
         Image(..),
         Depth(..),
         Transform2(..),
@@ -16,7 +16,9 @@ module Graphics.Rendering.Ombra.Shader.Default2D (
 import Graphics.Rendering.Ombra.Shader
 
 type Uniforms = '[View2, Image, Depth, Transform2]
-type Attributes = '[Position2, UV]
+
+-- | A 2D geometry.
+type Geometry2D = '[Position2, UV]
 
 -- | An uniform that represents the texture used in the default 2D shader.
 data Image = Image GSampler2D deriving Generic
@@ -33,7 +35,8 @@ data View2 = View2 GMat3 deriving Generic
 data Position2 = Position2 GVec2 deriving Generic
 
 vertexShader :: VertexShader '[Transform2, View2, Depth]
-                             '[Position2, UV] '[UV]
+                             '[Position2, UV]
+                             '[UV]
 vertexShader (Transform2 trans :- View2 view :- Depth z :- N)
              (Position2 pos :- uv@(UV _) :- N) =
                 let GVec3 x' y' _ = view .*. trans .* (pos ^| 1)

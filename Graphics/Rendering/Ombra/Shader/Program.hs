@@ -44,13 +44,13 @@ newtype ProgramIndex = ProgramIndex Int deriving Eq
 type DefaultUniforms3D = Default3D.Uniforms
 
 -- | The attributes used in the default 3D program.
-type DefaultAttributes3D = Default3D.Attributes
+type DefaultAttributes3D = Default3D.Geometry3D
 
 -- | The uniforms used in the default 2D program.
 type DefaultUniforms2D = Default2D.Uniforms
 
 -- | The attributes used in the default 2D program.
-type DefaultAttributes2D = Default2D.Attributes
+type DefaultAttributes2D = Default2D.Geometry2D
 
 instance Hashable (Program gs is) where
         hashWithSalt salt (Program _ _ h) = hashWithSalt salt h
