@@ -3,8 +3,9 @@ module Main where
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
 import Graphics.Rendering.Ombra.Vector
+import Utils.TextureLoader
+import Utils.Play
 import Program
-import Common
 
 scene :: Texture -> Float -> Layer
 scene tex time = let rotatedCube off =   trans (Vec3 0 (- 0.4) (- 1.6))
@@ -26,7 +27,7 @@ scene tex time = let rotatedCube off =   trans (Vec3 0 (- 0.4) (- 1.6))
                  in layer prg viewGroup
         where -- Creating programs is a slow operation so we put it here to
               -- avoid creating one in every frame.
-              prg :: Program Uniforms Attributes
+              prg :: Program Uniforms Geometry3D
               prg = program vertexShader fragmentShader
 
 main :: IO ()

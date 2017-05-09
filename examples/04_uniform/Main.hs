@@ -8,7 +8,8 @@ import Graphics.Rendering.Ombra.Vector
 import Graphics.Rendering.Ombra.Shader
 import Graphics.Rendering.Ombra.Shader.Default3D
        hiding (fragmentShader, Uniforms)
-import Common
+import Utils.TextureLoader
+import Utils.Play
 
 -- We'll pass two additional uniforms to the shaders (only the fragment shader
 -- will use them).
@@ -46,7 +47,7 @@ scene tex noiseTex time =
                             :~> withTexture noiseTex (NoiseTexture -=)
                             :~> viewGroup
             in layer prg timeNoiseGroup
-        where prg :: Program Uniforms Attributes
+        where prg :: Program Uniforms Geometry3D
               prg = program vertexShader fragmentShader
 
 fragmentShader :: FragmentShader '[ Time, NoiseTexture, Texture2 ]

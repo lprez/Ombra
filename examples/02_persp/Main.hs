@@ -3,7 +3,9 @@ module Main where
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
 import Graphics.Rendering.Ombra.Vector
-import Common
+
+import Utils.TextureLoader
+import Utils.Play
 
 -- This is similiar to the scene of the previous example, but with perspective
 -- projection and three objects instead of one.

@@ -3,7 +3,9 @@ module Main where
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
 import Graphics.Rendering.Ombra.Vector
-import Common
+
+import Utils.TextureLoader
+import Utils.Play
 
 scene :: Texture -> Layer
 scene tex = let rotatedCube =   rotY (pi / 4) -- Rotate the cube around the Y
@@ -32,7 +34,7 @@ scene tex = let rotatedCube =   rotY (pi / 4) -- Rotate the cube around the Y
             in layerS viewGroup
 
 main :: IO ()
--- We use the helper functions 'loadTexture' and 'static' from the Common module
+-- We use the helper functions 'loadTexture' and 'static' from the Utils modules
 -- to load the cube texture and create a window and a OpenGL context with GLFW,
 -- drawing the Layer inside.
 main = loadTexture "../tex.png" >>= static . scene

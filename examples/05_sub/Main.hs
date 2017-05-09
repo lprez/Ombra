@@ -7,7 +7,8 @@ import ProgramCommon
 import Program3D
 import qualified Graphics.Rendering.Ombra.D2 as D2
 import qualified ProgramDistort as D2
-import Common
+import Utils.TextureLoader
+import Utils.Play
 
 scene :: Texture -> Texture -> Float -> Layer
 scene tex noiseTex time =
@@ -42,10 +43,10 @@ scene tex noiseTex time =
                         layer prg2D
                       . D2.view idmtx
                       $ [distortedRect renderedSceneTex]
-        where prg :: Program Uniforms Attributes
+        where prg :: Program Uniforms Geometry3D
               prg = program vertexShader fragmentShader
 
-              prg2D :: Program D2.Uniforms D2.Attributes
+              prg2D :: Program D2.Uniforms D2.Geometry2D
               prg2D = program D2.vertexShader D2.fragmentShader
 
 main :: IO ()

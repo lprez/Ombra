@@ -8,7 +8,7 @@ import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.D3
 import Graphics.Rendering.Ombra.Vector
 
-import Common
+import Utils.Play
 import Program
 
 scene :: Float -> Layer
@@ -29,7 +29,7 @@ scene time = let -- We could have used the 'mesh' function, but that requires
              in layer prg grp
         where para = splitCube 20
 
-prg :: Program Uniforms Attributes
+prg :: Program Uniforms Geometry3D
 prg = program vertexShader fragmentShader
 
 {-
