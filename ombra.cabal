@@ -99,7 +99,7 @@ library
   build-depends:       base <5.0, Boolean <0.3, vector-space <0.11, hashable <1.3, unordered-containers <0.3, transformers <0.6, hashtables <1.4
 
   if flag(opengl) && !flag(webgl)
-    build-depends:     gl <0.8
+    build-depends:     gl >=0.8 && <0.9
 
   if flag(webgl)
     build-depends:     ghcjs-base
