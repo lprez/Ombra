@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs, TypeOperators, KindSignatures, DataKinds, FlexibleContexts,
              MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables,
-             PolyKinds, TypeFamilies, RankNTypes, ConstraintKinds #-}
+             PolyKinds, TypeFamilies, RankNTypes, ConstraintKinds,
+             UndecidableInstances #-}
 
 module Graphics.Rendering.Ombra.Geometry.Internal (
         LoadedBuffer,
@@ -12,6 +13,7 @@ module Graphics.Rendering.Ombra.Geometry.Internal (
         buildGeometry,
         buildGeometryT,
         decompose,
+        mapVertices,
         removeAttribute,
         loadGeometry,
         deleteGeometry
@@ -54,6 +56,18 @@ emptyGeometry = rehashGeometry $ Geometry 0 0 emptyAttrCol (Triangles 0 []) (-1)
 downList :: NotTop p => AttrTable p (i ': is) -> [CPU 'S i] -> [CPU 'S i]
 downList AttrEnd xs = xs
 downList (AttrCell x _ down) xs = downList down $ x : xs
+
+foldVertices :: NotTop p
+             => (AttrVertex is -> b -> b)
+             -> b
+             -> AttrTable p is
+             -> (Int, b)
+foldVertices f acc AttrEnd = (-1, acc)
+foldVertices f acc cell@(AttrCell _ _ down) =
+        let (didx, acc') = foldVertices f acc down
+            idx = didx + 1
+            widx = fromIntegral idx
+        in (idx, f (AttrVertex widx cell) acc')
 
 addVertex :: Attributes is
           => Vertex is
@@ -125,79 +139,79 @@ mkGeometry t = buildGeometry (foldlM add H.empty t >> return ())
                      Nothing -> do av <- vertex v
                                    return (H.insert v av vertices, av)
 
+attrVertexToVertex :: Attributes is => AttrVertex is -> Vertex is
+attrVertexToVertex (AttrVertex _ tab) = rowToVertex tab
+
 -- | Convert a 'Geometry' back to a list of triangles.
 decompose :: Geometry (i ': is) -> [Triangle (Vertex (i ': is))] 
-decompose g@(Geometry _ _ _ (Triangles _ triangles) _) = flip map triangles $
-        \(Triangle (AttrVertex  _ x) (AttrVertex _ y) (AttrVertex _ z)) ->
-                Triangle (rowToVertex x) (rowToVertex y) (rowToVertex z)
+decompose g@(Geometry _ _ _ (Triangles _ triangles) _) =
+        flip map triangles $ fmap attrVertexToVertex
+
+type AttrVertexMap is v = H.HashMap (AttrVertex is) v
+
+-- | Transform each vertex of a geometry. You can create a value for each
+-- triangle so that the transforming function will receive a list of the values
+-- of the triangles the vertex belongs to.
+mapVertices :: (Attributes is, Attributes is', GLES)
+            => (Triangle (Vertex is) -> a)
+            -> ([a] -> Vertex is -> Vertex is')
+            -> Geometry is
+            -> Geometry is'
+mapVertices getValue (transVert :: [a] -> Vertex is -> Vertex is')
+            (Geometry _ _ (AttrTop _ _ row0) (Triangles thash triangles) _) =
+        let accTriangle vertMap tri@(Triangle v1 v2 v3) (values, triangles) =
+                    let value = getValue $ fmap attrVertexToVertex tri
+                        values' = foldr (flip (H.insertWith (++)) [value])
+                                        values
+                                        [v1, v2, v3]
+                        tri' = fmap (vertMap H.!) tri
+                    in (values', tri' : triangles)
+
+            accVertex valueMap avert (vertMap, geom) =
+                    let value = valueMap H.! avert
+                        vert = attrVertexToVertex avert
+                        vert' = transVert value vert
+                        (avert', geom') = addVertex vert' geom
+                        vertMap' = H.insert avert avert' vertMap
+                    in (vertMap', geom')
+
+            (valueMap, triangles') = foldr (accTriangle vertMap)
+                                           (H.empty, [])
+                                           triangles
+            (_, (vertMap, Geometry tophash' _ top' _ lidx)) =
+                    foldVertices (accVertex valueMap)
+                                 (H.empty, emptyGeometry)
+                                 row0
+            geom' = Geometry tophash' 0 top' (Triangles thash triangles') lidx
+        in rehashGeometry geom'
 
 -- | Remove an attribute from a geometry.
-removeAttribute :: (RemoveAttr i is, Attributes (Remove i is), GLES)
+removeAttribute :: ( RemoveAttr i is
+                   , Attributes is
+                   , Attributes (Remove i is)
+                   , GLES
+                   )
                 => (a -> i)      -- ^ Attribute constructor (or any other
                                  -- function with that type).
                 -> Geometry is
                 -> Geometry (Remove i is)
-removeAttribute (g :: a -> i)
-                (Geometry _ _ top@(AttrTop _ _ firstRow)
-                         (Triangles thash triangles :: Elements is) lidx) =
-        let row :: NotTop p
-                => AttrTable p is
-                -> ( Int
-                   , [(AttrVertex is, AttrVertex (Remove i is))]
-                   , AttrTable p (Remove i is)
-                   )
-            row AttrEnd = (-1, [], AttrEnd)
-            row cell@(AttrCell _ _ down) =
-                    let (didx, ms, down') = row down
-                        idx = fromIntegral $ didx + 1
-                        cell' = removeAttrCell g down' cell
-                        in ( didx + 1
-                           , (AttrVertex idx cell, AttrVertex idx cell') : ms
-                           , cell'
-                           )
-            (_, mappings, firstRow') = row firstRow
-            rowMap = H.fromList mappings
-            top' = removeAttrTop g firstRow' top
+removeAttribute g = mapVertices (const ()) (const $ removeAttr g)
 
-            triangles' = flip map triangles $ \(Triangle x y z) ->
-                                Triangle (rowMap H.! x)
-                                         (rowMap H.! y)
-                                         (rowMap H.! z)
-            elements' = Triangles thash triangles'
-        in rehashGeometry $ Geometry (H.hash top') 0 top' elements' lidx
+class RemoveAttr i is where
+        removeAttr :: (a -> i) -> Vertex is -> Vertex (Remove i is)
 
-
-class RemoveAttr i is' where
-        removeAttrCell :: (a -> i)
-                       -> AttrTable p (Remove i is')
-                       -> AttrTable (Previous p) is'
-                       -> AttrTable (Previous p) (Remove i is')
-        removeAttrTop :: (a -> i)
-                      -> AttrTable p (Remove i is')
-                      -> AttrTable Top is'
-                      -> AttrTable Top (Remove i is')
-
-instance RemoveAttr i '[] where
-        removeAttrCell _ _ AttrNil = AttrNil
-        removeAttrTop _ _ AttrNil = AttrNil
+instance {-# OVERLAPPING #-} (Remove i '[i', i] ~ '[i']) =>
+        RemoveAttr i '[i', i] where
+        removeAttr g (Attr g' x :~ _) = Attr g' x
 
 instance {-# OVERLAPPING #-} RemoveAttr i is' => RemoveAttr i (i ': is') where
-        removeAttrCell g downNext (AttrCell _ next _) =
-                removeAttrCell g downNext next
-        removeAttrTop g downNext (AttrTop _ next _) =
-                removeAttrTop g downNext next
+        removeAttr g (Attr _ _ :~ v) = removeAttr g v
 
 instance {-# OVERLAPPABLE #-} ( RemoveAttr i is'
                               , Remove i (i' ': is') ~ (i' ': Remove i is')
                               ) => RemoveAttr i (i' ': is') where
-        removeAttrCell g down@(AttrCell _ downNext _) (AttrCell h next _) =
-                AttrCell h (removeAttrCell g downNext next) down
-        removeAttrCell g down@AttrEnd (AttrCell h next _) =
-                AttrCell h (removeAttrCell g AttrEnd next) down
-        removeAttrTop g down@(AttrCell _ downNext _) (AttrTop h next _) =
-                AttrTop h (removeAttrTop g downNext next) down
-        removeAttrTop g down@AttrEnd (AttrTop h next _) =
-                AttrTop h (removeAttrTop g AttrEnd next) down
+        removeAttr g (Attr g' x) = Attr g' x
+        removeAttr g (Attr g' x :~ v) = Attr g' x :~ removeAttr g v
 
 instance GLES => Resource (AttrCol (i ': is)) LoadedAttribute GL where
         loadResource (AttrTop _ _ down :: AttrCol (i ': is)) =
