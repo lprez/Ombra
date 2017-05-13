@@ -1,53 +1,67 @@
-{-# LANGUAGE GADTs, DataKinds, KindSignatures, TypeOperators,
-             FlexibleContexts #-}
+{-# LANGUAGE GADTs, DataKinds, PolyKinds, ConstraintKinds #-}
 
-module Graphics.Rendering.Ombra.Object.Internal where
+module Graphics.Rendering.Ombra.Object.Internal (
+        MonadObject,
+        MonadDrawingMode(..),
+        drawObject
+) where
 
-import Data.Proxy (Proxy)
-import Data.Monoid
-import qualified Graphics.Rendering.Ombra.Blend as Blend
-import qualified Graphics.Rendering.Ombra.Stencil as Stencil
-import Graphics.Rendering.Ombra.Geometry
-import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Internal.GL (ActiveTexture)
-import Graphics.Rendering.Ombra.Internal.TList
+import Data.Proxy (Proxy(..))
+import Graphics.Rendering.Ombra.Blend as Blend
+import Graphics.Rendering.Ombra.Geometry.Internal
+import Graphics.Rendering.Ombra.Internal.GL
+import Graphics.Rendering.Ombra.Object.Types
+import Graphics.Rendering.Ombra.Screen
 import Graphics.Rendering.Ombra.Shader.CPU
-import Graphics.Rendering.Ombra.Shader.ShaderVar
-import Graphics.Rendering.Ombra.Texture
+import Graphics.Rendering.Ombra.Shader.Program
+import Graphics.Rendering.Ombra.Shader.ShaderVar (varBuild)
+import Graphics.Rendering.Ombra.Stencil as Stencil
+import Graphics.Rendering.Ombra.Texture.Internal
 
--- | A geometry associated with some uniforms.
-data Object (gs :: [*]) (is :: [*]) where
-        -- | Add a Global to an Object.
-        (:~>) :: Global g -> Object gs is -> Object (g ': gs) is
-        Mesh :: ((i : is') ~ is) => Geometry (i : is') -> Object '[] is
-        NoMesh :: Object gs is
-        Prop :: ObjProp -> Object gs is -> Object gs is
-        Append :: Object gs is -> Object gs is -> Object gs is
+type MonadObject m = ( MonadProgram m
+                     , MonadTexture m
+                     , MonadScreen m
+                     , MonadGeometry m
+                     , MonadDrawingMode m
+                     )
 
-data ObjProp = Blend (Maybe Blend.Mode)
-             | Stencil (Maybe Stencil.Mode)
-             | Cull (Maybe CullFace)
-             | DepthTest Bool
-             | DepthMask Bool
-             | ColorMask (Bool, Bool, Bool, Bool)
+class MonadDrawingMode m where
+        withBlendMode :: Maybe Blend.Mode -> m a -> m a
+        withStencilMode :: Maybe Stencil.Mode -> m a -> m a
+        withDepthTest :: Bool -> m a -> m a
+        withDepthMask :: Bool -> m a -> m a
+        withColorMask :: (Bool, Bool, Bool, Bool) -> m a -> m a
+        withCulling :: Maybe CullFace -> m a -> m a
 
-infixr 2 :~>
+withGlobal :: (MonadProgram m, MonadTexture m, MonadScreen m)
+           => Global g
+           -> m ()
+           -> m ()
+withGlobal (Single g c) act =
+        setUniformValue (Proxy :: Proxy 'S)  (g undefined) c >> act
+withGlobal (Mirror g c) act =
+           setUniformValue (Proxy :: Proxy 'M) (varBuild (const undefined) g) c
+        >> act
+withGlobal (WithTexture t gf) act =
+        withActiveTexture t () $ flip withGlobal act . gf
+withGlobal (WithTextureSize t gf) act =
+        textureSize t >>= flip withGlobal act . gf
+withGlobal (WithFramebufferSize gf) act =
+        currentViewport >>= flip withGlobal act . gf
 
--- | The value of a GPU uniform.
-data Global g where
-        Single :: (ShaderVar g, Uniform 'S g)
-               => (a -> g) -> (CPU 'S g) -> Global g
-        Mirror :: (ShaderVar g, Uniform 'M g)
-               => Proxy g -> (CPU 'M g) -> Global g
-        WithTexture :: Texture -> (ActiveTexture -> Global g) -> Global g
-        WithTextureSize :: Texture -> ((Int, Int) -> Global g) -> Global g
-        WithFramebufferSize :: ((Int, Int) -> Global g) -> Global g
+withObjProp :: MonadDrawingMode m => ObjProp -> m a -> m a
+withObjProp (Blend m) a = withBlendMode m a
+withObjProp (Stencil m) a = withStencilMode m a
+withObjProp (DepthTest d) a = withDepthTest d a
+withObjProp (DepthMask m) a = withDepthMask m a
+withObjProp (ColorMask m) a = withColorMask m a
+withObjProp (Cull face) a = withCulling face a
 
-
--- Side(s) to be culled.
-data CullFace = CullFront | CullBack | CullFrontBack deriving Eq
-
--- TODO: should be Semigroup, mempty is unsafe
-instance (ShaderVars gs, ShaderVars is) => Monoid (Object gs is) where
-        mempty = NoMesh
-        mappend = Append
+drawObject :: MonadObject m
+           => Object gs is
+           -> m ()
+drawObject (g :~> o) = withGlobal g $ drawObject o
+drawObject (Mesh g) = drawGeometry g
+drawObject NoMesh = return ()
+drawObject (Prop p o) = withObjProp p $ drawObject o
+drawObject (Append o o') = drawObject o >> drawObject o'

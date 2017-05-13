@@ -6,6 +6,7 @@ module Graphics.Rendering.Ombra.Geometry (
         Vertex(..),
         Triangle(..),
         mkGeometry,
+        mapVertices,
         removeAttribute,
         decompose,
         -- * Geometry builder

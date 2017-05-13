@@ -1,54 +1,63 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Graphics.Rendering.Ombra.Texture.Internal where
+module Graphics.Rendering.Ombra.Texture.Internal (
+        MonadTexture(..),
+        withActiveTexture,
+        textureSize,
+        emptyTexture
+) where
 
 import Control.Monad (when)
 import Data.Hashable
 import Graphics.Rendering.Ombra.Backend (GLES)
-import qualified Graphics.Rendering.Ombra.Backend as GL
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Internal.GL hiding (Texture)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
+import Graphics.Rendering.Ombra.Internal.GL hiding (Texture)
 import Graphics.Rendering.Ombra.Internal.Resource
+import Graphics.Rendering.Ombra.Texture.Types
 
--- | A texture.
-data Texture = TextureImage TextureImage
-             | TextureLoaded LoadedTexture
-             deriving Eq
-             
-data TextureImage = TexturePixels Bool [[Color]] (Filter, Maybe Filter) Filter
-                                  GLSize GLSize Int
-                  | TextureRaw Bool [UInt8Array] (Filter, Maybe Filter) Filter
-                               GLSize GLSize Int
-                  | TextureFloat [Float] (Filter, Maybe Filter) Filter
-                                 GLSize GLSize Int
-
-data Filter = Linear    -- ^ Average of the four nearest pixels.
-            | Nearest   -- ^ Nearest pixel.
-            deriving Eq
-
-data LoadedTexture = LoadedTexture GLSize GLSize GL.Texture
-
-instance Hashable TextureImage where
-        hashWithSalt salt tex = hashWithSalt salt $ textureHash tex
-
-instance Eq TextureImage where
-        (TexturePixels _ _ _ _ _ _ h) == (TexturePixels _ _ _ _ _ _ h') = h == h'
-        (TextureRaw _ _ _ _ _ _ h) == (TextureRaw _ _ _ _ _ _ h') = h == h'
-        (TextureFloat _ _ _ _ _ h) == (TextureFloat _ _ _ _ _ h') = h == h'
-        _ == _ = False
-
-instance GLES => Eq LoadedTexture where
-        LoadedTexture _ _ t == LoadedTexture _ _ t' = t == t'
-
-textureHash :: TextureImage -> Int
-textureHash (TexturePixels _ _ _ _ _ _ h) = h
-textureHash (TextureRaw _ _ _ _ _ _ h) = h
-textureHash (TextureFloat _ _ _ _ _ h) = h
+class (MonadGL m, GLES) => MonadTexture m where
+        getTexture :: Texture -> m (Either String LoadedTexture)
+        getActiveTexturesCount :: m Int
+        setActiveTexturesCount :: Int -> m ()
+        newTexture :: Int
+                   -> Int
+                   -> (Filter, Maybe Filter)
+                   -> Filter
+                   -> m LoadedTexture
+        unusedTexture :: LoadedTexture -> m ()
 
 instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i
         unloadResource _ (LoadedTexture _ _ t) = deleteTexture t
+
+makeActive :: MonadTexture m => (ActiveTexture -> m a) -> m a
+makeActive f = do atn <- getActiveTexturesCount
+                  setActiveTexturesCount $ atn + 1
+                  gl . activeTexture $ gl_TEXTURE0 + fromIntegral atn
+                  ret <- f . ActiveTexture . fromIntegral $ atn
+                  setActiveTexturesCount $ atn
+                  return ret
+
+withActiveTexture :: MonadTexture m
+                  => Texture
+                  -> a
+                  -> (ActiveTexture -> m a)
+                  -> m a
+withActiveTexture tex fail f = getTexture tex >>= \etex ->
+        case etex of
+             Left _ -> return fail
+             Right (LoadedTexture _ _ wtex) -> makeActive $
+                        \at -> do gl $ bindTexture gl_TEXTURE_2D wtex
+                                  f at
+
+-- | Get the dimensions of a 'Texture'.
+textureSize :: (MonadTexture m, Num a) => Texture -> m (a, a)
+textureSize tex = do etex <- getTexture tex
+                     case etex of
+                          Left _ -> return (0, 0)
+                          Right (LoadedTexture w h _) ->
+                                  return (fromIntegral w, fromIntegral h)
 
 loadTextureImage :: GLES => TextureImage -> GL LoadedTexture
 loadTextureImage (TexturePixels g pss min mag w h hash) =

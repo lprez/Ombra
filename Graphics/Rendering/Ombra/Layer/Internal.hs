@@ -3,69 +3,19 @@
 module Graphics.Rendering.Ombra.Layer.Internal where
 
 import Data.Word (Word8)
+import Control.Monad (when)
 import Graphics.Rendering.Ombra.Color
+import Graphics.Rendering.Ombra.Internal.GL hiding (Buffer, Texture)
+import qualified Graphics.Rendering.Ombra.Internal.GL as GL
 import Graphics.Rendering.Ombra.Internal.TList
+import Graphics.Rendering.Ombra.Internal.Resource
+import Graphics.Rendering.Ombra.Layer.Types
 import Graphics.Rendering.Ombra.Object.Internal
+import Graphics.Rendering.Ombra.Object.Types
+import Graphics.Rendering.Ombra.Screen
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Texture.Internal
-
--- | An 'Object' associated with a program.
-type Layer = Layer' Drawable () ()
-
--- | A layer with a return value. It may also be 'NonDrawable', this means that
--- there are some protected temporary resources and you have to call 'drawable'
--- to turn it into a normal layer. The second parameter prevents the 'TTexture's
--- from being returned by a @NonDrawable@ layer in a @drawable@ operation.
---
--- Note that layers are monads: @flip ('>>')@ is equivalent to 'over' for
--- Drawable layers, while ('>>='), in combination with the *ToTexture functions,
--- can be used to achieve the same effect of the subLayer functions.
-data Layer' (s :: LayerStatus) t a where
-        Layer :: (Subset pi oi, Subset pg og)
-              => Program pg pi
-              -> Object og oi
-              -> Layer' s t ()
-        TextureLayer :: Bool                    -- Use drawBuffers
-                     -> [LayerType]             -- Attachments
-                     -> (Int, Int)              -- Width, height
-                     -> (Int, Int, Int, Int)    -- Inspect rectangle
-                     -> Bool                    -- Inspect color
-                     -> Bool                    -- Inspect depth
-                     -> Layer' s t a            -- Layer to draw
-                     -> Layer' NonDrawable t
-                               (a, [TTexture t], Maybe [Color], Maybe [Word8])
-        Permanent :: TTexture t -> Layer' NonDrawable t Texture
-        WithTTextures :: [TTexture t]
-                      -> ([Texture] -> Layer)
-                      -> Layer' NonDrawable t ()
-        Free :: (forall t. Layer' NonDrawable t a) -> Layer' s t a
-        Clear :: [Buffer] -> Layer' s t ()
-        Cast :: Layer' Drawable t a -> Layer' Drawable t' a
-        Bind :: Layer' s t a -> (a -> Layer' s t b) -> Layer' s t b
-        Return :: a -> Layer' s t a
-
--- | Temporary texture.
-newtype TTexture t = TTexture LoadedTexture deriving Eq
-
-data LayerStatus = Drawable | NonDrawable
-
-data Buffer = ColorBuffer | DepthBuffer | StencilBuffer
-
-data LayerType = ColorLayer
-               | DepthLayer
-               | DepthStencilLayer
-               | BufferLayer Int deriving Eq
-
-instance Functor (Layer' s t) where
-        fmap f = flip Bind $ Return . f
-
-instance Applicative (Layer' s t) where
-        lf <*> lx = Bind lf $ \f -> Bind lx $ \x -> Return $ f x
-        pure = Return
-
-instance Monad (Layer' s t) where
-        (>>=) = Bind
-        return = Return
+import Graphics.Rendering.Ombra.Texture.Types
 
 -- TODO: document buffers.
 -- | Layer that clear some buffers. For instance, @clear ['ColorBuffer']@ fills
@@ -216,3 +166,168 @@ buffersStencilToTexture w h n l =
                 TextureLayer True
                              (DepthStencilLayer : map BufferLayer [0 .. n - 1])
                              (w, h) (0, 0, 0, 0) False False l
+
+clearBuffers :: (GLES, MonadGL m) => [Buffer] -> m ()
+clearBuffers = mapM_ $ gl . GL.clear . buffer
+        where buffer ColorBuffer = gl_COLOR_BUFFER_BIT
+              buffer DepthBuffer = gl_DEPTH_BUFFER_BIT
+              buffer StencilBuffer = gl_STENCIL_BUFFER_BIT
+
+-- | Draw a 'Layer'.
+drawLayer :: MonadObject m => Layer' Drawable t a -> m a
+drawLayer = fmap fst . flip drawLayer' []
+
+drawLayer' :: MonadObject m
+           => Layer' s t a
+           -> [TTexture t]
+           -> m (a, [TTexture t])
+drawLayer' (Layer prg grp) ts = do setProgram prg
+                                   drawObject grp
+                                   return ((), ts)
+drawLayer' (TextureLayer drawBufs stypes (w, h) (rx, ry, rw, rh)
+                         inspCol inspDepth layer) tts0 =
+        do (x, tts1, ts, mcol, mdepth) <-
+                layerToTexture drawBufs stypes w h layer
+                               (mayInspect inspCol) (mayInspect inspDepth) tts0
+           let tts2 = map (TTexture . LoadedTexture gw gh) ts
+           return ((x, tts2, mcol, mdepth), tts1 ++ tts2)
+        where (gw, gh) = (fromIntegral w, fromIntegral h)
+        
+              mayInspect :: Monad m
+                         => Bool
+                         -> Either (Maybe [r])
+                                   ([r] -> m (Maybe [r]), Int, Int, Int, Int)
+              mayInspect True = Right (return . Just, rx, ry, rw, rh)
+              mayInspect False = Left Nothing
+drawLayer' (Permanent tt@(TTexture lt)) tts = 
+        do let t = TextureLoaded lt
+           gl $ unloader t (Nothing :: Maybe TextureImage) lt
+           return (t, filter (/= tt) tts)
+drawLayer' (WithTTextures ets f) tts =
+        do drawLayer . f $ map (\(TTexture lt) -> TextureLoaded lt) ets
+           return ((), tts)
+drawLayer' (Free layer) tts =
+        do (x, tts') <- drawLayer' layer []
+           mapM_ (\(TTexture lt) -> unusedTexture lt) tts'
+           return (x, tts)
+drawLayer' (Clear bufs) tts = clearBuffers bufs >> return ((), tts)
+drawLayer' (Cast layer) tts =
+        do (x, tts') <- drawLayer' layer $ map castTTexture tts
+           return (x, map castTTexture tts')
+drawLayer' (Bind lx f) tts0 = drawLayer' lx tts0 >>=
+                                \(x, tts1) -> drawLayer' (f x) tts1
+drawLayer' (Return x) tts = return (x, tts)
+
+-- | Draw a 'Layer' on some textures.
+layerToTexture :: (GLES, Integral a, MonadObject m)
+               => Bool                                  -- ^ Draw buffers
+               -> [LayerType]                           -- ^ Textures contents
+               -> a                                     -- ^ Width
+               -> a                                     -- ^ Height
+               -> Layer' s t x                          -- ^ Layer to draw
+               -> Either b ( [Color] -> m b
+                           , Int, Int, Int, Int)        -- ^ Color inspecting
+                                                        -- function, start x,
+                                                        -- start y, width,
+                                                        -- height
+               -> Either c ( [Word8] -> m c
+                           , Int, Int, Int, Int)        -- ^ Depth inspecting,
+                                                        -- function, etc.
+               -> [TTexture t]
+               -> m (x, [TTexture t], [GL.Texture], b ,c)
+layerToTexture drawBufs stypes wp hp layer einspc einspd tts = do
+        (ts, (x, tts', colRes, depthRes)) <-
+                renderToTexture drawBufs (map arguments stypes) w h $
+                        do (x, tts') <- drawLayer' layer tts
+                           colRes <- inspect einspc gl_RGBA wordsToColors 4
+                           depthRes <- inspect einspd gl_DEPTH_COMPONENT id 1
+                           return (x, tts', colRes, depthRes)
+
+        return (x, tts', ts, colRes, depthRes)
+
+        where (w, h) = (fromIntegral wp, fromIntegral hp)
+              arguments stype =
+                        case stype of
+                              ColorLayer -> ( fromIntegral gl_RGBA
+                                            , gl_RGBA
+                                            , gl_UNSIGNED_BYTE
+                                            , gl_COLOR_ATTACHMENT0
+                                            , [ColorBuffer] )
+                              DepthLayer -> ( fromIntegral gl_DEPTH_COMPONENT
+                                            , gl_DEPTH_COMPONENT
+                                            , gl_UNSIGNED_SHORT
+                                            , gl_DEPTH_ATTACHMENT
+                                            , [DepthBuffer] )
+                              DepthStencilLayer -> ( fromIntegral
+                                                        gl_DEPTH_STENCIL
+                                                   , gl_DEPTH_STENCIL
+                                                   , gl_UNSIGNED_INT_24_8
+                                                   , gl_DEPTH_STENCIL_ATTACHMENT
+                                                   , [ DepthBuffer
+                                                     , StencilBuffer]
+                                                   )
+                              BufferLayer n -> ( fromIntegral gl_RGBA32F
+                                               , gl_RGBA
+                                               , gl_FLOAT
+                                               , gl_COLOR_ATTACHMENT0 + 
+                                                 fromIntegral n
+                                               , [] )
+
+              inspect (Left r) _ _ _ = return r
+              inspect (Right (insp, x, y, rw, rh)) format trans s =
+                        do arr <- liftIO . newByteArray $
+                                        fromIntegral rw * fromIntegral rh * s
+                           gl $ readPixels (fromIntegral x)
+                                           (fromIntegral y)
+                                           (fromIntegral rw)
+                                           (fromIntegral rh)
+                                           format gl_UNSIGNED_BYTE arr
+                           liftIO (decodeBytes arr) >>= insp . trans
+              wordsToColors (r : g : b : a : xs) = Color r g b a :
+                                                   wordsToColors xs
+              wordsToColors _ = []
+
+renderToTexture :: (GLES, MonadObject m)
+                => Bool
+                -> [(GLInt, GLEnum, GLEnum, GLEnum, [Buffer])]
+                -> GLSize
+                -> GLSize
+                -> m a
+                -> m ([GL.Texture], a)
+renderToTexture drawBufs infos w h act = do
+        fb <- gl createFramebuffer 
+        gl $ bindFramebuffer gl_FRAMEBUFFER fb
+
+        (ts, attchs, buffersToClear) <- fmap unzip3 . flip mapM infos $
+                \(internalFormat, format, pixelType, attachment, buffer) ->
+                        do LoadedTexture _ _ t <- newTexture (fromIntegral w)
+                                                             (fromIntegral h)
+                                                             (Nearest, Nothing)
+                                                             Nearest
+                           gl $ bindTexture gl_TEXTURE_2D t
+                           if pixelType == gl_FLOAT
+                           then liftIO noFloat32Array >>=
+                                        gl . texImage2DFloat gl_TEXTURE_2D 0
+                                                             internalFormat w h
+                                                             0 format pixelType
+                           else liftIO noUInt8Array >>=
+                                        gl . texImage2DUInt gl_TEXTURE_2D 0
+                                                            internalFormat w h
+                                                            0 format pixelType
+                           gl $ framebufferTexture2D gl_FRAMEBUFFER attachment
+                                                     gl_TEXTURE_2D t 0
+                           return (t, fromIntegral attachment, buffer)
+
+        let buffersToDraw = filter (/= fromIntegral gl_DEPTH_ATTACHMENT) attchs
+        when drawBufs $ liftIO (encodeInts buffersToDraw) >>= gl . drawBuffers
+
+        (sw, sh) <- currentViewport
+        resizeViewport (fromIntegral w) (fromIntegral h)
+
+        clearBuffers $ concat buffersToClear
+        ret <- act
+
+        resizeViewport sw sh
+        gl $ deleteFramebuffer fb
+
+        return (ts, ret)

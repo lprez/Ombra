@@ -48,6 +48,7 @@ import Graphics.Rendering.Ombra.Backend (GLES)
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Layer.Internal
+import Graphics.Rendering.Ombra.Layer.Types
 import Graphics.Rendering.Ombra.Object
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Texture

@@ -26,7 +26,7 @@ data ResStatus r = Loaded r
                  | Error String
 
 class (Eq i, Applicative m, EmbedIO m, Hashable i) =>
-        Resource i r m | r -> m where
+        Resource i r m where
         loadResource :: i -> m (Either String r)
         unloadResource :: Maybe i -> r -> m ()
 

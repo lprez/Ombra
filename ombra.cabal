@@ -49,6 +49,7 @@ library
 
   other-modules:       Graphics.Rendering.Ombra.Internal.Resource,
                        Graphics.Rendering.Ombra.Internal.TList,
+                       Graphics.Rendering.Ombra.Screen,
                        Graphics.Rendering.Ombra.Shader.ShaderVar,
                        Graphics.Rendering.Ombra.Shader.GLSL,
                        Graphics.Rendering.Ombra.Shader.Stages,
@@ -59,10 +60,13 @@ library
                        Graphics.Rendering.Ombra.Shader.Language.Functions,
                        Graphics.Rendering.Ombra.Draw.Internal,
                        Graphics.Rendering.Ombra.Layer.Internal,
+                       Graphics.Rendering.Ombra.Layer.Types,
                        Graphics.Rendering.Ombra.Object.Internal,
+                       Graphics.Rendering.Ombra.Object.Types,
                        Graphics.Rendering.Ombra.Geometry.Internal,
                        Graphics.Rendering.Ombra.Geometry.Types,
                        Graphics.Rendering.Ombra.Texture.Internal,
+                       Graphics.Rendering.Ombra.Texture.Types,
                        Graphics.Rendering.Ombra.Blend.Internal,
                        Graphics.Rendering.Ombra.Stencil.Internal
 

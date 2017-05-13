@@ -4,12 +4,15 @@
              TypeSynonymInstances, FlexibleContexts #-}
 
 module Graphics.Rendering.Ombra.Shader.Program (
+        MonadProgram(..),
         LoadedProgram(..),
         Compatible,
         Program,
         ProgramIndex,
         program,
-        loadProgram,
+        setProgram,
+        UniformLocation(..),
+        setUniformValue,
         DefaultUniforms2D,
         DefaultAttributes2D,
         DefaultUniforms3D,
@@ -23,10 +26,11 @@ import Data.Hashable
 import qualified Data.HashMap.Strict as H
 import qualified Graphics.Rendering.Ombra.Shader.Default2D as Default2D
 import qualified Graphics.Rendering.Ombra.Shader.Default3D as Default3D
+import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.GLSL
-import Graphics.Rendering.Ombra.Shader.ShaderVar (ShaderVars)
+import Graphics.Rendering.Ombra.Shader.ShaderVar (ShaderVar, ShaderVars)
 import Graphics.Rendering.Ombra.Shader.Stages
-import Graphics.Rendering.Ombra.Internal.GL hiding (Program)
+import Graphics.Rendering.Ombra.Internal.GL hiding (Program, UniformLocation)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Internal.TList
@@ -39,6 +43,8 @@ data Program (gs :: [*]) (is :: [*]) =
 data LoadedProgram = LoadedProgram !GL.Program (H.HashMap String Int) Int
 
 newtype ProgramIndex = ProgramIndex Int deriving Eq
+
+newtype UniformLocation = UniformLocation GL.UniformLocation
 
 -- | The uniforms used in the default 3D program.
 type DefaultUniforms3D = Default3D.Uniforms
@@ -68,6 +74,12 @@ instance GLES => Resource (Program g i) LoadedProgram GL where
         -- TODO: err check!
         loadResource i = loadProgram i
         unloadResource _ (LoadedProgram p _ _) = deleteProgram p
+
+instance GLES => Resource (LoadedProgram, String) UniformLocation GL where
+        loadResource (LoadedProgram prg _ _, g) =
+                do loc <- getUniformLocation prg $ toGLString g
+                   return . Right $ UniformLocation loc
+        unloadResource _ _ = return ()
 
 -- | Compatible shaders.
 type Compatible pgs vgs fgs =
@@ -99,6 +111,24 @@ defaultProgram3D = program Default3D.vertexShader Default3D.fragmentShader
 
 defaultProgram2D :: Program DefaultUniforms2D DefaultAttributes2D
 defaultProgram2D = program Default2D.vertexShader Default2D.fragmentShader
+
+class (GLES, MonadGL m) => MonadProgram m where
+        withProgram :: Program gs is -> (LoadedProgram -> m ()) -> m ()
+        getUniform :: String -> m (Either String UniformLocation)
+
+setUniformValue :: (MonadProgram m, ShaderVar g, Uniform s g)
+                => proxy (s :: CPUSetterType *)
+                -> g
+                -> CPU s g
+                -> m ()
+setUniformValue p g c = withUniforms p g c $ \n ug uc ->
+        getUniform (uniformName g n) >>= \eu ->
+                case eu of
+                     Right (UniformLocation l) -> gl $ setUniform l ug uc
+                     Left _ -> return ()
+
+setProgram :: MonadProgram m => Program gs is -> m ()
+setProgram p = withProgram p $ \(LoadedProgram glp _ _) -> gl $ useProgram glp
 
 loadProgram :: GLES => Program g i -> GL (Either String LoadedProgram)
 loadProgram (Program (vss, attrs) fss h) =

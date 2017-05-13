@@ -51,7 +51,7 @@ import qualified Graphics.Rendering.Ombra.Blend as Blend
 import qualified Graphics.Rendering.Ombra.Stencil as Stencil
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Object.Internal
+import Graphics.Rendering.Ombra.Object.Types
 import Graphics.Rendering.Ombra.Internal.GL (ActiveTexture)
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU hiding (mirror)

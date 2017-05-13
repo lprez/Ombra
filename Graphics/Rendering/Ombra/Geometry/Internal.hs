@@ -4,6 +4,7 @@
              UndecidableInstances #-}
 
 module Graphics.Rendering.Ombra.Geometry.Internal (
+        MonadGeometry(..),
         LoadedBuffer,
         LoadedAttribute,
         LoadedGeometry(..),
@@ -15,11 +16,11 @@ module Graphics.Rendering.Ombra.Geometry.Internal (
         decompose,
         mapVertices,
         removeAttribute,
-        loadGeometry,
-        deleteGeometry
+        drawGeometry
 ) where
 
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Foldable (foldlM)
 import qualified Data.Hashable as H
@@ -35,6 +36,14 @@ import Graphics.Rendering.Ombra.Internal.TList (Remove, Append)
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType(size))
 import Graphics.Rendering.Ombra.Vector
+
+class (GLES, MonadGL m) => MonadGeometry m where
+        getAttribute :: Attribute 'S i
+                     => AttrCol (i ': is)
+                     -> m (Either String LoadedAttribute)
+        getElementBuffer :: Elements is -> m (Either String LoadedBuffer)
+        getGeometry :: Geometry (i ': is) -> m (Either String LoadedGeometry)
+
 
 data LoadedGeometry = LoadedGeometry {
         -- elementType :: GLEnum,
@@ -244,50 +253,45 @@ instance GLES => Resource (Elements is) LoadedBuffer GL where
                                     (AttrVertex z _)) = [x, y, z]
         unloadResource _ (LoadedBuffer buf) = deleteBuffer buf
 
-loadGeometry :: (GLES, Monad m)
-             => (forall i is. Attribute 'S i
-                           => AttrCol (i ': is)
-                           -> m LoadedAttribute
-                )
-             -> (forall is. Elements is -> m LoadedBuffer)
-             -> (forall a. GL a -> m a)
-             -> Geometry (i ': is)
-             -> m LoadedGeometry
-loadGeometry getAttr getElems gl geometry@(Geometry _ _ _ _ _) =
-        do vao <- gl createVertexArray
-           gl $ bindVertexArray vao
+instance (GLES, MonadGeometry m, EmbedIO m) =>
+        Resource (Geometry (i ': is)) LoadedGeometry m where
+        loadResource = loadGeometry
+        unloadResource _ = gl . deleteGeometry
 
-           setAttrTop getAttr gl (0 :: GLUInt) $ top geometry
-           LoadedBuffer eb <- getElems $ elements geometry
+loadGeometry :: (GLES, MonadGeometry m)
+             => Geometry (i ': is)
+             -> m (Either String LoadedGeometry)
+loadGeometry geometry@(Geometry _ _ _ _ _) = runExceptT $
+        do vao <- lift $ gl createVertexArray
+           lift . gl $ bindVertexArray vao
 
-           gl $ do bindBuffer gl_ELEMENT_ARRAY_BUFFER eb
-                   bindVertexArray noVAO
-                   bindBuffer gl_ELEMENT_ARRAY_BUFFER noBuffer
-                   bindBuffer gl_ARRAY_BUFFER noBuffer
+           ExceptT . setAttrTop (0 :: GLUInt) $ top geometry
+           LoadedBuffer eb <- ExceptT . getElementBuffer $ elements geometry
+
+           lift . gl $ do bindBuffer gl_ELEMENT_ARRAY_BUFFER eb
+                          bindVertexArray noVAO
+                          bindBuffer gl_ELEMENT_ARRAY_BUFFER noBuffer
+                          bindBuffer gl_ARRAY_BUFFER noBuffer
 
            return $ LoadedGeometry (elementCount $ elements geometry) vao
         where elementCount (Triangles _ ts) = 3 * length ts
 
-setAttrTop :: (GLES, Monad m, Attributes (i ': is))
-           => (forall i is. Attribute 'S i
-                         => AttrCol (i ': is)
-                         -> m LoadedAttribute
-              )
-           -> (forall a. GL a -> m a)
-           -> GLUInt
+setAttrTop :: (GLES, MonadGeometry m, Attributes (i ': is))
+           => GLUInt
            -> AttrCol (i ': is)
-           -> m ()
-setAttrTop getAttr (gl :: forall a. GL a -> m a) i0 col0 =
-        foldTop setAttr (return i0) col0 >> return ()
-        where setAttr :: m GLUInt -> AttrCol (i ': is) -> m GLUInt
-              setAttr geti col@(AttrTop _ _ _) =
-                do i <- geti
-                   LoadedAttribute sz as <- getAttr col
-                   gl $ mapM_ (\(buf, set) -> do bindBuffer gl_ARRAY_BUFFER buf
-                                                 enableVertexAttribArray i
-                                                 set i
-                           ) as
-                   return $ i + sz
+           -> m (Either String ())
+setAttrTop i0 col0 = runExceptT . (>> return ()) $
+        foldTop (\geti col@(AttrTop _ _ _) ->
+                        do i <- geti
+                           LoadedAttribute sz as <- ExceptT $ getAttribute col
+                           lift . gl $
+                                mapM_ (\(buf, set) ->
+                                        do bindBuffer gl_ARRAY_BUFFER buf
+                                           enableVertexAttribArray i
+                                           set i
+                                      ) as
+                           return $ i + sz
+                ) (return i0) col0
 
 deleteGeometry :: GLES => LoadedGeometry -> GL ()
 deleteGeometry (LoadedGeometry _ vao) = deleteVertexArray vao
@@ -299,3 +303,15 @@ loadBuffer ty bufData =
            bufferData ty bufData gl_STATIC_DRAW
            bindBuffer ty noBuffer
            return buffer
+
+drawGeometry :: MonadGeometry m => Geometry (i ': is) -> m ()
+drawGeometry g = getGeometry g >>= \eg ->
+        case eg of
+             Left _ -> return ()
+             Right (LoadedGeometry ec vao) ->
+                     gl $ do bindVertexArray vao
+                             drawElements gl_TRIANGLES
+                                          (fromIntegral ec)
+                                          gl_UNSIGNED_SHORT
+                                          nullGLPtr
+                             bindVertexArray noVAO

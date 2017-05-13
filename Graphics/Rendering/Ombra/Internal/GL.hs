@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Graphics.Rendering.Ombra.Internal.GL (
+        MonadGL(..),
         GL,
         ActiveTexture(..),
         module Graphics.Rendering.Ombra.Backend,
@@ -144,6 +145,12 @@ import Graphics.Rendering.Ombra.Internal.Resource (EmbedIO(..))
         
 newtype GL a = GL (ReaderT Ctx IO a)
         deriving (Functor, Applicative, Monad, MonadIO)
+
+class MonadIO m => MonadGL m where
+        gl :: GL a -> m a
+
+instance MonadGL GL where
+        gl = id
 
 -- | A Texture ready to be passed as an uniform.
 newtype ActiveTexture = ActiveTexture Word
