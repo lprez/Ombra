@@ -88,6 +88,9 @@ module Graphics.Rendering.Ombra.Shader.Language (
         reflect,
         refract,
         matrixCompMult,
+        dFdx,
+        dFdy,
+        fwidth,
         -- *** Vector relational functions
         VecOrd,
         VecEq,

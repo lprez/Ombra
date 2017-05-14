@@ -88,7 +88,6 @@ class ( Integral GLEnum
         decodeBytes :: UInt8Array -> IO [Word8]
 
         -- | This extension is fundamental and Ombra won't work without it.
-        -- Thankfully it's widely supported.
         hasVertexArrayObjects :: Ctx -> IO Bool
 
         -- | Required for the buffers* layer functions. May not be supported
@@ -98,6 +97,9 @@ class ( Integral GLEnum
         -- | Required for the buffers* layer functions. May not be supported
         -- on older hardware.
         hasDrawBuffers :: Ctx -> IO Bool
+
+        -- | Required for the dFdx, dFdy and fwidth shader functions.
+        hasStandardDerivatives :: Ctx -> IO Bool
 
         glActiveTexture :: Ctx -> GLEnum -> IO ()
         glAttachShader :: Ctx -> Program -> Shader -> IO ()

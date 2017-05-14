@@ -422,6 +422,18 @@ textureCubeBias = fun3 "textureCube"
 textureCubeLod :: GSamplerCube -> GVec3 -> GFloat -> GVec4
 textureCubeLod = fun3 "textureCubeLod"
 
+-- | Partial derivative of the argument with respect to the window X coordinate.
+dFdx :: GenType a => a -> a
+dFdx = fun1 "dFdx"
+
+-- | Partial derivative of the argument with respect to the window Y coordinate.
+dFdy :: GenType a => a -> a
+dFdy = fun1 "dFdy"
+
+-- | Sum of the absolute values of 'dFdx' and 'dFdy'.
+fwidth :: GenType a => a -> a
+fwidth = fun1 "fwidth"
+
 -- | The position of the vertex (only works in the vertex shader).
 position :: GVec4
 position = fromExpr $ Read "gl_Position"

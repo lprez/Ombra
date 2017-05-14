@@ -47,6 +47,7 @@ fragmentToGLSL v =
                     "#extension GL_EXT_draw_buffers : require\n"
                    | otherwise = ""
         in shaderToGLSL ("#version 100\n" ++ header ++
+                         "#extension GL_OES_standard_derivatives : enable\n" ++
                          "precision mediump float;")
                         "varying" "" (vars True v) subst
         where subst = [ ("hvFragmentShaderOutput0", "gl_FragData[0]")

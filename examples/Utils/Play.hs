@@ -58,14 +58,14 @@ play :: MonadIO m
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
      -> m ()
-play width height requireBuffers initialization frame inpCallback _ =
+play width height requireExts initialization frame inpCallback _ =
         do canvas <- liftIO $ query "canvas"
            ctx <- liftIO $ makeContext canvas
            width <- liftIO $ getWidth canvas
            height <- liftIO $ getHeight canvas
            inpCtl <- liftIO $ mkInputControl canvas inpCallback
 
-           mextError <- liftIO $ checkExtensions requireBuffers ctx
+           mextError <- liftIO $ checkExtensions requireExts ctx
            case mextError of
                 Just extError -> liftIO $ alert (fromString extError) >>
                                           exitFailure
@@ -102,14 +102,14 @@ play :: MonadIO m
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
      -> m ()
-play width height requireBuffers initialization frame inpCallback sizeCallback =
+play width height requireExts initialization frame inpCallback sizeCallback =
         do w <- liftIO $ initWindow
            stateRef <- liftIO $ drawState width height >>= newIORef
            ctx <- liftIO $ makeContext
            t0 <- liftIO $ getCurrentTime
            inpCtl <- liftIO $ mkInputControl w inpCallback
 
-           mextError <- liftIO $ checkExtensions requireBuffers ctx
+           mextError <- liftIO $ checkExtensions requireExts ctx
            case mextError of
                 Just extError -> liftIO $ putStrLn extError >> exitFailure
                 Nothing -> return ()
@@ -153,16 +153,19 @@ play width height requireBuffers initialization frame inpCallback sizeCallback =
 #endif
 
 checkExtensions :: GLES => Bool -> Ctx -> IO (Maybe String)
-checkExtensions requireBuffers ctx =
+checkExtensions requireAllExtensions ctx =
         do vaoExt <- hasVertexArrayObjects ctx
            floatTexExt <- hasFloatTextures ctx
            drawBufsExt <- hasDrawBuffers ctx
+           derivativesExt <- hasStandardDerivatives ctx
 
            let e1 = [ "\nVertex array objects are not supported." | not vaoExt ]
                e2 = [ "\nFloat textures are not supported."
-                    | requireBuffers && not floatTexExt ]
+                    | requireAllExtensions && not floatTexExt ]
                e3 = [ "\nMRT are not supported."
-                    | requireBuffers && not drawBufsExt ]
+                    | requireAllExtensions && not drawBufsExt ]
+               e4 = [ "\nStandard derivatives are not supported."
+                    | requireAllExtensions && not derivativesExt ]
            
            return $ case concat [e1, e2, e3] of
                          [] -> Nothing

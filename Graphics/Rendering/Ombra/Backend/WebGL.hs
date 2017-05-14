@@ -75,9 +75,12 @@ makeContext element = do ctx <- JS.getCtx element
                          floatTexExt <- JS.getExtension ctx "OES_texture_float"
                          vaoExt <- JS.getExtension ctx "OES_vertex_array_object"
                          drawBufsExt <- JS.getExtension ctx "WEBGL_draw_buffers"
+                         derivativesExt <- JS.getExtension ctx
+                                                "OES_standard_derivatives"
                          setProp "floatTexExt" floatTexExt $ Object ctx
                          setProp "vaoExt" vaoExt $ Object ctx
                          setProp "drawBufs" drawBufsExt $ Object ctx
+                         setProp "derivatives" derivativesExt $ Object ctx
                          return (counter, ctx)
 
 toJSArray :: ToJSVal a => (v -> Maybe (a, v)) -> v -> IO JSArray.JSArray
@@ -225,6 +228,8 @@ instance GLES where
                 (not . isNull <$>) .  getProp "floatTexExt" . Object . snd
         hasDrawBuffers =
                 (not . isNull <$>) .  getProp "drawBufs" . Object . snd
+        hasStandardDerivatives =
+                (not . isNull <$>) .  getProp "derivatives" . Object . snd
 
         glActiveTexture = JS.glActiveTexture . snd
         glAttachShader = JS.glAttachShader . snd

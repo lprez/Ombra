@@ -106,6 +106,9 @@ module Graphics.Rendering.Ombra.Shader (
         Shader.reflect,
         Shader.refract,
         Shader.matrixCompMult,
+        Shader.dFdx,
+        Shader.dFdy,
+        Shader.fwidth,
         -- *** Vector relational functions
         Shader.VecOrd,
         Shader.VecEq,

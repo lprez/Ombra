@@ -140,6 +140,7 @@ instance GLES where
         hasVertexArrayObjects = return . elem "GL_ARB_vertex_array_object"
         hasFloatTextures = return . elem "GL_ARB_texture_float"
         hasDrawBuffers = return . const True
+        hasStandardDerivatives = return . elem "GL_OES_standard_derivatives"
 
         glActiveTexture = const GL.glActiveTexture
         glAttachShader = const GL.glAttachShader

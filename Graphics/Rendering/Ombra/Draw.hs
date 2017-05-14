@@ -31,6 +31,7 @@ module Graphics.Rendering.Ombra.Draw (
         hasVertexArrayObjects,
         hasFloatTextures,
         hasDrawBuffers,
+        hasStandardDerivatives,
 ) where
 
 import Data.IORef
