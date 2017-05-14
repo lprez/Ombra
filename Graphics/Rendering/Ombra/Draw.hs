@@ -9,12 +9,15 @@ module Graphics.Rendering.Ombra.Draw (
         evalDrawCtx,
         drawState,
         -- * Draw actions
+        MonadGL(gl),
+        MonadScreen(resizeViewport),
+        MonadObject,
         drawInit,
         clearBuffers,
         drawLayer,
-        resizeViewport,
         -- ** Resources
         -- $resources
+        ResStatus(..),
         preloadGeometry,
         preloadTexture,
         preloadProgram,
@@ -28,14 +31,14 @@ module Graphics.Rendering.Ombra.Draw (
         hasVertexArrayObjects,
         hasFloatTextures,
         hasDrawBuffers,
-        -- *
-        gl
 ) where
 
 import Data.IORef
 import Graphics.Rendering.Ombra.Draw.Internal
+import Graphics.Rendering.Ombra.Object.Internal
 import Graphics.Rendering.Ombra.Internal.GL hiding (Buffer)
 import Graphics.Rendering.Ombra.Layer
+import Graphics.Rendering.Ombra.Screen
 
 -- | Run a Draw action using an IORef and a context.
 refDrawCtx :: GLES => Ctx -> Draw a -> IORef DrawState -> IO a
