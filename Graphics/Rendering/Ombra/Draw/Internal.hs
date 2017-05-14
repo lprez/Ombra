@@ -107,8 +107,10 @@ instance GLES => MonadProgram Draw where
                                      Left _ -> return ()
         getUniform name = do mprg <- loadedProgram <$> Draw get
                              case mprg of
-                                  Just prg -> getDrawResource gl uniforms
-                                                              (prg, name)
+                                  Just prg -> do map <- uniforms <$> Draw get
+                                                 gl $ getResource' prg
+                                                                   (prg, name)
+                                                                   map
                                   Nothing -> return $ Left "No loaded program."
 
 instance GLES => MonadDrawingMode Draw where

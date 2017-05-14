@@ -9,6 +9,7 @@ module Graphics.Rendering.Ombra.Internal.Resource (
         newResMap,
         addResource,
         getResource,
+        getResource',
         checkResource,
         removeResource,
         unloader
@@ -56,8 +57,12 @@ checkResource' _ i (ResMap map) = do m <- liftIO $ H.lookup map i
                                                    Just (Left e) -> Error e
                                                    Nothing -> Unloaded
 
+
 getResource :: Resource i r m => i -> ResMap r -> m (Either String r)
-getResource (i :: i) rmap@(ResMap map) =
+getResource i = getResource' i i
+
+getResource' :: Resource i r m => k -> i -> ResMap r -> m (Either String r)
+getResource' k (i :: i) rmap@(ResMap map) =
         do status <- checkResource i rmap
            case status of
                    Unloaded ->
@@ -67,7 +72,7 @@ getResource (i :: i) rmap@(ResMap map) =
                                          Left s -> H.insert map ihash $ Left s
                                          Right r -> H.insert map ihash $ Right r
 
-                           embedIO (addFinalizer i) $
+                           embedIO (addFinalizer k) $
                                    removeResource' (Nothing :: Maybe i)
                                                    ihash rmap
                            meRes <- liftIO . H.lookup map $ ihash
