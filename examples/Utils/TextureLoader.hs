@@ -15,6 +15,7 @@ import Data.Hashable
 
 import Data.String
 import GHCJS.Types
+import Graphics.Rendering.Ombra.Backend.WebGL
 import JavaScript.TypedArray
 import JavaScript.TypedArray.Internal
 import JavaScript.TypedArray.DataView
