@@ -10,6 +10,7 @@ import Control.Applicative
 import Control.Concurrent
 import Data.Coerce
 import Data.Maybe
+import Data.Hashable
 import qualified Data.HashMap.Strict as H
 import Data.Int (Int32)
 import Data.IORef
@@ -61,10 +62,17 @@ foreign import javascript unsafe "Float32Array.from([$1, $2, $3, $4,     \
                      -> IO Float32Array
 
 
-data TagTex = TagTex Int JS.Texture
+data TagTexture = TagTexture Int JS.Texture
+data TagProgram = TagProgram Int JS.Program
 
-instance Eq TagTex where
-        TagTex t _ == TagTex t' _ = t == t'
+instance Eq TagTexture where
+        TagTexture t _ == TagTexture t' _ = t == t'
+
+instance Eq TagProgram where
+        TagProgram t _ == TagProgram t' _ = t == t'
+        
+instance Hashable TagProgram where
+        hashWithSalt salt (TagProgram t _) = hashWithSalt salt t
 
 makeContext :: JSVal -- ^ Canvas element.
             -> IO Ctx
@@ -107,9 +115,9 @@ instance GLES where
         type GLBool = Bool
         type Buffer = JS.Buffer
         type UniformLocation = JS.UniformLocation
-        type Texture = TagTex
+        type Texture = TagTexture
         type Shader = JS.Shader
-        type Program = JS.Program
+        type Program = TagProgram
         type FrameBuffer = JS.FrameBuffer
         type RenderBuffer = JS.RenderBuffer
         type VertexArrayObject = JS.VertexArrayObject
@@ -128,7 +136,7 @@ instance GLES where
         toGLString = pack
         fromGLString = unpack
         noBuffer = JS.noBuffer
-        noTexture = TagTex (-1) JS.noTexture
+        noTexture = TagTexture (-1) JS.noTexture
         noUInt8Array = nullUInt8Array
         noFloat32Array = nullFloat32Array
         noVAO = JS.noVAO
@@ -232,12 +240,12 @@ instance GLES where
                 (not . isNull <$>) .  getProp "derivatives" . Object . snd
 
         glActiveTexture = JS.glActiveTexture . snd
-        glAttachShader = JS.glAttachShader . snd
-        glBindAttribLocation = JS.glBindAttribLocation . snd
+        glAttachShader (_, c) (TagProgram _ p) s = JS.glAttachShader c p s
+        glBindAttribLocation (_, c) (TagProgram _ p) = JS.glBindAttribLocation c p
         glBindBuffer = JS.glBindBuffer . snd
         glBindFramebuffer = JS.glBindFramebuffer . snd
         glBindRenderbuffer = JS.glBindRenderbuffer . snd
-        glBindTexture (_, c) e (TagTex _ t) = JS.glBindTexture c e t
+        glBindTexture (_, c) e (TagTexture _ t) = JS.glBindTexture c e t
         glBindVertexArray = JS.glBindVertexArrayOES . snd
         glBlendColor = JS.glBlendColor . snd
         glBlendEquation = JS.glBlendEquation . snd
@@ -259,25 +267,27 @@ instance GLES where
         glCopyTexSubImage2D = JS.glCopyTexSubImage2D . snd
         glCreateBuffer = JS.glCreateBuffer . snd
         glCreateFramebuffer = JS.glCreateFramebuffer . snd
-        glCreateProgram = JS.glCreateProgram . snd
+        glCreateProgram (r, c) = do p <- JS.glCreateProgram c
+                                    n <- atomicModifyIORef' r $ \n -> (n + 1, n)
+                                    return $ TagProgram n p
         glCreateRenderbuffer = JS.glCreateRenderbuffer . snd
         glCreateShader = JS.glCreateShader . snd
         glCreateTexture (r, c) = do t <- JS.glCreateTexture c
                                     n <- atomicModifyIORef' r $ \n -> (n + 1, n)
-                                    return $ TagTex n t
+                                    return $ TagTexture n t
         glCreateVertexArray = JS.glCreateVertexArrayOES . snd
         glCullFace = JS.glCullFace . snd
         glDeleteBuffer = JS.glDeleteBuffer . snd
         glDeleteFramebuffer = JS.glDeleteFramebuffer . snd
-        glDeleteProgram = JS.glDeleteProgram . snd
+        glDeleteProgram (_, c) (TagProgram _ p) = JS.glDeleteProgram c p
         glDeleteRenderbuffer = JS.glDeleteRenderbuffer . snd
         glDeleteShader = JS.glDeleteShader . snd
-        glDeleteTexture (_, c) (TagTex _ t) = JS.glDeleteTexture c t
+        glDeleteTexture (_, c) (TagTexture _ t) = JS.glDeleteTexture c t
         glDeleteVertexArray = JS.glDeleteVertexArrayOES . snd
         glDepthFunc = JS.glDepthFunc . snd
         glDepthMask = JS.glDepthMask . snd
         glDepthRange = JS.glDepthRange . snd
-        glDetachShader = JS.glDetachShader . snd
+        glDetachShader (_, c) (TagProgram _ p) = JS.glDetachShader c p
         glDisable = JS.glDisable . snd
         glDisableVertexAttribArray = JS.glDisableVertexAttribArray . snd
         glDrawArrays = JS.glDrawArrays . snd
@@ -288,18 +298,18 @@ instance GLES where
         glFinish = JS.glFinish . snd
         glFlush = JS.glFlush . snd
         glFramebufferRenderbuffer = JS.glFramebufferRenderbuffer . snd
-        glFramebufferTexture2D (_, ctx) a b c (TagTex _ t) d =
+        glFramebufferTexture2D (_, ctx) a b c (TagTexture _ t) d =
                 JS.glFramebufferTexture2D ctx a b c t d
         glFrontFace = JS.glFrontFace . snd
         glGenerateMipmap = JS.glGenerateMipmap . snd
         -- glGetActiveAttrib = JS.glGetActiveAttrib . snd
         -- glGetActiveUniform = JS.glGetActiveUniform . snd
-        glGetAttribLocation = JS.glGetAttribLocation . snd
+        glGetAttribLocation (_, c) (TagProgram _ p) = JS.glGetAttribLocation c p
         -- glGetBufferParameter = JS.glGetBufferParameter . snd
         -- glGetParameter = JS.glGetParameter . snd
         glGetError = JS.glGetError . snd
         -- glGetFramebufferAttachmentParameter = JS.glGetFramebufferAttachmentParameter . snd
-        glGetProgramInfoLog = JS.glGetProgramInfoLog . snd
+        glGetProgramInfoLog (_, c) (TagProgram _ p) = JS.glGetProgramInfoLog c p
         -- glGetRenderbufferParameter = JS.glGetRenderbufferParameter . snd
         glGetShaderParameterBool = JS.glGetShaderParameterBool . snd
         -- glGetShaderPrecisionFormat = JS.glGetShaderPrecisionFormat . snd
@@ -307,20 +317,20 @@ instance GLES where
         glGetShaderSource = JS.glGetShaderSource . snd
         -- glGetTexParameter = JS.glGetTexParameter . snd
         -- glGetUniform = JS.glGetUniform . snd
-        glGetUniformLocation = JS.glGetUniformLocation . snd
+        glGetUniformLocation (_, c) (TagProgram _ p) = JS.glGetUniformLocation c p
         -- glGetVertexAttrib = JS.glGetVertexAttrib . snd
         -- glGetVertexAttribOffset = JS.glGetVertexAttribOffset . snd
         glHint = JS.glHint . snd
         glIsBuffer = JS.glIsBuffer . snd
         glIsEnabled = JS.glIsEnabled . snd
         glIsFramebuffer = JS.glIsFramebuffer . snd
-        glIsProgram = JS.glIsProgram . snd
+        glIsProgram (_, c) (TagProgram _ p) = JS.glIsProgram c p
         glIsRenderbuffer = JS.glIsRenderbuffer . snd
         glIsShader = JS.glIsShader . snd
-        glIsTexture (_, c) (TagTex _ t) = JS.glIsTexture c t
+        glIsTexture (_, c) (TagTexture _ t) = JS.glIsTexture c t
         glIsVertexArray = JS.glIsVertexArrayOES . snd
         glLineWidth = JS.glLineWidth . snd
-        glLinkProgram = JS.glLinkProgram . snd
+        glLinkProgram (_, c) (TagProgram _ p) = JS.glLinkProgram c p
         glPixelStorei = JS.glPixelStorei . snd
         glPolygonOffset = JS.glPolygonOffset . snd
         glReadPixels = JS.glReadPixels . snd
@@ -359,8 +369,8 @@ instance GLES where
         glUniformMatrix2fv (_, c) loc _ arr = JS.glUniformMatrix2fv c loc False arr
         glUniformMatrix3fv (_, c) loc _ arr = JS.glUniformMatrix3fv c loc False arr
         glUniformMatrix4fv (_, c) loc _ arr = JS.glUniformMatrix4fv c loc False arr
-        glUseProgram = JS.glUseProgram . snd
-        glValidateProgram = JS.glValidateProgram . snd
+        glUseProgram (_, c) (TagProgram _ p) = JS.glUseProgram c p
+        glValidateProgram (_, c) (TagProgram _ p) = JS.glValidateProgram c p
         glVertexAttrib1f = JS.glVertexAttrib1f . snd
         glVertexAttrib1fv = JS.glVertexAttrib1fv . snd
         glVertexAttrib2f = JS.glVertexAttrib2f . snd

@@ -4,6 +4,7 @@ module Graphics.Rendering.Ombra.Backend where
 
 import Control.Concurrent (ThreadId)
 import Data.Bits (Bits)
+import Data.Hashable (Hashable)
 import Data.Int
 import Data.Word
 import Foreign.Storable
@@ -28,7 +29,9 @@ class ( Integral GLEnum
       , Eq GLInt
       , Eq GLPtrDiff
       , Eq GLSize
-      , Eq Texture) => GLES where
+      , Eq Texture
+      , Eq Program
+      , Hashable Program) => GLES where
         type Ctx
         type GLEnum
         type GLUInt

@@ -155,7 +155,9 @@ loadProgram (Program (vss, attrs) fss h) =
                    detachShader glp fs
                    -}
   
-                   return . Right $ LoadedProgram glp (H.fromList locs) h
+                   return . Right $ LoadedProgram glp
+                                                  (H.fromList locs)
+                                                  (hash glp)
            else do vsError <- shaderError vs vsStatus "Vertex shader"
                    fsError <- shaderError fs fsStatus "Fragment shader"
 
