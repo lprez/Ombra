@@ -12,7 +12,7 @@ stability:           Experimental
 copyright:           Copyright © 2014-2017 Luca Prezzavento
 category:            Graphics
 build-type:          Simple
-extra-source-files:  README.md
+extra-source-files:  README.md, CHANGES.md
 cabal-version:       >=1.10
 
 source-repository head
