@@ -77,7 +77,6 @@ play width height requireExts initialization frame inpCallback _ =
            loop $ \t -> do draw <- frame (realToFrac t) (width, height)
                            liftDraw $ do clearBuffers [ColorBuffer, DepthBuffer]
                            liftDraw draw
-                           liftIO $ performGC
 
            return ()
         where loop a = do t <- liftIO waitFrame
