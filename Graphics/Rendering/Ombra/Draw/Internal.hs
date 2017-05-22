@@ -69,6 +69,7 @@ data DrawState = DrawState {
         geometries :: ResMap LoadedGeometry,
         textureImages :: ResMap LoadedTexture,
         activeTextures :: Int,
+        textureCache :: [LoadedTexture],
         viewportSize :: (Int, Int),
         blendMode :: Maybe Blend.Mode,
         stencilMode :: Maybe Stencil.Mode,
@@ -129,9 +130,25 @@ instance GLES => MonadTexture Draw where
         getActiveTexturesCount = activeTextures <$> Draw get
         setActiveTexturesCount n = Draw . modify  $ \s ->
                                         s { activeTextures = n }
-        newTexture w h fm fM = gl $ LoadedTexture w' h' <$> emptyTexture fm fM
+        newTexture w h fm fM i initialize =
+                do cache <- textureCache <$> Draw get
+                   let (c1, c2) = flip break cache $
+                                        \(LoadedTexture cw ch i' t) ->
+                                                w' == cw && h' == ch && i == i'
+                   case c2 of
+                        [] -> gl $ do t <- emptyTexture fm fM
+                                      initialize t
+                                      return $ LoadedTexture w' h' i t
+                        (lt : c2') -> do Draw . modify $ \s ->
+                                                s { textureCache = c1 ++ c2' }
+                                         return lt
                 where (w', h') = (fromIntegral w, fromIntegral h)
-        unusedTexture = removeTexture . TextureLoaded
+        unusedTextures ts =
+                do cache <- textureCache <$> Draw get
+                   let (cache', excess) = splitAt textureCacheMaxSize
+                                                  (ts ++ cache)
+                   Draw . modify $ \s -> s { textureCache = cache' }
+                   mapM_ (removeTexture . TextureLoaded) excess
 
 instance GLES => MonadGeometry Draw where
         getAttribute = getDrawResource gl attributes
@@ -160,6 +177,7 @@ drawState w h = do programs <- newGLResMap
                                     , geometries = geometries
                                     , uniforms = uniforms
                                     , textureImages = textureImages
+                                    , textureCache = []
                                     , activeTextures = 0
                                     , viewportSize = (w, h)
                                     , blendMode = Nothing
@@ -251,7 +269,7 @@ checkTexture (TextureImage i) =
 checkTexture (TextureLoaded l) = return $ Loaded (loadedTextureSize l)
 
 loadedTextureSize :: (GLES, Num a) => LoadedTexture -> (a, a)
-loadedTextureSize (LoadedTexture w h _) = (fromIntegral w, fromIntegral h)
+loadedTextureSize (LoadedTexture w h _ _) = (fromIntegral w, fromIntegral h)
 
 -- | Check if a 'Program' failed to load.
 checkProgram :: GLES => Program gs is -> Draw (ResStatus ())
@@ -399,6 +417,9 @@ removeDrawResource :: (Resource i r m, Hashable i)
 removeDrawResource lft mg i = do
         s <- mg <$> Draw get
         lft $ removeResource i s
+
+textureCacheMaxSize :: Num a => a
+textureCacheMaxSize = 16
 
 -- | Get the 'DrawState'.
 drawGet :: Draw DrawState

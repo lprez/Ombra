@@ -2,6 +2,7 @@
 
 module Graphics.Rendering.Ombra.Layer.Internal where
 
+import Data.Hashable (hash)
 import Data.Functor ((<$>))
 import Data.Word (Word8, Word16)
 import Control.Monad (when, replicateM)
@@ -225,7 +226,7 @@ drawLayer' (ReadDepthFloat r) tts =
 drawLayer' (ReadStencil r) tts = flip (,) tts <$> readPixels r gl_STENCIL_INDEX
 drawLayer' (Free layer) tts =
         do (x, tts') <- drawLayer' layer []
-           mapM_ unusedTexture tts'
+           unusedTextures tts'
            return (x, tts)
 drawLayer' (Clear bufs) tts = const ((), tts) <$> clearBuffers bufs
 drawLayer' (Cast layer) tts = drawLayer' layer tts
@@ -241,20 +242,26 @@ createTTexture :: (GLES, MonadTexture m)
                -> TTextureType bufs
                -> m (TTexture bufs t)
 createTTexture w h min mag ty = 
-        do lt@(LoadedTexture _ _ t) <- newTexture w h (min, Nothing) mag
-           gl $ bindTexture gl_TEXTURE_2D t
-           if pixelType == gl_FLOAT
-           then liftIO noFloat32Array >>=
-                        gl . texImage2DFloat gl_TEXTURE_2D 0
-                                             internalFormat w' h'
-                                             0 format pixelType
-           else liftIO noUInt8Array >>=
-                        gl . texImage2DUInt gl_TEXTURE_2D 0
-                                            internalFormat w' h'
-                                            0 format pixelType
-           gl $ bindTexture gl_TEXTURE_2D noTexture
+        do lt <- newTexture w h (min, Nothing) mag cacheIdentifier $
+                \t -> do bindTexture gl_TEXTURE_2D t
+                         if pixelType == gl_FLOAT
+                         then liftIO noFloat32Array >>=
+                                      texImage2DFloat gl_TEXTURE_2D 0
+                                                      internalFormat w' h'
+                                                      0 format pixelType
+                         else liftIO noUInt8Array >>=
+                                      texImage2DUInt gl_TEXTURE_2D 0
+                                                     internalFormat w' h'
+                                                     0 format pixelType
+                         -- bindTexture gl_TEXTURE_2D noTexture
            return $ TTexture ty lt
         where (w', h') = (fromIntegral w, fromIntegral h)
+              cacheIdentifier = hash ( fromIntegral internalFormat :: Int
+                                     , fromIntegral format :: Int
+                                     , fromIntegral pixelType :: Int
+                                     , mag == Linear
+                                     , min == Linear
+                                     )
               (internalFormat, format, pixelType) = case ty of
                         RGBAByteTTexture ->  ( fromIntegral gl_RGBA
                                              , gl_RGBA
@@ -294,7 +301,7 @@ drawLayerToTexture w h colorAtts edsAtt layer tts =
                             Left att -> attachment att 0
                             Right att -> attachment att 0
 
-              attachment (TTexture ty (LoadedTexture _ _ t)) n =
+              attachment (TTexture ty (LoadedTexture _ _ _ t)) n =
                       (t, attachmentType ty $ fromIntegral n)
 
               attachmentType :: TTextureType bufs -> GLEnum -> GLEnum

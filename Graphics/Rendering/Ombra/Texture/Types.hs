@@ -23,7 +23,7 @@ data Filter = Linear    -- ^ Average of the four nearest pixels.
             | Nearest   -- ^ Nearest pixel.
             deriving Eq
 
-data LoadedTexture = LoadedTexture GLSize GLSize GL.Texture
+data LoadedTexture = LoadedTexture GLSize GLSize Int GL.Texture
 
 instance Hashable TextureImage where
         hashWithSalt salt tex = hashWithSalt salt $ textureHash tex
@@ -35,7 +35,7 @@ instance Eq TextureImage where
         _ == _ = False
 
 instance GLES => Eq LoadedTexture where
-        LoadedTexture _ _ t == LoadedTexture _ _ t' = t == t'
+        LoadedTexture _ _ _ t == LoadedTexture _ _ _ t' = t == t'
 
 textureHash :: TextureImage -> Int
 textureHash (TexturePixels _ _ _ _ _ _ h) = h

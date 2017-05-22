@@ -24,12 +24,14 @@ class (MonadGL m, GLES) => MonadTexture m where
                    -> Int
                    -> (Filter, Maybe Filter)
                    -> Filter
+                   -> Int
+                   -> (GL.Texture -> GL ())
                    -> m LoadedTexture
-        unusedTexture :: LoadedTexture -> m ()
+        unusedTextures :: [LoadedTexture] -> m ()
 
 instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i
-        unloadResource _ (LoadedTexture _ _ t) = deleteTexture t
+        unloadResource _ (LoadedTexture _ _ _ t) = deleteTexture t
 
 makeActive :: MonadTexture m => (ActiveTexture -> m a) -> m a
 makeActive f = do atn <- getActiveTexturesCount
@@ -47,7 +49,7 @@ withActiveTexture :: MonadTexture m
 withActiveTexture tex fail f = getTexture tex >>= \etex ->
         case etex of
              Left _ -> return fail
-             Right (LoadedTexture _ _ wtex) -> makeActive $
+             Right (LoadedTexture _ _ _ wtex) -> makeActive $
                         \at -> do gl $ bindTexture gl_TEXTURE_2D wtex
                                   f at
 
@@ -56,7 +58,7 @@ textureSize :: (MonadTexture m, Num a) => Texture -> m (a, a)
 textureSize tex = do etex <- getTexture tex
                      case etex of
                           Left _ -> return (0, 0)
-                          Right (LoadedTexture w h _) ->
+                          Right (LoadedTexture w h _ _) ->
                                   return (fromIntegral w, fromIntegral h)
 
 loadTextureImage :: GLES => TextureImage -> GL LoadedTexture
@@ -78,6 +80,7 @@ loadTextureImage (TextureRaw g arrs min mag w h _) =
            when g $ generateMipmap gl_TEXTURE_2D
            return $ LoadedTexture (fromIntegral w)
                                   (fromIntegral h)
+                                  0
                                   t
 loadTextureImage (TextureFloat ps min mag w h hash) =
         do arr <- liftIO . encodeFloats . take (fromIntegral $ w * h * 4) $ ps
@@ -90,6 +93,7 @@ loadTextureImage (TextureFloat ps min mag w h hash) =
                            arr
            return $ LoadedTexture (fromIntegral w)
                                   (fromIntegral h)
+                                  0
                                   t
 
 emptyTexture :: GLES => (Filter, Maybe Filter) -> Filter -> GL GL.Texture
