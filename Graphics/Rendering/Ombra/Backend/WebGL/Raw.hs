@@ -267,7 +267,13 @@ foreign import javascript unsafe "$1.polygonOffset($2, $3)"
         glPolygonOffset :: Ctx -> Float -> Float -> IO ()
 
 foreign import javascript unsafe "$1.readPixels($2, $3, $4, $5, $6, $7, $8)"
-        glReadPixels :: Ctx -> Int32 -> Int32 -> Int32 -> Int32 -> Word -> Word -> Uint8Array -> IO ()
+        glReadPixelsUInt8 :: Ctx -> Int32 -> Int32 -> Int32 -> Int32 -> Word -> Word -> Uint8Array -> IO ()
+
+foreign import javascript unsafe "$1.readPixels($2, $3, $4, $5, $6, $7, $8)"
+        glReadPixelsUInt16 :: Ctx -> Int32 -> Int32 -> Int32 -> Int32 -> Word -> Word -> Uint16Array -> IO ()
+
+foreign import javascript unsafe "$1.readPixels($2, $3, $4, $5, $6, $7, $8)"
+        glReadPixelsFloat :: Ctx -> Int32 -> Int32 -> Int32 -> Int32 -> Word -> Word -> Float32Array -> IO ()
 
 foreign import javascript unsafe "$1.renderbufferStorage($2, $3, $4, $5)"
         glRenderbufferStorage :: Ctx -> Word -> Word -> Int32 -> Int32 -> IO ()

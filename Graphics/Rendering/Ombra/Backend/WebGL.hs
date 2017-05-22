@@ -136,6 +136,7 @@ instance GLES where
         toGLString = pack
         fromGLString = unpack
         noBuffer = JS.noBuffer
+        noBuffer = JS.noFramebuffer
         noTexture = TagTexture (-1) JS.noTexture
         noUInt8Array = nullUInt8Array
         noFloat32Array = nullFloat32Array
@@ -201,7 +202,7 @@ instance GLES where
                       next (3, IVec4 _ _ _ w : xs) = Just (w, (0, xs))
                       next (_, []) = Nothing
 
-        encodeUShorts v = JSArray.fromList <$> mapM toJSVal v
+        encodeUInt16s v = JSArray.fromList <$> mapM toJSVal v
                           >>= JS.uint16ArrayFrom
 
         encodeUInt8s v = JSArray.fromList <$> mapM toJSVal v
@@ -217,18 +218,34 @@ instance GLES where
 -}
 
         -- !
-        newByteArray l = do arr <- JSArray.create
-                            _ <- sequence . replicate l $
-                                    toJSVal (0 :: Word) >>=
-                                    flip JSArray.push arr
-                            JSArray.unsafeFreeze arr >>= JS.uint8ArrayFrom
+        newUInt8Array l = do arr <- JSArray.create
+                             _ <- sequence . replicate l $
+                                     toJSVal (0 :: Word8) >>=
+                                     flip JSArray.push arr
+                             JSArray.unsafeFreeze arr >>= JS.uint8ArrayFrom
+        newUInt16Array l = do arr <- JSArray.create
+                              _ <- sequence . replicate l $
+                                      toJSVal (0 :: Word16) >>=
+                                      flip JSArray.push arr
+                              JSArray.unsafeFreeze arr >>= JS.uint16ArrayFrom
+        newFloat32Array l = do arr <- JSArray.create
+                               _ <- sequence . replicate l $
+                                       toJSVal (0 :: Float) >>=
+                                       flip JSArray.push arr
+                               JSArray.unsafeFreeze arr >>= JS.float32ArrayFrom
         fromFloat32Array = JS.buffer
         fromInt32Array = JS.buffer
         fromUInt8Array = JS.buffer
         fromUInt16Array = JS.buffer
-        decodeBytes ar = let dw = JSDataView.dataView $ JS.buffer ar
-                         in return $ map (flip JSDataView.getUint8 dw)
-                                         [0 .. JS.length ar - 1]
+        decodeUInt8s ar = let dw = JSDataView.dataView $ JS.buffer ar
+                          in return $ map (flip JSDataView.getUint8 dw)
+                                          [0 .. JS.length ar - 1]
+        decodeUInt16s ar = let dw = JSDataView.dataView $ JS.buffer ar
+                           in return $ map (flip JSDataView.getUint16 dw)
+                                           [0 .. JS.length ar - 1]
+        decodeFloat32s ar = let dw = JSDataView.dataView $ JS.buffer ar
+                            in return $ map (flip JSDataView.getFloat32 dw)
+                                            [0 .. JS.length ar - 1]
 
         hasVertexArrayObjects =
                 (not . isNull <$>) .  getProp "vaoExt" . Object . snd
@@ -333,7 +350,9 @@ instance GLES where
         glLinkProgram (_, c) (TagProgram _ p) = JS.glLinkProgram c p
         glPixelStorei = JS.glPixelStorei . snd
         glPolygonOffset = JS.glPolygonOffset . snd
-        glReadPixels = JS.glReadPixels . snd
+        glReadPixelsUInt8 = JS.glReadPixelsUInt8 . snd
+        glReadPixelsUInt16 = JS.glReadPixelsUInt16 . snd
+        glReadPixelsFloat = JS.glReadPixelsFloat . snd
         glRenderbufferStorage = JS.glRenderbufferStorage . snd
         glSampleCoverage = JS.glSampleCoverage . snd
         glScissor = JS.glScissor . snd
@@ -645,6 +664,7 @@ instance GLES where
         gl_RGB5_A1 = JS.gl_RGB5_A1
         gl_RGB565 = JS.gl_RGB565
         gl_DEPTH_COMPONENT16 = JS.gl_DEPTH_COMPONENT16
+        gl_STENCIL_INDEX = error "STENCIL_INDEX: not supported on WebGL"
         gl_STENCIL_INDEX8 = JS.gl_STENCIL_INDEX8
         gl_RENDERBUFFER_WIDTH = JS.gl_RENDERBUFFER_WIDTH
         gl_RENDERBUFFER_HEIGHT = JS.gl_RENDERBUFFER_HEIGHT

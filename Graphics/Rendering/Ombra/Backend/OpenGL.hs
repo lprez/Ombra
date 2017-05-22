@@ -98,6 +98,7 @@ instance GLES where
         toGLString = id
         fromGLString = id
         noBuffer = 0
+        noFramebuffer = 0
         noTexture = 0
         noVAO = 0
         noUInt8Array = fmap ((,) 0) $ newForeignPtr_ nullPtr
@@ -127,15 +128,19 @@ instance GLES where
         encodeIVec2s = mkArray
         encodeIVec3s = mkArray
         encodeIVec4s = mkArray
-        encodeUShorts = mkArray
         encodeUInt8s = mkArray
+        encodeUInt16s = mkArray
 
-        newByteArray = mkArrayLen
+        newUInt8Array = mkArrayLen
+        newUInt16Array = mkArrayLen
+        newFloat32Array = mkArrayLen
         fromFloat32Array (size, fptr) = (size, castForeignPtr fptr)
         fromInt32Array (size, fptr) = (size, castForeignPtr fptr)
         fromUInt16Array (size, fptr) = (size, castForeignPtr fptr)
         fromUInt8Array (size, fptr) = (size, castForeignPtr fptr)
-        decodeBytes (s, f) = arrayToList (s, castForeignPtr f)
+        decodeUInt8s (s, f) = arrayToList (s, castForeignPtr f)
+        decodeUInt16s (s, f) = arrayToList (s, castForeignPtr f)
+        decodeFloat32s (s, f) = arrayToList (s, castForeignPtr f)
 
         hasVertexArrayObjects = return . elem "GL_ARB_vertex_array_object"
         hasFloatTextures = return . elem "GL_ARB_texture_float"
@@ -229,7 +234,11 @@ instance GLES where
         glLinkProgram = const GL.glLinkProgram
         glPixelStorei = const GL.glPixelStorei
         glPolygonOffset = const GL.glPolygonOffset
-        glReadPixels _ a b c d e f (_, fp)  = withForeignPtr fp $
+        glReadPixelsUInt8 _ a b c d e f (_, fp)  = withForeignPtr fp $
+                GL.glReadPixels a b c d e f . castPtr
+        glReadPixelsUInt16 _ a b c d e f (_, fp)  = withForeignPtr fp $
+                GL.glReadPixels a b c d e f . castPtr
+        glReadPixelsFloat _ a b c d e f (_, fp)  = withForeignPtr fp $
                 GL.glReadPixels a b c d e f . castPtr
         glRenderbufferStorage = const GL.glRenderbufferStorage
         glSampleCoverage = const GL.glSampleCoverage
@@ -548,6 +557,7 @@ instance GLES where
         gl_RGB5_A1 = GL.GL_RGB5_A1
         gl_RGB565 = error "GL_RGB565: not present in OpenGL 2.1"
         gl_DEPTH_COMPONENT16 = GL.GL_DEPTH_COMPONENT16
+        gl_STENCIL_INDEX = GL.GL_STENCIL_INDEX
         gl_STENCIL_INDEX8 = GL.GL_STENCIL_INDEX8
         gl_RENDERBUFFER_WIDTH = GL.GL_RENDERBUFFER_WIDTH
         gl_RENDERBUFFER_HEIGHT = GL.GL_RENDERBUFFER_HEIGHT

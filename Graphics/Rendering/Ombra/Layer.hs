@@ -14,33 +14,35 @@ module Graphics.Rendering.Ombra.Layer (
         depthSubLayer,
         colorDepthSubLayer,
         colorStencilSubLayer,
-        colorSubLayer',
-        depthSubLayer',
-        colorDepthSubLayer',
-        colorStencilSubLayer',
         buffersSubLayer,
         buffersDepthSubLayer,
         buffersStencilSubLayer,
         -- * Layers with return values
-        -- $extlayers
         Layer',
         LayerStatus(..),
         drawable,
         castLayer,
         -- ** Temporary textures
         TTexture,
+        TTextureType(..),
+        newTTexture,
         withTTexture,
+        withTTextures,
+        withTTextures',
         permanent,
         -- ** Drawing to textures
         depthToTexture,
         colorDepthToTexture,
         colorStencilToTexture,
-        colorToTexture',
-        depthToTexture',
-        colorDepthToTexture',
-        colorStencilToTexture',
         buffersDepthToTexture,
-        buffersStencilToTexture
+        buffersStencilToTexture,
+        layerToTexture,
+        -- * Reading screen pixels
+        readColor,
+        readColorFloat,
+        readDepth,
+        readDepthFloat,
+        readStencil
 ) where
 
 import Data.Word (Word8)
@@ -85,7 +87,8 @@ depthSubLayer :: Int                         -- ^ Texture width.
               -> (Texture -> Layer)          -- ^ Layers using the texture.
               -> Layer
 depthSubLayer w h l f = drawable $
-        depthToTexture w h (castLayer l) >>= \(_, t) -> withTTexture t f
+        depthToTexture w h (castLayer l) >>=
+                \(_, t) -> withTTexture t f
 
 -- | Combination of 'colorSubLayer' and 'depthSubLayer'.
 colorDepthSubLayer :: Int                               -- ^ Texture width.
@@ -96,8 +99,9 @@ colorDepthSubLayer :: Int                               -- ^ Texture width.
                    -> Layer
 colorDepthSubLayer w h l f = drawable $
         colorDepthToTexture w h (castLayer l) >>=
-                \(_, ct, dt) -> withTTextures [ct, dt] $
-                        \[ct', dt'] -> f ct' dt'
+                \(_, ct, dt) -> withTTextures' [ct] $
+                        \[ct'] -> withTTextures' [dt] $
+                                \[dt'] -> castLayer $ f ct' dt'
 
 -- | 'colorSubLayer' with a stencil buffer.
 colorStencilSubLayer :: Int                     -- ^ Texture width.
@@ -106,70 +110,8 @@ colorStencilSubLayer :: Int                     -- ^ Texture width.
                      -> (Texture -> Layer)      -- ^ Color.
                      -> Layer
 colorStencilSubLayer w h l f = drawable $
-        colorStencilToTexture w h (castLayer l) >>= \(_, t) -> withTTexture t f
-
--- | Extended version of 'colorSubLayer' that reads and converts the Texture
--- pixels.
-colorSubLayer'
-        :: Int                          -- ^ Texture width.
-        -> Int                          -- ^ Texture height.
-        -> Int                          -- ^ First pixel to read X
-        -> Int                          -- ^ First pixel to read Y
-        -> Int                          -- ^ Width of the rectangle to read
-        -> Int                          -- ^ Height of the rectangle to read
-        -> Layer                        -- ^ Layer to draw on a 'Texture'.
-        -> (Texture -> [Color] -> Layer) -- ^ Function using the texture.
-        -> Layer
-colorSubLayer' w h rx ry rw rh l f = drawable $
-        colorToTexture' w h rx ry rw rh (castLayer l) >>=
-                \(_, t, c) -> withTTexture t $ flip f c
-
--- | Extended version of 'depthSubLayer'. Not supported on WebGL.
-depthSubLayer'
-        :: Int                          -- ^ Texture width.
-        -> Int                          -- ^ Texture height.
-        -> Int                          -- ^ First pixel to read X
-        -> Int                          -- ^ First pixel to read Y
-        -> Int                          -- ^ Width of the rectangle to read
-        -> Int                          -- ^ Height of the rectangle to read
-        -> Layer                        -- ^ Layer to draw on a depth 'Texture'.
-        -> (Texture -> [Word8] -> Layer) -- ^ Layers using the texture.
-        -> Layer
-depthSubLayer' w h rx ry rw rh l f = drawable $
-        depthToTexture' w h rx ry rw rh (castLayer l) >>=
-                \(_, t, d) -> withTTexture t $ flip f d
-
--- | Extended version of 'colorDepthSubLayer'. Not supported on WebGL.
-colorDepthSubLayer'
-        :: Int         -- ^ Texture width.
-        -> Int         -- ^ Texture height.
-        -> Int         -- ^ First pixel to read X
-        -> Int         -- ^ First pixel to read Y
-        -> Int         -- ^ Width of the rectangle to read
-        -> Int         -- ^ Height of the rectangle to read
-        -> Layer       -- ^ Layer to draw on a 'Texture'
-        -> (Texture -> Texture -> [Color] -> [Word8] -> Layer) -- ^ Layers using
-                                                               -- the texture.
-        -> Layer
-colorDepthSubLayer' w h rx ry rw rh l f = drawable $
-        colorDepthToTexture' w h rx ry rw rh (castLayer l) >>=
-                \(_, ct, dt, c, d) -> withTTextures [ct, dt] $
-                        \[ct', dt'] -> f ct' dt' c d
-
--- | 'colorSubLayer'' with an additional stencil buffer.
-colorStencilSubLayer'
-        :: Int                          -- ^ Texture width.
-        -> Int                          -- ^ Texture height.
-        -> Int                          -- ^ First pixel to read X
-        -> Int                          -- ^ First pixel to read Y
-        -> Int                          -- ^ Width of the rectangle to read
-        -> Int                          -- ^ Height of the rectangle to read
-        -> Layer                        -- ^ Layer to draw on a 'Texture'.
-        -> (Texture -> [Color] -> Layer) -- ^ Function using the texture.
-        -> Layer
-colorStencilSubLayer' w h rx ry rw rh l f = drawable $
-        colorStencilToTexture' w h rx ry rw rh (castLayer l) >>=
-                \(_, t, c) -> withTTexture t $ flip f c
+        colorStencilToTexture w h (castLayer l) >>=
+                \(_, t, _) -> withTTexture t f
 
 -- | Draw a 'Layer' with multiple floating point colors
 -- (use 'Fragment2', 'Fragment3', etc.) to some 'Texture's and use them to
@@ -184,17 +126,18 @@ buffersSubLayer w h n l = buffersDepthSubLayer w h n l . flip . const
 
 -- | Combination of 'buffersSubLayer' and 'depthSubLayer'.
 buffersDepthSubLayer :: Int                             -- ^ Textures width.
-                   -> Int                               -- ^ Textures height.
-                   -> Int                               -- ^ Number of colors.
-                   -> Layer                             -- ^ Layer to draw.
-                   -> ([Texture] -> Texture -> Layer)   -- ^ Function using the
+                     -> Int                             -- ^ Textures height.
+                     -> Int                             -- ^ Number of colors.
+                     -> Layer                           -- ^ Layer to draw.
+                     -> ([Texture] -> Texture -> Layer) -- ^ Function using the
                                                         -- buffers textures and
                                                         -- the depth texture.
-                   -> Layer
+                     -> Layer
 buffersDepthSubLayer w h n l f = drawable $
         buffersDepthToTexture w h n (castLayer l) >>=
-                \(_, bts, dt) -> withTTextures (dt : bts) $
-                        \(dt' : bts') -> f bts' dt'
+                \(_, bts, dt) -> withTTextures' [dt] $
+                        \[dt'] -> withTTextures' bts $
+                                \bts' -> castLayer $ f bts' dt'
 
 -- | 'buffersSubLayer' with an additional stencil buffer.
 buffersStencilSubLayer :: Int                   -- ^ Textures width.
@@ -205,10 +148,4 @@ buffersStencilSubLayer :: Int                   -- ^ Textures width.
                        -> Layer
 buffersStencilSubLayer w h n l f = drawable $
         buffersStencilToTexture w h n (castLayer l) >>=
-                \(_, bts) -> withTTextures bts f
-
--- $extlayers
--- Functions like 'subLayer' create temporary textures that usually have to be
--- freed immediately after drawing the layer, otherwise they may waste a lot of
--- GPU memory if @subLayer@ is called in every frame. The 'Layer'' type lets
--- you extract those textures after having made permanent.
+                \(_, bts, _) -> withTTextures bts f

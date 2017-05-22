@@ -14,6 +14,7 @@ module Graphics.Rendering.Ombra.Backend.WebGL.Types (
         ShaderPrecisionFormat,
         getCtx,
         noBuffer,
+        noFramebuffer,
         noTexture,
         noVAO,
 ) where
@@ -57,6 +58,9 @@ type ShaderPrecisionFormat = JSVal
 
 noBuffer :: Buffer
 noBuffer = jsNull
+
+noFramebuffer :: Framebuffer
+noFramebuffer = jsNull
 
 noTexture :: Texture
 noTexture = jsNull

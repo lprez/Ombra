@@ -243,7 +243,7 @@ instance GLES => Resource (AttrCol (i ': is)) LoadedAttribute GL where
 
 instance GLES => Resource (Elements is) LoadedBuffer GL where
         loadResource (Triangles _ ts) =
-                liftIO (encodeUShorts elems) >>=
+                liftIO (encodeUInt16s elems) >>=
                         fmap (Right . LoadedBuffer) .
                         loadBuffer gl_ELEMENT_ARRAY_BUFFER
                         . fromUInt16Array

@@ -65,6 +65,7 @@ class ( Integral GLEnum
         toGLString :: String -> GLString
         fromGLString :: GLString -> String
         noBuffer :: Buffer
+        noFramebuffer :: FrameBuffer
         noTexture :: Texture
         noVAO :: VertexArrayObject
         noUInt8Array :: IO UInt8Array
@@ -80,15 +81,19 @@ class ( Integral GLEnum
         encodeIVec2s :: [IVec2] -> IO Int32Array
         encodeIVec3s :: [IVec3] -> IO Int32Array
         encodeIVec4s :: [IVec4] -> IO Int32Array
-        encodeUShorts :: [Word16] -> IO UInt16Array
+        encodeUInt16s :: [Word16] -> IO UInt16Array
         encodeUInt8s :: [Word8] -> IO UInt8Array
 
-        newByteArray :: Int -> IO UInt8Array
+        newUInt8Array :: Int -> IO UInt8Array
+        newUInt16Array :: Int -> IO UInt16Array
+        newFloat32Array :: Int -> IO Float32Array
         fromFloat32Array :: Float32Array -> AnyArray
         fromInt32Array :: Int32Array -> AnyArray
         fromUInt8Array :: UInt8Array -> AnyArray
         fromUInt16Array :: UInt16Array -> AnyArray
-        decodeBytes :: UInt8Array -> IO [Word8]
+        decodeUInt8s :: UInt8Array -> IO [Word8]
+        decodeUInt16s :: UInt16Array -> IO [Word16]
+        decodeFloat32s :: Float32Array -> IO [Float]
 
         -- | This extension is fundamental and Ombra won't work without it.
         hasVertexArrayObjects :: Ctx -> IO Bool
@@ -193,7 +198,9 @@ class ( Integral GLEnum
         glLinkProgram :: Ctx -> Program -> IO ()
         glPixelStorei :: Ctx -> GLEnum -> GLInt -> IO ()
         glPolygonOffset :: Ctx -> Float -> Float -> IO ()
-        glReadPixels :: Ctx -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> IO ()
+        glReadPixelsUInt8 :: Ctx -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> IO ()
+        glReadPixelsUInt16 :: Ctx -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt16Array -> IO ()
+        glReadPixelsFloat :: Ctx -> GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> Float32Array -> IO ()
         glRenderbufferStorage :: Ctx -> GLEnum -> GLEnum -> GLSize -> GLSize -> IO ()
         glSampleCoverage :: Ctx -> Float -> GLBool -> IO ()
         glScissor :: Ctx -> GLInt -> GLInt -> GLSize -> GLSize -> IO ()
@@ -504,6 +511,7 @@ class ( Integral GLEnum
         gl_RGB5_A1 :: GLEnum
         gl_RGB565 :: GLEnum
         gl_DEPTH_COMPONENT16 :: GLEnum
+        gl_STENCIL_INDEX :: GLEnum
         gl_STENCIL_INDEX8 :: GLEnum
         gl_RENDERBUFFER_WIDTH :: GLEnum
         gl_RENDERBUFFER_HEIGHT :: GLEnum

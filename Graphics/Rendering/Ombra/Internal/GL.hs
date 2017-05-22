@@ -87,7 +87,9 @@ module Graphics.Rendering.Ombra.Internal.GL (
         linkProgram,
         pixelStorei,
         polygonOffset,
-        readPixels,
+        readPixelsUInt8,
+        readPixelsUInt16,
+        readPixelsFloat,
         renderbufferStorage,
         sampleCoverage,
         scissor,
@@ -431,8 +433,14 @@ pixelStorei a b = getCtx >>= \ctx -> liftIO $ glPixelStorei ctx a b
 polygonOffset :: GLES => Float -> Float -> GL ()
 polygonOffset a b = getCtx >>= \ctx -> liftIO $ glPolygonOffset ctx a b
 
-readPixels :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> GL ()
-readPixels a b c d e f g = getCtx >>= \ctx -> liftIO $ glReadPixels ctx a b c d e f g
+readPixelsUInt8 :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt8Array -> GL ()
+readPixelsUInt8 a b c d e f g = getCtx >>= \ctx -> liftIO $ glReadPixelsUInt8 ctx a b c d e f g
+
+readPixelsUInt16 :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> UInt16Array -> GL ()
+readPixelsUInt16 a b c d e f g = getCtx >>= \ctx -> liftIO $ glReadPixelsUInt16 ctx a b c d e f g
+
+readPixelsFloat :: GLES => GLInt -> GLInt -> GLSize -> GLSize -> GLEnum -> GLEnum -> Float32Array -> GL ()
+readPixelsFloat a b c d e f g = getCtx >>= \ctx -> liftIO $ glReadPixelsFloat ctx a b c d e f g
 
 renderbufferStorage :: GLES => GLEnum -> GLEnum -> GLSize -> GLSize -> GL ()
 renderbufferStorage a b c d = getCtx >>= \ctx -> liftIO $ glRenderbufferStorage ctx a b c d
