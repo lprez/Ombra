@@ -1,5 +1,5 @@
 name:                ombra
-version:             0.3.1.0
+version:             0.3.2.0
 synopsis:            Render engine.
 description:         Type-safe render engine, with a purely functional API and a shader EDSL. Ombra supports both OpenGL (2.0 with some extensions) and WebGL, through GHCJS.
 homepage:            https://github.com/ziocroc/Ombra
