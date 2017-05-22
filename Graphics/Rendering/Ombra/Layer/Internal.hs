@@ -199,40 +199,43 @@ clearBuffers = mapM_ $ gl . GL.clear . buffer
 
 -- | Draw a 'Layer'.
 drawLayer :: MonadObject m => Layer' Drawable t a -> m a
-drawLayer = fmap fst . flip drawLayer' []
+drawLayer l = fst <$> drawLayer' l noFramebuffer []
 
 drawLayer' :: MonadObject m
            => Layer' s t a
+           -> FrameBuffer
            -> [LoadedTexture]
            -> m (a, [LoadedTexture])
-drawLayer' (Layer prg grp) ts = do setProgram prg
-                                   drawObject grp
-                                   return ((), ts)
-drawLayer' (NewTTexture w h min mag ty) tts =
+drawLayer' (Layer prg grp) fb ts = do setProgram prg
+                                      drawObject grp
+                                      return ((), ts)
+drawLayer' (NewTTexture w h min mag ty) _ tts =
         (\tt@(TTexture _ l) -> (tt, l : tts)) <$> createTTexture w h min mag ty
-drawLayer' (Permanent (TTexture _ lt)) tts = 
+drawLayer' (Permanent (TTexture _ lt)) _ tts = 
         do let t = TextureLoaded lt
            gl $ unloader t (Nothing :: Maybe TextureImage) lt
            return (t, filter (/= lt) tts)
-drawLayer' (WithTTextures ets f) tts = fmap (const ((), tts)) $
-           drawLayer' (f $ map (\(TTexture _ lt) -> TextureLoaded lt) ets) tts
-drawLayer' (TextureLayer w h colAtts edsAtt layer) tts =
-        drawLayerToTexture w h colAtts edsAtt layer tts
-drawLayer' (ReadColor r) tts = flip (,) tts <$> readPixels r gl_RGBA
-drawLayer' (ReadColorFloat r) tts = flip (,) tts <$> readPixels r gl_RGBA
-drawLayer' (ReadDepth r) tts = flip (,) tts <$> readPixels r gl_DEPTH_COMPONENT
-drawLayer' (ReadDepthFloat r) tts =
-        flip (,) tts <$> readPixels r gl_DEPTH_COMPONENT
-drawLayer' (ReadStencil r) tts = flip (,) tts <$> readPixels r gl_STENCIL_INDEX
-drawLayer' (Free layer) tts =
-        do (x, tts') <- drawLayer' layer []
+drawLayer' (WithTTextures ts f) fb tts = fmap (const ((), tts)) $
+           drawLayer' (f $ map (\(TTexture _ lt) -> TextureLoaded lt) ts) fb tts
+drawLayer' (TextureLayer w h colAtts edsAtt layer) fb tts =
+        drawLayerToTexture w h colAtts edsAtt layer fb tts
+drawLayer' (ReadColor rec) _ tts = flip (,) tts <$> readPixels rec gl_RGBA
+drawLayer' (ReadColorFloat rec) _ tts = flip (,) tts <$> readPixels rec gl_RGBA
+drawLayer' (ReadDepth rec) _ tts =
+        flip (,) tts <$> readPixels rec gl_DEPTH_COMPONENT
+drawLayer' (ReadDepthFloat rec) _ tts =
+        flip (,) tts <$> readPixels rec gl_DEPTH_COMPONENT
+drawLayer' (ReadStencil rec) _ tts =
+        flip (,) tts <$> readPixels rec gl_STENCIL_INDEX
+drawLayer' (Free layer) fb tts =
+        do (x, tts') <- drawLayer' layer fb []
            unusedTextures tts'
            return (x, tts)
-drawLayer' (Clear bufs) tts = const ((), tts) <$> clearBuffers bufs
-drawLayer' (Cast layer) tts = drawLayer' layer tts
-drawLayer' (Bind lx f) tts0 = drawLayer' lx tts0 >>=
-                                \(x, tts1) -> drawLayer' (f x) tts1
-drawLayer' (Return x) tts = return (x, tts)
+drawLayer' (Clear bufs) _ tts = const ((), tts) <$> clearBuffers bufs
+drawLayer' (Cast layer) fb tts = drawLayer' layer fb tts
+drawLayer' (Bind lx f) fb tts0 =
+        drawLayer' lx fb tts0 >>= \(x, tts1) -> drawLayer' (f x) fb tts1
+drawLayer' (Return x) _ tts = return (x, tts)
 
 createTTexture :: (GLES, MonadTexture m)
                => Int
@@ -288,10 +291,12 @@ drawLayerToTexture :: (GLES, MonadObject m)
                    -> Either (TTexture '[DepthBuffer] t)
                              (TTexture '[DepthBuffer, StencilBuffer] t)
                    -> Layer' s t a
+                   -> FrameBuffer
                    -> [LoadedTexture]
                    -> m (a, [LoadedTexture])
-drawLayerToTexture w h colorAtts edsAtt layer tts =
-        drawToTexture drawBufs (dsAtt' : colorAtts') w h $ drawLayer' layer tts
+drawLayerToTexture w h colorAtts edsAtt layer fb tts =
+        drawToTexture drawBufs (dsAtt' : colorAtts') w h fb $ \fb' ->
+                drawLayer' layer fb' tts
 
         where drawBufs | (_ : _ : _) <- colorAtts = True
                        | otherwise = False
@@ -315,11 +320,11 @@ drawToTexture :: (GLES, MonadObject m)
               -> [(GL.Texture, GLEnum)]
               -> Int
               -> Int
+              -> FrameBuffer
+              -> (FrameBuffer -> m a)
               -> m a
-              -> m a
-drawToTexture useDrawBuffers atts w h act =
+drawToTexture useDrawBuffers atts w h oldFb act =
         do fb <- gl createFramebuffer 
-           -- TODO: nested framebuffers
            gl $ bindFramebuffer gl_FRAMEBUFFER fb
 
            buffersToDraw <- fmap concat . flip mapM atts $
@@ -340,11 +345,11 @@ drawToTexture useDrawBuffers atts w h act =
            (sw, sh) <- currentViewport
            resizeViewport (fromIntegral w) (fromIntegral h)
 
-           ret <- act
+           ret <- act fb
 
            resizeViewport sw sh
            gl $ do deleteFramebuffer fb
-                   bindFramebuffer gl_FRAMEBUFFER noFramebuffer
+                   bindFramebuffer gl_FRAMEBUFFER oldFb
 
            return ret
 
