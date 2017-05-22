@@ -32,7 +32,8 @@ vertexToGLSLAttr :: (ShaderVars g, ShaderVars i, VOShaderVars o)
                  -> (String, [(String, Int)])
 vertexToGLSLAttr v =
         let r@(SV _ is _) = vars False v
-        in ( shaderToGLSL "#version 100\n" "attribute" "varying"
+        in ( shaderToGLSL "#version 100\nprecision mediump float;\n"
+                          "attribute" "varying"
                           r [("hvVertexShaderOutput0", "gl_Position")]
            , map (\(_, n, s) -> (n, s)) is)
 
