@@ -141,7 +141,7 @@ scaleTexAR t = transform' t $ (\(Vec2 w h) -> scaleMat3 $ Vec2 1 (h / w))
 -- | Transform a 2D 'Object'.
 transform :: (MemberGlobal Transform2 gs, GLES)
           => Mat3 -> Object gs is -> Object gs is
-transform m' o = (\m -> Transform2 -= m .*. m') ~~> o
+transform m' o = (\m -> Transform2 -= m' .*. m) ~~> o
 
 -- | Transform a 2D 'Object'.
 transform' :: (MemberGlobal Transform2 gs, GLES)

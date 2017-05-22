@@ -18,10 +18,10 @@ import Graphics.Rendering.Ombra.Vector
 
 -- | 4x4 translation matrix.
 transMat4 :: Vec3 -> Mat4
-transMat4 (Vec3 x y z) = Mat4 (Vec4 1 0 0 0)
-                              (Vec4 0 1 0 0)
-                              (Vec4 0 0 1 0)
-                              (Vec4 x y z 1)
+transMat4 (Vec3 x y z) = Mat4 (Vec4 1 0 0 x)
+                              (Vec4 0 1 0 y)
+                              (Vec4 0 0 1 z)
+                              (Vec4 0 0 0 1)
 
 -- | 4x4 rotation matrix (X axis).
 rotXMat4 :: Float -> Mat4
@@ -32,9 +32,9 @@ rotXMat4 a = Mat4 (Vec4 1 0 0 0)
 
 -- | 4x4 rotation matrix (Y axis).
 rotYMat4 :: Float -> Mat4
-rotYMat4 a = Mat4 (Vec4 (cos a) 0 (sin a) 0)
+rotYMat4 a = Mat4 (Vec4 (cos a) 0 (- sin a) 0)
                   (Vec4 0 1 0 0)
-                  (Vec4 (- sin a) 0 (cos a) 0)
+                  (Vec4 (sin a) 0 (cos a) 0)
                   (Vec4 0 0 0 1)
 
 -- | 4x4 rotation matrix (Z axis).
@@ -85,6 +85,8 @@ perspectiveMat4 n f fov ar =
              (Vec4 0 s 0 0)
              (Vec4 0 0 ((f + n) / (n - f)) ((2 * f * n) / (n - f)))
              (Vec4 0 0 (- 1) 0)
+             -- (Vec4 0 0 ((f + n) / (n - f)) (-1))
+             -- (Vec4 0 0 ((2 * f * n) / (n - f)) 0)
         where s = 1 / tan (fov * pi / 360)
 
 -- | 4x4 orthographic projection matrix.
@@ -102,15 +104,15 @@ orthoMat4 n f l r b t =
              (Vec4 0 0 0 1)
 
 -- | 4x4 FPS camera matrix.
-cameraMat4 :: Vec3        -- ^ Eye
+cameraMat4 :: Vec3      -- ^ Eye
            -> Float     -- ^ Pitch
            -> Float     -- ^ Yaw
            -> Mat4
 cameraMat4 eye pitch yaw =
-        Mat4 (Vec4 xx yx zx 0)
-             (Vec4 xy yy zy 0)
-             (Vec4 xz yz zz 0)
-             (Vec4 (- xv <.> eye) (- yv <.> eye) (- zv <.> eye) 1)
+        Mat4 (Vec4 xx xy xz (- xv <.> eye))
+             (Vec4 yx yy yz (- yv <.> eye))
+             (Vec4 zx zy zz (- zv <.> eye))
+             (Vec4 0 0 0 1)
         where cosPitch = cos pitch
               sinPitch = sin pitch
               cosYaw = cos yaw
@@ -127,24 +129,24 @@ lookAtMat4 :: Vec3        -- ^ Eye
            -> Vec3        -- ^ Up
            -> Mat4
 lookAtMat4 eye target up =
-        Mat4 (Vec4 xx yx zx 0)
-             (Vec4 xy yy zy 0)
-             (Vec4 xz yz zz 0)
-             (Vec4 (- xv <.> eye) (- yv <.> eye) (- zv <.> eye) 1)
+        Mat4 (Vec4 xx xy xz (- xv <.> eye))
+             (Vec4 yx yy yz (- yv <.> eye))
+             (Vec4 zx zy zz (- zv <.> eye))
+             (Vec4 0 0 0 1)
         where zv@(Vec3 zx zy zz) = normalized $ eye ^-^ target
               xv@(Vec3 xx xy xz) = normalized $ cross3 up zv
               yv@(Vec3 yx yy yz) = cross3 zv xv
 
 -- | 3x3 translation matrix.
 transMat3 :: Vec2 -> Mat3
-transMat3 (Vec2 x y) = Mat3 (Vec3 1 0 0)
-                            (Vec3 0 1 0)
-                            (Vec3 x y 1)
+transMat3 (Vec2 x y) = Mat3 (Vec3 1 0 x)
+                            (Vec3 0 1 y)
+                            (Vec3 0 0 1)
 
 -- | 3x3 rotation matrix.
 rotMat3 :: Float -> Mat3
-rotMat3 a = Mat3 (Vec3 (cos a) (sin a) 0)
-                 (Vec3 (- sin a) (cos a) 0)
+rotMat3 a = Mat3 (Vec3 (cos a) (- sin a) 0)
+                 (Vec3 (sin a) (cos a) 0)
                  (Vec3 0 0 1)
 
 -- | 3x3 scale matrix.

@@ -171,7 +171,7 @@ scaleV v = transform $ scaleMat4 v
 -- | Transform a 3D 'Object'.
 transform :: (MemberGlobal Transform3 gs, GLES) => Mat4
           -> Object gs is -> Object gs is
-transform m' o = (\m -> Transform3 -= m .*. m') ~~> o
+transform m' o = (\m -> Transform3 -= m' .*. m) ~~> o
 
 -- | 4x4 perspective projection matrix, using width and height instead of the
 -- aspect ratio.

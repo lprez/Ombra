@@ -17,7 +17,7 @@ scene time = let -- We could have used the 'mesh' function, but that requires
                  -- that the transformation functions (e.g. trans, rotZ) modify
                  -- the Transform3 Global.
                  obj :: Object '[ Time, Transform3 ] Geometry3D
-                 obj =     trans (Vec3 0 0 (- 1.1))
+                 obj =     trans (Vec3 0 0 (- 0.3))
                        .   rotY (time / 2)
                        .   rotX 0.1
                        .   scaleV (Vec3 0.04 0.16 0.04)

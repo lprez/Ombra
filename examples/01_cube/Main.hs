@@ -10,7 +10,7 @@ import Utils.Play
 scene :: Texture -> Layer
 scene tex = let rotatedCube =   rotY (pi / 4) -- Rotate the cube around the Y
                                               -- axis
-                              . rotX (pi / 8)
+                              . rotX (- pi / 8)
                               . scale 0.5     -- Scale the cube in every
                                               -- direction
                               $ cube tex      -- The 'cube' function creates

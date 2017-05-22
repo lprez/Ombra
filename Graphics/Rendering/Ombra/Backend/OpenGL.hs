@@ -105,20 +105,22 @@ instance GLES where
         noFloat32Array = fmap ((,) 0) $ newForeignPtr_ nullPtr
 
         encodeMat2 (Mat2 (Vec2 a1 a2) (Vec2 b1 b2)) =
-                mkArray [ a1, a2, b1, b2 ]
+                mkArray [ a1, b1, a2, b2 ]
 
         encodeMat3 (Mat3 (Vec3 a1 a2 a3)
                          (Vec3 b1 b2 b3)
-                         (Vec3 c1 c2 c3)) = mkArray [ a1, a2, a3
-                                                    , b1, b2, b3
-                                                    , c1, c2, c3 ]
+                         (Vec3 c1 c2 c3)) = mkArray [ a1, b1, c1
+                                                    , a2, b2, c2
+                                                    , a3, b3, c3
+                                                    ]
         encodeMat4 (Mat4 (Vec4 a1 a2 a3 a4)
                          (Vec4 b1 b2 b3 b4)
                          (Vec4 c1 c2 c3 c4)
-                         (Vec4 d1 d2 d3 d4) ) = mkArray [ a1, a2, a3, a4
-                                                        , b1, b2, b3, b4
-                                                        , c1, c2, c3, c4
-                                                        , d1, d2, d3, d4 ]
+                         (Vec4 d1 d2 d3 d4) ) = mkArray [ a1, b1, c1, d1
+                                                        , a2, b2, c2, d2
+                                                        , a3, b3, c3, d3
+                                                        , a4, b4, c4, d4
+                                                        ]
 
         encodeFloats = mkArray
         encodeVec2s = mkArray
