@@ -98,12 +98,13 @@ class ( Integral GLEnum
         -- | This extension is fundamental and Ombra won't work without it.
         hasVertexArrayObjects :: Ctx -> IO Bool
 
-        -- | Required for the buffers* layer functions. May not be supported
-        -- on older hardware.
+        -- | Required for using float textures and TTextures, and for the
+        -- buffers* layer functions. May not be supported on older hardware.
         hasFloatTextures :: Ctx -> IO Bool
 
-        -- | Required for the buffers* layer functions. May not be supported
-        -- on older hardware.
+        -- | Required for using more than one color buffer in the the buffers*
+        -- layer functions and layerToTexture. May not be supported on older
+        -- hardware.
         hasDrawBuffers :: Ctx -> IO Bool
 
         -- | Required for the dFdx, dFdy and fwidth shader functions.
