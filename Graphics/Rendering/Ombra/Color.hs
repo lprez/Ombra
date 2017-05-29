@@ -1,3 +1,10 @@
+-- |
+-- Module:      Graphics.Rendering.Ombra.Color
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: portable
+
 module Graphics.Rendering.Ombra.Color where
 
 import Data.Hashable
@@ -5,7 +12,7 @@ import Data.Word (Word8)
 import Foreign.Ptr (castPtr)
 import Foreign.Storable
 
--- | An RGBA 32-bit color.
+-- | A RGBA 32-bit color.
 data Color = Color !Word8 !Word8 !Word8 !Word8 deriving (Eq, Show)
 
 instance Hashable Color where

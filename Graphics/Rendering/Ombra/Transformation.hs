@@ -1,3 +1,10 @@
+-- |
+-- Module:      Graphics.Rendering.Ombra.Transformation
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: portable
+
 module Graphics.Rendering.Ombra.Transformation (
         transMat4,
         rotXMat4,

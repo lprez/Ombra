@@ -3,12 +3,20 @@ module Graphics.Rendering.Ombra.Blend.Internal where
 import Graphics.Rendering.Ombra.Internal.GL
 import Graphics.Rendering.Ombra.Vector
 
--- | Blend mode
+-- | Blend mode.
 data Mode = Mode {
+        -- | The color that will be used if you choose the 'ConstantColor' or
+        -- 'ConstantAlpha' parameter.
         constantColor :: Maybe Vec4,
+        -- | Operation to apply to the colors (first three components of the
+        -- color vectors).
         rgbOperator :: Operator,
+        -- | Multipliers of the source color and destination color,
+        -- respectively.
         rgbParameters :: Maybe (Parameter, Parameter),
+        -- | Operation to apply to the alpha component.
         alphaOperator :: Operator,
+        -- | Multipliers of the source alpha and destination alpha.
         alphaParameters :: Maybe (Parameter, Parameter)
 } deriving Eq
 
@@ -20,7 +28,7 @@ data Parameter = Zero | One | SourceColor | DestinationColor | ConstantColor
                | SourceAlpha | DestinationAlpha | ConstantAlpha
                | OneMinus Parameter deriving Eq
 
--- | Standard transparency (default).
+-- | Standard transparency.
 transparency :: Mode
 transparency = Mode Nothing Add (Just (SourceAlpha, OneMinus SourceAlpha))
                             Add (Just (SourceAlpha, OneMinus SourceAlpha))
@@ -61,5 +69,4 @@ function m = (rgbs, rgbd, alphas, alphad)
               param (OneMinus SourceAlpha) = gl_ONE_MINUS_SRC_ALPHA
               param (OneMinus DestinationAlpha) = gl_ONE_MINUS_DST_ALPHA
               param (OneMinus ConstantAlpha) = gl_ONE_MINUS_CONSTANT_ALPHA
-              param (OneMinus _) =
-                      error "Invalid blend function (nested OneMinus)"
+              param (OneMinus (OneMinus x)) = param x

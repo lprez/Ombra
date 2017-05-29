@@ -1,6 +1,13 @@
 {-# LANGUAGE GADTs, KindSignatures, DataKinds, ScopedTypeVariables,
              TypeOperators, FlexibleContexts #-}
 
+-- |
+-- Module:      Graphics.Rendering.Ombra.Geometry
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+
 module Graphics.Rendering.Ombra.Geometry (
         Geometry,
         Vertex(..),

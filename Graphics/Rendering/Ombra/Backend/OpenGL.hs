@@ -1,5 +1,12 @@
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses #-}
 
+-- |
+-- Module:      Graphics.Rendering.Ombra.Backend.OpenGL
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+
 module Graphics.Rendering.Ombra.Backend.OpenGL (makeContext) where
         
 import Data.Word

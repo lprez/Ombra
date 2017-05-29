@@ -79,7 +79,9 @@ data DrawState = DrawState {
         colorMask :: (Bool, Bool, Bool, Bool)
 }
 
--- | A state monad on top of 'GL'.
+-- | The Draw monad lets you render the 'Layer's on the screen.
+--
+-- __The first action must be 'drawInit'__
 newtype Draw a = Draw { unDraw :: StateT DrawState GL a }
         deriving (Functor, Applicative, Monad, MonadIO)
 

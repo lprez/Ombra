@@ -1,3 +1,10 @@
+-- |
+-- Module:      Graphics.Rendering.Ombra.Shapes
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: portable
+
 module Graphics.Rendering.Ombra.Shapes where
 
 import Graphics.Rendering.Ombra.Geometry

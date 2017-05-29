@@ -1,5 +1,12 @@
 {-# LANGUAGE DeriveGeneric, TypeFamilies, TypeFamilyDependencies #-}
 
+-- |
+-- Module:      Graphics.Rendering.Ombra.Vector
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+
 module Graphics.Rendering.Ombra.Vector (
         module Data.VectorSpace,
         module Data.Cross,

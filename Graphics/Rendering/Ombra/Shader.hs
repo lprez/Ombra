@@ -3,6 +3,15 @@
              UndecidableInstances, DeriveGeneric #-}
 
 {-|
+Module:      Graphics.Rendering.Ombra.Shader
+License:     BSD3
+Maintainer:  ziocroc@gmail.com
+Stability:   experimental
+Portability: GHC only
+
+This module exports the shader EDSL. This is used to create shader variables
+(that can be used as uniforms or attributes), vertex shaders and fragment shaders.
+
 An example of shader variable:
 
 @
@@ -47,14 +56,14 @@ module Graphics.Rendering.Ombra.Shader (
         Shader.VOShaderVars,
         Shader.Uniform,
         Shader.Attribute,
-        Shader.Generic,
         Shader.SVList(..),
+        Generic,
         -- ** GPU types
         Shader.GBool,
         Shader.GFloat,
         Shader.GInt,
         Shader.GSampler2D,
-        Shader.GSamplerCube,
+        -- Shader.GSamplerCube,
         Shader.GVec2(..),
         Shader.GVec3(..),
         Shader.GVec4(..),
@@ -67,12 +76,15 @@ module Graphics.Rendering.Ombra.Shader (
         Shader.GMat2(..),
         Shader.GMat3(..),
         Shader.GMat4(..),
+        Shader.GenType,
+        Shader.GenTypeGFloat,
         Shader.GArray,
         -- * GPU functions
         (Shader.!),
         Shader.loop,
         Shader.store,
         Shader.texture2D,
+        {-
         Shader.texture2DBias,
         Shader.texture2DProj,
         Shader.texture2DProjBias,
@@ -81,6 +93,7 @@ module Graphics.Rendering.Ombra.Shader (
         Shader.texture2DLod,
         Shader.texture2DProjLod,
         Shader.texture2DProjLod4,
+        -}
         Shader.arrayLength,
         -- ** Various math functions
         Matrix(..),
@@ -99,13 +112,15 @@ module Graphics.Rendering.Ombra.Shader (
         Shader.clamp,
         Shader.mix,
         Shader.step,
-        Shader.smoothstep,
+        -- Shader.smoothstep,
         Shader.distance, -- TODO: implement AffineSpace?
         -- Shader.length,
         Shader.faceforward,
         Shader.reflect,
         Shader.refract,
         Shader.matrixCompMult,
+        -- *** Partial derivatives
+        -- | These are available only in the fragment shader.
         Shader.dFdx,
         Shader.dFdy,
         Shader.fwidth,
@@ -184,13 +199,14 @@ import Data.Cross
 import Data.VectorSpace
 import Prelude
 
+-- | UV coordinates.
 data UV = UV Shader.GVec2 deriving Generic
 
 type instance BooleanOf Shader.GBool = Shader.GBool
 type instance BooleanOf Shader.GFloat = Shader.GBool
 type instance BooleanOf Shader.GInt = Shader.GBool
 type instance BooleanOf Shader.GSampler2D = Shader.GBool
-type instance BooleanOf Shader.GSamplerCube = Shader.GBool
+-- type instance BooleanOf Shader.GSamplerCube = Shader.GBool
 type instance BooleanOf Shader.GVec2 = Shader.GBool
 type instance BooleanOf Shader.GVec3 = Shader.GBool
 type instance BooleanOf Shader.GVec4 = Shader.GBool

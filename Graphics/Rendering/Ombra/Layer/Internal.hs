@@ -20,9 +20,9 @@ import Graphics.Rendering.Ombra.Texture.Internal
 import Graphics.Rendering.Ombra.Texture.Types
 import Graphics.Rendering.Ombra.Vector
 
--- TODO: document buffers.
--- | Layer that clear some buffers. For instance, @clear ['ColorBuffer']@ fills
--- the screen with a black rectangle, without affecting the depth buffer.
+-- | Layer that clear some buffers. For instance, @clear ['ColorBuffer']@ is
+-- equivalent to drawing a black rectangle that fills the screen, with depth and
+-- stencil test disabled.
 clear :: [Buffer] -> Layer' s t ()
 clear = Clear
 
@@ -191,6 +191,7 @@ readDepthFloat = ReadDepthFloat
 readStencil :: (Int, Int, Int, Int) -> Layer' s t [Word8]
 readStencil = ReadStencil
 
+-- | This is equivalent to drawing a 'clear' layer.
 clearBuffers :: (GLES, MonadGL m) => [Buffer] -> m ()
 clearBuffers = mapM_ $ gl . GL.clear . buffer
         where buffer ColorBuffer = gl_COLOR_BUFFER_BIT

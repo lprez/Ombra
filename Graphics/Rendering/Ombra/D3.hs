@@ -2,7 +2,15 @@
              TypeFamilies, MultiParamTypeClasses, FlexibleInstances,
              UndecidableInstances #-}
 
-{-| Simplified 3D graphics system. -}
+-- |
+-- Module:      Graphics.Rendering.Ombra.D3
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+--
+-- This module helps you create simple objects and layers with 3D graphics.
+
 module Graphics.Rendering.Ombra.D3 (
         -- * 3D Objects
         Object3D,
@@ -56,6 +64,7 @@ import Graphics.Rendering.Ombra.Object
 import Graphics.Rendering.Ombra.Shapes
 import Graphics.Rendering.Ombra.Vector
 import Graphics.Rendering.Ombra.Internal.TList
+import Graphics.Rendering.Ombra.Shader (ShaderVars)
 import Graphics.Rendering.Ombra.Shader.Default3D
         (Texture2(..), Transform3(..), View3(..), Project3(..))
 import Graphics.Rendering.Ombra.Shader.Program hiding (program)
@@ -168,7 +177,7 @@ scaleV :: (MemberGlobal Transform3 gs, GLES) => Vec3
        -> Object gs is -> Object gs is
 scaleV v = transform $ scaleMat4 v
 
--- | Transform a 3D 'Object'.
+-- | Transform a 3D 'Object' using a transformation matrix.
 transform :: (MemberGlobal Transform3 gs, GLES) => Mat4
           -> Object gs is -> Object gs is
 transform m' o = (\m -> Transform3 -= m' .*. m) ~~> o

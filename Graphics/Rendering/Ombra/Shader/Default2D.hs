@@ -1,5 +1,12 @@
 {-# LANGUAGE DataKinds, DeriveGeneric, GADTs #-}
 
+-- |
+-- Module:      Graphics.Rendering.Ombra.Shader.Default2D
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+
 module Graphics.Rendering.Ombra.Shader.Default2D (
         Uniforms,
         Geometry2D,

@@ -1,5 +1,12 @@
 {-# LANGUAGE DataKinds, DeriveGeneric, GADTs #-}
 
+-- |
+-- Module:      Graphics.Rendering.Ombra.Shader.Default3D
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+
 module Graphics.Rendering.Ombra.Shader.Default3D (
         Uniforms,
         Geometry3D,
@@ -21,16 +28,22 @@ type Uniforms = '[Project3, View3, Transform3, Texture2]
 -- | A 3D geometry.
 type Geometry3D = '[Position3, UV, Normal3]
 
+-- | The texture that is applied to the object.
 data Texture2 = Texture2 GSampler2D deriving Generic
 
+-- | The matrix that transforms an object from model space to world space.
 data Transform3 = Transform3 GMat4 deriving Generic
 
+-- | World space -> view space.
 data View3 = View3 GMat4 deriving Generic
 
+-- | View space -> screen space.
 data Project3 = Project3 GMat4 deriving Generic
 
+-- | The position of the vertex.
 data Position3 = Position3 GVec3 deriving Generic
 
+-- | The vertex normal.
 data Normal3 = Normal3 GVec3 deriving Generic
 
 -- | The output position and normal are in view space.

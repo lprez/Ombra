@@ -1,3 +1,10 @@
+-- |
+-- Module:      Graphics.Rendering.Ombra.Texture
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: portable
+
 module Graphics.Rendering.Ombra.Texture (
         Texture,
         mkTexture,

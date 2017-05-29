@@ -1,7 +1,15 @@
 {-# LANGUAGE DataKinds, FlexibleContexts, ConstraintKinds, TypeOperators,
              TypeFamilies #-}
 
-{-| Simplified 2D graphics system. -}
+-- |
+-- Module:      Graphics.Rendering.Ombra.D2
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+--
+-- This module helps you create simple objects and layers with 2D graphics.
+
 module Graphics.Rendering.Ombra.D2 (
         -- * 2D Objects
         Object2D,
@@ -44,6 +52,7 @@ import Graphics.Rendering.Ombra.Layer
 import Graphics.Rendering.Ombra.Object
 import Graphics.Rendering.Ombra.Shapes
 import Graphics.Rendering.Ombra.Internal.TList
+import Graphics.Rendering.Ombra.Shader (ShaderVars)
 import Graphics.Rendering.Ombra.Shader.Default2D (Image(..), Depth(..), Transform2(..), View2(..))
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Texture

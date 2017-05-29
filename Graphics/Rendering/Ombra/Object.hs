@@ -1,6 +1,13 @@
 {-# LANGUAGE TypeOperators, DataKinds, ConstraintKinds, MultiParamTypeClasses,
              TypeFamilies, FlexibleContexts, FlexibleInstances #-}
 
+-- |
+-- Module:      Graphics.Rendering.Ombra.Object
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+
 module Graphics.Rendering.Ombra.Object (
         -- * Creating and modifying objects
         Object((:~>)),
@@ -13,8 +20,6 @@ module Graphics.Rendering.Ombra.Object (
         depthTest,
         depthMask,
         colorMask,
-        ShaderVars,
-        VOShaderVars,
         -- ** Blending
         blend,
         noBlend,

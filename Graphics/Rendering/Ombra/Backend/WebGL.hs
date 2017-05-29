@@ -1,7 +1,13 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies,
              UndecidableInstances, OverloadedStrings #-}
 
-{-| The GHCJS/WebGL backend. This just exports the instance for 'GLES'. -}
+-- |
+-- Module:      Graphics.Rendering.Ombra.Backend.WebGL
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+
 module Graphics.Rendering.Ombra.Backend.WebGL (
         makeContext
 ) where

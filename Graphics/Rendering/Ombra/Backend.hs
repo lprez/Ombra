@@ -1,6 +1,14 @@
-{-# LANGUAGE TypeFamilies, MultiParamTypeClasses, FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies, MultiParamTypeClasses,
+             FlexibleContexts, ConstraintKinds #-}
 
-module Graphics.Rendering.Ombra.Backend where
+-- |
+-- Module:      Graphics.Rendering.Ombra.Backend
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: GHC only
+
+module Graphics.Rendering.Ombra.Backend (GLES(..)) where
 
 import Control.Concurrent (ThreadId)
 import Data.Bits (Bits)
@@ -12,26 +20,31 @@ import Foreign.Ptr (castPtr)
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Vector
 
--- Mixed OpenGL ES 2.0/WebGL 1.0/OpenGL 2.0 API, with VAOs and FBOs.
--- | Backend API.
-class ( Integral GLEnum
-      , Integral GLUInt
-      , Integral GLInt
-      , Integral GLSize
-      , Bits GLEnum
-      , Num GLEnum
-      , Num GLUInt
-      , Num GLInt
-      , Num GLPtrDiff
-      , Num GLSize
-      , Eq GLEnum
-      , Eq GLUInt
-      , Eq GLInt
-      , Eq GLPtrDiff
-      , Eq GLSize
-      , Eq Texture
-      , Eq Program
-      , Hashable Program) => GLES where
+type GLTypes enum uint int size ptrdiff texture program =
+      ( Integral enum
+      , Integral uint
+      , Integral int
+      , Integral size
+      , Bits enum
+      , Num enum
+      , Num uint
+      , Num int
+      , Num ptrdiff
+      , Num size
+      , Eq enum
+      , Eq uint
+      , Eq int
+      , Eq ptrdiff
+      , Eq size
+      , Eq texture
+      , Eq program
+      , Hashable program
+      )
+
+-- | Instances of this class are implementations of the OpenGL API.
+class GLTypes GLEnum GLUInt GLInt GLSize
+              GLPtrDiff Texture Program
+      => GLES where
         type Ctx
         type GLEnum
         type GLUInt
@@ -574,3 +587,4 @@ class ( Integral GLEnum
         gl_RENDERBUFFER_BINDING :: GLEnum
         gl_MAX_RENDERBUFFER_SIZE :: GLEnum
         gl_INVALID_FRAMEBUFFER_OPERATION :: GLEnum
+        {-# MINIMAL #-}

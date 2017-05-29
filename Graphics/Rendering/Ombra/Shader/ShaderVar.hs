@@ -38,8 +38,7 @@ data SVList :: [*] -> * where
         (:-) :: ShaderVar a => a -> SVList xs -> SVList (a ': xs)
 
 -- | A function from a set of uniforms and a set of inputs (attributes or
--- varyings) to a set of outputs (varyings). It can be used to represent a
--- reusable piece of shader code, other than actual shaders.
+-- varyings) to a set of outputs (varyings).
 type Shader gs is os = SVList gs -> SVList is -> SVList os
 
 class GShaderVar (g :: * -> *) where

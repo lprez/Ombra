@@ -22,7 +22,7 @@ module Graphics.Rendering.Ombra.Shader.Language (
         GFloat,
         GInt,
         GSampler2D,
-        GSamplerCube,
+        -- GSamplerCube,
         GVec2(..),
         GVec3(..),
         GVec4(..),
@@ -40,6 +40,7 @@ module Graphics.Rendering.Ombra.Shader.Language (
         loop,
         store,
         texture2D,
+        {-
         texture2DBias,
         texture2DProj,
         texture2DProjBias,
@@ -48,6 +49,7 @@ module Graphics.Rendering.Ombra.Shader.Language (
         texture2DLod,
         texture2DProjLod,
         texture2DProjLod4,
+        -}
         arrayLength,
         -- ** Math functions
         radians,
@@ -78,7 +80,7 @@ module Graphics.Rendering.Ombra.Shader.Language (
         clamp,
         mix,
         step,
-        smoothstep,
+        -- smoothstep,
         length,
         distance,
         dot,

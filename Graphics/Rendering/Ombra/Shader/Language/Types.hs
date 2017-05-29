@@ -25,16 +25,15 @@ data ContextVarType = LoopIteration | LoopValue deriving Eq
 -- | A GPU boolean.
 newtype GBool = GBool Expr 
 
--- | A GPU float.
+-- | A GPU 32-bit float.
 newtype GFloat = GFloat Expr 
 
--- | A GPU integer.
+-- | A GPU 32-bit integer.
 newtype GInt = GInt Expr 
 
--- | A GPU 2D texture handle.
+-- | This represents an active 2D texture in the GPU.
 newtype GSampler2D = GSampler2D Expr 
 
--- | A GPU cube texture handler.
 newtype GSamplerCube = GSamplerCube Expr 
 
 -- | The type of a generic expression.

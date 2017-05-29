@@ -69,7 +69,10 @@ data TTextureType (bufs :: [Buffer]) where
 
 data LayerStatus = Drawable | NonDrawable
 
-data Buffer = ColorBuffer | DepthBuffer | StencilBuffer
+-- | The type of the output buffer to draw to.
+data Buffer = ColorBuffer
+            | DepthBuffer
+            | StencilBuffer
 
 instance Functor (Layer' s t) where
         fmap f = flip Bind $ Return . f

@@ -85,7 +85,7 @@ instance GFloatVec GVec2
 instance GFloatVec GVec3
 instance GFloatVec GVec4
 
--- | GFloats or vectors.
+-- | GFloats or float vectors.
 class ShaderType a => GenType a
 instance {-# OVERLAPS #-} GenType GFloat
 instance {-# OVERLAPPABLE #-} (GFloatVec a, ShaderType a) => GenType a
@@ -94,6 +94,8 @@ type family GenTypeGFloatConstr a b where
         GenTypeGFloatConstr a GFloat = GenType a
         GenTypeGFloatConstr a a = GenType a
 
+-- | __@a@__ must be a 'GenType', while __@b@__ can either be the same as
+-- __@a@__, or a 'GFloat'.
 type GenTypeGFloat a b = (GenTypeGFloatConstr a b, ShaderType a, ShaderType b)
 
 infixl 7 *
@@ -310,14 +312,20 @@ max = fun2 "max"
 clamp :: GenTypeGFloat a b => a -> b -> b -> a
 clamp = fun3 "clamp"
 
+-- | Linear interpolation between two values.
+--
+-- @mix x y t = x*(1-t) + y*t@
 mix :: GenTypeGFloat a b => a -> a -> b -> a
 mix = fun3 "mix"
 
+-- | @step e x@ returns 0 if x < e, 1 otherwise.
 step :: GenTypeGFloat a b => b -> a -> a
 step = fun2 "step"
 
+{-
 smoothstep :: GenTypeGFloat a b => b -> b -> a -> a
 smoothstep = fun3 "smoothstep"
+-}
 
 length :: GenType a => a -> GFloat
 length = fun1 "length"
@@ -325,6 +333,7 @@ length = fun1 "length"
 arrayLength :: (ShaderType t, KnownNat n) => GArray n t -> GInt
 arrayLength = fun1 "length"
 
+-- | Access an array element at a given index.
 (!) :: (ShaderType t, KnownNat n) => GArray n t -> GInt -> t
 arr ! i = fromExpr $ ArrayIndex (toExpr arr) (toExpr i)
 
@@ -354,7 +363,8 @@ instance GMatrix GMat2
 instance GMatrix GMat3
 instance GMatrix GMat4
 
-matrixCompMult :: (GMatrix a, GMatrix b, GMatrix c) => a -> b -> c
+-- | Component-wise multiplication of matrices.
+matrixCompMult :: GMatrix a => a -> a -> a
 matrixCompMult = fun2 "matrixCompMult"
 
 -- | Avoid evaluating the expression of the argument more than one time.
@@ -386,9 +396,11 @@ loop iters iv f =
                     (\ie ve -> let (next, stop) = f (fromExpr ie) (fromExpr ve)
                                in (toExpr next, toExpr stop))
 
+-- | Texture lookup function.
 texture2D :: GSampler2D -> GVec2 -> GVec4
 texture2D = fun2 "texture2D"
 
+{-
 texture2DBias :: GSampler2D -> GVec2 -> GFloat -> GVec4
 texture2DBias = fun3 "texture2DBias"
 
@@ -421,6 +433,7 @@ textureCubeBias = fun3 "textureCube"
 
 textureCubeLod :: GSamplerCube -> GVec3 -> GFloat -> GVec4
 textureCubeLod = fun3 "textureCubeLod"
+-}
 
 -- | Partial derivative of the argument with respect to the window X coordinate.
 dFdx :: GenType a => a -> a

@@ -19,8 +19,8 @@ data FunctionType = Never               -- ^ Never pass.
                   | Always              -- ^ Always pass.
                   | Less                -- ^ <
                   | LessOrEqual         -- ^ <=
-                  | Greater             -- ^ >
-                  | GreaterOrEqual      -- ^ >=
+                  | Greater             -- ^ \>
+                  | GreaterOrEqual      -- ^ \>=
                   | Equal               -- ^ ==
                   | NotEqual            -- ^ /=
                   deriving Eq

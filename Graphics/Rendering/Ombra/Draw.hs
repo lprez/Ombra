@@ -1,3 +1,10 @@
+-- |
+-- Module:      Graphics.Rendering.Ombra.Draw
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: portable
+
 module Graphics.Rendering.Ombra.Draw (
         Draw,
         DrawState,
@@ -9,9 +16,7 @@ module Graphics.Rendering.Ombra.Draw (
         evalDrawCtx,
         drawState,
         -- * Draw actions
-        MonadGL(gl),
         MonadScreen(resizeViewport),
-        MonadObject,
         drawInit,
         clearBuffers,
         drawLayer,
@@ -32,6 +37,8 @@ module Graphics.Rendering.Ombra.Draw (
         hasFloatTextures,
         hasDrawBuffers,
         hasStandardDerivatives,
+        -- *
+        MonadGL(gl),
 ) where
 
 import Data.IORef
@@ -41,7 +48,7 @@ import Graphics.Rendering.Ombra.Internal.GL hiding (Buffer)
 import Graphics.Rendering.Ombra.Layer
 import Graphics.Rendering.Ombra.Screen
 
--- | Run a Draw action using an IORef and a context.
+-- | Run a Draw action using an IORef to hold the state.
 refDrawCtx :: GLES => Ctx -> Draw a -> IORef DrawState -> IO a
 refDrawCtx ctx d ref = do state <- readIORef ref
                           (ret, state') <- runDrawCtx ctx d state
@@ -69,5 +76,5 @@ evalDrawCtx ctx d = flip evalGL ctx . evalDraw d
 -- Geometries, Textures and Programs. This means that, when a CPU resource is
 -- garbage collected, the GPU resource is also removed. The functions below let
 -- you manage allocation and deallocation manually. Note that if you try to use
--- a resource that was deallocated with the remove* functions it will be
+-- a resource that was deallocated with the remove* functions, it will be
 -- allocated again.

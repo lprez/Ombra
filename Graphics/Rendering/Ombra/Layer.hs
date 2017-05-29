@@ -1,3 +1,10 @@
+-- |
+-- Module:      Graphics.Rendering.Ombra.Layer
+-- License:     BSD3
+-- Maintainer:  ziocroc@gmail.com
+-- Stability:   experimental
+-- Portability: portable
+
 module Graphics.Rendering.Ombra.Layer (
         Buffer(..),
         Layer,
@@ -5,10 +12,12 @@ module Graphics.Rendering.Ombra.Layer (
         over,
         clear,
         -- * Programs
-        Compatible,
         Program,
         program,
         -- * Sublayers
+        -- | These functions lets you draw a layer to one or more textures instead
+        -- of directly to the screen, and then use those textures to create
+        -- another layer.
         subLayer,
         colorSubLayer,
         depthSubLayer,
