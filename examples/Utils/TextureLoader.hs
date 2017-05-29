@@ -5,7 +5,8 @@
 #endif
 
 module Utils.TextureLoader (
-        loadTexture
+        loadTexture,
+        loadTextureNoMipmaps,
 ) where
 
 import Graphics.Rendering.Ombra
@@ -41,22 +42,23 @@ foreign import javascript interruptible
           };                                                            "
         loadImage :: JSString -> IO JSVal
 
-loadTexture :: GLES => FilePath -> IO Texture
-loadTexture path = do img <- loadImage $ fromString path
-                      w <- imgWidth img
-                      h <- imgHeight img
-                      arr <- imgData img
+loadTexture' :: GLES => FilePath -> Bool -> IO Texture
+loadTexture' path mips = do img <- loadImage $ fromString path
+                            w <- imgWidth img
+                            h <- imgHeight img
+                            arr <- imgData img
 
-                      let buf = buffer arr
-                          dw = dataView buf
-                          l = w * h * 4
-                          pxhash = flip hashWithSalt l $
-                                        foldl (\s i -> hashWithSalt s $
-                                                        getUint8 i dw)
-                                        0x36d1615b7400a4
-                                        [ 0 .. l - 1 ]
+                            let buf = buffer arr
+                                dw = dataView buf
+                                l = w * h * 4
+                                pxhash = flip hashWithSalt l $
+                                              foldl (\s i -> hashWithSalt s $
+                                                              getUint8 i dw)
+                                              0x36d1615b7400a4
+                                              [ 0 .. l - 1 ]
 
-                      return . mkTextureRaw w h True [arr] $ hash (w, h, pxhash)
+                            return . mkTextureRaw w h mips [arr] $
+                                                  hash (w, h, pxhash)
 
 #else
 
@@ -64,21 +66,21 @@ import Codec.Picture
 import Codec.Picture.Types (promoteImage)
 import qualified Data.Vector.Storable as V
 
-loadTexture :: GLES => FilePath -> IO Texture
-loadTexture path = do eimg <- readImage path
-                      case eimg of
-                           Left err -> error err
-                           Right img ->
-                                   case convertRGBA8 img of
-                                        {-
-                                        Image w h v ->
-                                            let (fp, l) = unsafeToForeignPtr0 v
-                                                hash = hash ...
-                                            in mkTextureRaw ...
-                                        -}
-                                        Image w h v -> return .
-                                                        mkTexture w h True
-                                                                $ [colList v]
+loadTexture' :: GLES => FilePath -> Bool -> IO Texture
+loadTexture' path mips = do eimg <- readImage path
+                            case eimg of
+                                 Left err -> error err
+                                 Right img ->
+                                         case convertRGBA8 img of
+                                              {-
+                                              Image w h v ->
+                                                  let (fp, l) = unsafeToForeignPtr0 v
+                                                      hash = hash ...
+                                                  in mkTextureRaw ...
+                                              -}
+                                              Image w h v -> return .
+                                                              mkTexture w h mips
+                                                                   $ [colList v]
         where colList = fst . V.foldr (\x (l, cs) ->
                                         case cs of
                                              [g, b, a] -> ( Color x g b a : l
@@ -88,3 +90,9 @@ loadTexture path = do eimg <- readImage path
                                       ([], [])
 
 #endif
+
+loadTexture :: GLES => FilePath -> IO Texture
+loadTexture = flip loadTexture' True
+
+loadTextureNoMipmaps :: GLES => FilePath -> IO Texture
+loadTextureNoMipmaps = flip loadTexture' False
