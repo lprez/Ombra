@@ -59,7 +59,7 @@ type ShaderPrecisionFormat = JSVal
 noBuffer :: Buffer
 noBuffer = jsNull
 
-noFramebuffer :: Framebuffer
+noFramebuffer :: FrameBuffer
 noFramebuffer = jsNull
 
 noTexture :: Texture

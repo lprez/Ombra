@@ -136,7 +136,7 @@ instance GLES where
         toGLString = pack
         fromGLString = unpack
         noBuffer = JS.noBuffer
-        noBuffer = JS.noFramebuffer
+        noFramebuffer = JS.noFramebuffer
         noTexture = TagTexture (-1) JS.noTexture
         noUInt8Array = nullUInt8Array
         noFloat32Array = nullFloat32Array
@@ -159,7 +159,7 @@ instance GLES where
                         encodeMat4JS a1 b1 c1 d1
                                      a2 b2 c2 d2
                                      a3 b3 c3 d3
-                                     a4 b5 c4 d4
+                                     a4 b4 c4 d4
         encodeFloats v = JSArray.fromList <$> mapM toJSVal v
                          >>= JS.float32ArrayFrom
         encodeInts v = JSArray.fromList <$> mapM toJSVal v
@@ -241,10 +241,11 @@ instance GLES where
                           in return $ map (flip JSDataView.getUint8 dw)
                                           [0 .. JS.length ar - 1]
         decodeUInt16s ar = let dw = JSDataView.dataView $ JS.buffer ar
-                           in return $ map (flip JSDataView.getUint16 dw)
+                           in return $ map (flip JSDataView.getUint16LE dw)
                                            [0 .. JS.length ar - 1]
         decodeFloat32s ar = let dw = JSDataView.dataView $ JS.buffer ar
-                            in return $ map (flip JSDataView.getFloat32 dw)
+                            in return $ map (realToFrac .
+                                                flip JSDataView.getFloat32LE dw)
                                             [0 .. JS.length ar - 1]
 
         hasVertexArrayObjects =
