@@ -383,6 +383,9 @@ ifThenElse :: ShaderType a => GBool -> a -> a -> a
 ifThenElse b t f = fromExpr . Action $ If (toExpr b) (typeName t)
                                           (toExpr t) (toExpr f)
 
+-- | This function implements raw GLSL loops. The same effect can be achieved
+-- using Haskell list functions, but that may result in a large compiled GLSL
+-- source, which in turn causes an out of memory error.
 loop :: ShaderType a 
      => Int -- ^ Maximum number of iterations (should be as low as possible)
      -> a -- ^ Initial value
