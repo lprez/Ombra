@@ -41,7 +41,7 @@ class (GLES, MonadGL m) => MonadGeometry m where
                      => AttrCol (i ': is)
                      -> m (Either String LoadedAttribute)
         getElementBuffer :: Elements is -> m (Either String LoadedBuffer)
-        getGeometry :: GVertex g
+        getGeometry :: GeometryVertex g
                     => Geometry g
                     -> m (Either String LoadedGeometry)
 
@@ -60,7 +60,7 @@ rehashGeometry :: Geometry g -> Geometry g
 rehashGeometry g = let Triangles elemsHash _ = elements g
                    in g { geometryHash = H.hashWithSalt (topHash g) elemsHash }
 
-emptyGeometry :: GVertex g => Geometry g
+emptyGeometry :: GeometryVertex g => Geometry g
 emptyGeometry = rehashGeometry $ Geometry 0 0 emptyAttrCol (Triangles 0 []) (-1)
 
 downList :: NotTop p => AttrTable p (i ': is) -> [CPUBase i] -> [CPUBase i]
@@ -79,7 +79,7 @@ foldVertices f acc cell@(AttrCell _ _ down) =
             widx = fromIntegral idx
         in (idx, f (AttrVertex widx cell) acc')
 
-addVertex :: GVertex g
+addVertex :: GeometryVertex g
           => VertexAttributes (AttributeTypes g)
           -> Geometry g
           -> (AttrVertex (AttributeTypes g), Geometry g)
@@ -96,7 +96,7 @@ addVertex v g =
                                 }
            )
 
-addTriangle :: GVertex g
+addTriangle :: GeometryVertex g
             => Triangle (AttrVertex (AttributeTypes g))
             -> Geometry g
             -> Geometry g
@@ -106,13 +106,13 @@ addTriangle t g = let Triangles h ts = elements g
                   in rehashGeometry $ g { elements = elements' }
 
 -- | Create a new vertex that can be used in 'addTriangle'.
-vertex :: (Monad m, GVertex g)
+vertex :: (Monad m, GeometryVertex g)
        => Vertex g
        -> GeometryBuilderT g m (AttrVertex (AttributeTypes g))
 vertex = GeometryBuilderT . state . addVertex . toVertexAttributes
 
 -- | Add a triangle to the current geometry.
-triangle :: (Monad m, GVertex g)
+triangle :: (Monad m, GeometryVertex g)
          => AttrVertex (AttributeTypes g)
          -> AttrVertex (AttributeTypes g)
          -> AttrVertex (AttributeTypes g)
@@ -122,16 +122,16 @@ triangle x y z = GeometryBuilderT . state $ \g -> ((), addTriangle t g)
 
 -- | Create a 'Geometry' using the 'GeometryBuilder' monad. This is more
 -- efficient than 'mkGeometry'.
-buildGeometry :: GVertex g => GeometryBuilder g () -> Geometry g
+buildGeometry :: GeometryVertex g => GeometryBuilder g () -> Geometry g
 buildGeometry (GeometryBuilderT m) = execState m emptyGeometry
 
-buildGeometryT :: (Monad m, GVertex g)
+buildGeometryT :: (Monad m, GeometryVertex g)
                => GeometryBuilderT g m ()
                -> m (Geometry g)
 buildGeometryT (GeometryBuilderT m) = execStateT m emptyGeometry
 
 -- | Create a 'Geometry' using a list of triangles.
-mkGeometry :: (GLES, GVertex g)
+mkGeometry :: (GLES, GeometryVertex g)
            => [Triangle (Vertex g)]
            -> Geometry g
 mkGeometry t = buildGeometry (foldlM add H.empty t >> return ())
@@ -151,7 +151,7 @@ attrVertexToVertex :: Attributes is => AttrVertex is -> VertexAttributes is
 attrVertexToVertex (AttrVertex _ tab) = rowToVertexAttributes tab
 
 -- | Convert a 'Geometry' back to a list of triangles.
-decompose :: GVertex g => Geometry g -> [Triangle (Vertex g)] 
+decompose :: GeometryVertex g => Geometry g -> [Triangle (Vertex g)] 
 decompose g@(Geometry _ _ _ (Triangles _ triangles) _) =
         flip map triangles $ fmap (fromVertexAttributes . attrVertexToVertex)
 
@@ -160,7 +160,7 @@ type AttrVertexMap is v = H.HashMap (AttrVertex is) v
 -- | Transform each vertex of a geometry. You can create a value for each
 -- triangle so that the transforming function will receive a list of the values
 -- of the triangles the vertex belongs to.
-mapVertices :: forall a g g'. (GLES, GVertex g, GVertex g')
+mapVertices :: forall a g g'. (GLES, GeometryVertex g, GeometryVertex g')
             => (Triangle (Vertex g) -> a)
             -> ([a] -> Vertex g -> Vertex g')
             -> Geometry g
@@ -261,12 +261,12 @@ instance GLES => Resource (Elements is) LoadedBuffer GL where
                                     (AttrVertex z _)) = [x, y, z]
         unloadResource _ (LoadedBuffer buf) = deleteBuffer buf
 
-instance (GLES, MonadGeometry m, EmbedIO m, GVertex g) =>
+instance (GLES, MonadGeometry m, EmbedIO m, GeometryVertex g) =>
         Resource (Geometry g) LoadedGeometry m where
         loadResource = loadGeometry
         unloadResource _ = gl . deleteGeometry
 
-loadGeometry :: (GLES, MonadGeometry m, GVertex g)
+loadGeometry :: (GLES, MonadGeometry m, GeometryVertex g)
              => Geometry g
              -> m (Either String LoadedGeometry)
 loadGeometry geometry@(Geometry _ _ _ _ _) = runExceptT $
@@ -312,7 +312,7 @@ loadBuffer ty bufData =
            bindBuffer ty noBuffer
            return buffer
 
-drawGeometry :: (MonadGeometry m, GVertex g) => Geometry g -> m ()
+drawGeometry :: (MonadGeometry m, GeometryVertex g) => Geometry g -> m ()
 drawGeometry g = getGeometry g >>= \eg ->
         case eg of
              Left _ -> return ()

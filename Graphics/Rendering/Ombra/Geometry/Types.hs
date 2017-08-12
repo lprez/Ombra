@@ -1,10 +1,11 @@
 {-# LANGUAGE GADTs, TypeOperators, KindSignatures, DataKinds, FlexibleContexts,
-             FlexibleInstances, UndecidableInstances, TypeFamilies, RankNTypes,
-             GeneralizedNewtypeDeriving, ConstraintKinds,
-             TypeFamilyDependencies #-}
+             FlexibleInstances, TypeFamilies, RankNTypes, UndecidableInstances,
+             GeneralizedNewtypeDeriving, ConstraintKinds, MultiParamTypeClasses,
+             TypeFamilyDependencies, ScopedTypeVariables, DefaultSignatures #-}
 
 module Graphics.Rendering.Ombra.Geometry.Types (
-        GVertex(..),
+        GeometryVertex(..),
+        GGeometryVertex(..),
         VertexAttributes(..),
         Triangle(..),
         AttrTable(..),
@@ -25,24 +26,46 @@ import Control.Monad.Trans.State
 import GHC.Exts (Constraint)
 import qualified Data.Hashable as H
 import Data.Functor.Identity (Identity)
+import Data.Int (Int32)
 import Data.Word (Word16)
+import Data.Proxy
+import GHC.Generics
 
+import Graphics.Rendering.Ombra.Backend (GLES)
 import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU
+import Graphics.Rendering.Ombra.Shader.Language.Types
+import Graphics.Rendering.Ombra.Vector
 
-class Attributes (AttributeTypes a) => GVertex a where
+class Attributes (AttributeTypes a) => GeometryVertex a where
         type AttributeTypes a :: [*]
-        type Vertex a = v | v -> a
-        toVertexAttributes :: Vertex a -> VertexAttributes (AttributeTypes a)
-        fromVertexAttributes :: VertexAttributes (AttributeTypes a) -> Vertex a
+        type AttributeTypes a = GAttributeTypes (Rep a) (Rep (Vertex a))
 
-{-
-instance Attributes is => GVertex (HList is) where
-        type AttributeTypes (VertexAttributes is) = is
-        type Vertex (VertexAttributes is) = VertexAttributes is
-        toVertexAttributes = id
-        fromVertexAttributes = id
--}
+        type Vertex a = v | v -> a
+
+        toVertexAttributes :: Vertex a -> VertexAttributes (AttributeTypes a)
+        default toVertexAttributes :: ( Generic a
+                                      , Generic (Vertex a)
+                                      , GGeometryVertex (Rep a) (Rep (Vertex a))
+                                      )
+                                   => Vertex a
+                                   -> VertexAttributes
+                                        (GAttributeTypes (Rep a)
+                                                         (Rep (Vertex a)))
+        toVertexAttributes = gtoVertexAttributes (Proxy :: Proxy (Rep a)) . from
+
+        fromVertexAttributes :: VertexAttributes (AttributeTypes a) -> Vertex a
+        default fromVertexAttributes :: ( Generic a
+                                        , Generic (Vertex a)
+                                        , GGeometryVertex (Rep a)
+                                                          (Rep (Vertex a))
+                                        )
+                                   => VertexAttributes
+                                        (GAttributeTypes (Rep a)
+                                                         (Rep (Vertex a)))
+                                   -> Vertex a
+        fromVertexAttributes =
+                to . gfromVertexAttributes (Proxy :: Proxy (Rep a))
 
 data Triangle a = Triangle a a a
 
@@ -60,7 +83,7 @@ data Elements is = Triangles Int [Triangle (AttrVertex is)]
 
 -- | A set of triangles.
 data Geometry g where
-        Geometry :: GVertex g
+        Geometry :: GeometryVertex g
                  => { topHash :: Int            -- TODO: ?
                     , geometryHash :: Int       -- TODO: ?
                     , top :: AttrCol (AttributeTypes g)
@@ -182,3 +205,170 @@ instance H.Hashable (AttrCol is) where
 
 instance Eq (AttrCol (i ': is)) where
         (AttrTop h _ _) == (AttrTop h' _ _) = h == h'
+
+class (Attributes as, Attributes bs, Attributes (Append as bs)) =>
+        BreakVertex (as :: [*]) (bs :: [*]) where
+        breakVertexAttributes :: VertexAttributes (Append as bs)
+                              -> (VertexAttributes as, VertexAttributes bs)
+
+instance (Attributes '[a], Attributes bs, Attributes (a ': bs)) =>
+        BreakVertex '[a] bs where
+        breakVertexAttributes (attr :~ rest) = (attr, rest)
+
+instance ( Attributes (a1 ': a2 ': as)
+         , BreakVertex (a2 ': as) bs
+         , Attributes (Append (a1 ': a2 ': as) bs)
+         ) => BreakVertex (a1 ': a2 ': as) bs where
+        breakVertexAttributes (a1 :~ rest) =
+                let (a2as, bs) = breakVertexAttributes rest
+                in (a1 :~ a2as, bs)
+
+class (Attributes as, Attributes bs, Attributes (Append as bs)) =>
+        AppendVertex (as :: [*]) (bs :: [*]) where
+        appendVertexAttributes :: VertexAttributes as
+                               -> VertexAttributes bs
+                               -> VertexAttributes (Append as bs)
+
+instance (Attributes '[a], Attributes bs, Attributes (a ': bs)) =>
+        AppendVertex '[a] bs where
+        appendVertexAttributes x@(Attr _) xs = x :~ xs
+
+instance ( Attributes (a1 ': a2 ': as)
+         , Attributes (a1 ': Append (a2 ': as) bs)
+         , AppendVertex (a2 ': as) bs
+         ) => AppendVertex (a1 ': a2 ': as) bs where
+        appendVertexAttributes (x@(Attr _) :~ xs1) xs2 =
+                x :~ appendVertexAttributes xs1 xs2
+
+class GGeometryVertex (g :: * -> *) (v :: * -> *) where
+        type GAttributeTypes g v :: [*]
+        gtoVertexAttributes :: Proxy g
+                            -> v p
+                            -> VertexAttributes (GAttributeTypes g v)
+        gfromVertexAttributes :: Proxy g
+                              -> VertexAttributes (GAttributeTypes g v)
+                              -> v p
+
+instance GGeometryVertex c v => GGeometryVertex (M1 i d c) (M1 i' d' v) where
+        type GAttributeTypes (M1 i d c) (M1 i' d' v) = GAttributeTypes c v
+        gtoVertexAttributes (Proxy :: Proxy (M1 i d c)) (M1 v) =
+                gtoVertexAttributes (Proxy :: Proxy c) v
+        gfromVertexAttributes (Proxy :: Proxy (M1 i d c)) va =
+                M1 $ gfromVertexAttributes (Proxy :: Proxy c) va
+
+instance (GeometryVertex c, v ~ Vertex c) =>
+        GGeometryVertex (K1 i c) (K1 i v) where
+        type GAttributeTypes (K1 i c) (K1 i v) = AttributeTypes c
+        gtoVertexAttributes _ (K1 v) = toVertexAttributes v
+        gfromVertexAttributes _ va = K1 $ fromVertexAttributes va
+
+instance ( GGeometryVertex c v
+         , GGeometryVertex c' v'
+         , AppendVertex (GAttributeTypes c v) (GAttributeTypes c' v')
+         , BreakVertex (GAttributeTypes c v) (GAttributeTypes c' v')
+         ) => GGeometryVertex (c :*: c') (v :*: v') where
+        type GAttributeTypes (c :*: c') (v :*: v') =
+                Append (GAttributeTypes c v) (GAttributeTypes c' v')
+        gtoVertexAttributes (Proxy :: Proxy (c :*: c')) (v :*: v') =
+                let va = gtoVertexAttributes (Proxy :: Proxy c) v
+                    va' = gtoVertexAttributes (Proxy :: Proxy c') v'
+                in appendVertexAttributes va va'
+        gfromVertexAttributes (Proxy :: Proxy (c :*: c')) va =
+                let (vaa, vab) = breakVertexAttributes va
+                in gfromVertexAttributes (Proxy :: Proxy c) vaa :*:
+                   gfromVertexAttributes (Proxy :: Proxy c') vab
+
+instance ( GeometryVertex a
+         , GeometryVertex b
+         , BreakVertex (AttributeTypes a) (AttributeTypes b)
+         , AppendVertex (AttributeTypes a) (AttributeTypes b)
+         ) => GeometryVertex (a, b) where
+        type AttributeTypes (a, b) = Append (AttributeTypes a)
+                                            (AttributeTypes b)
+        type Vertex (a, b) = (Vertex a, Vertex b)
+        toVertexAttributes (a, b) =
+                appendVertexAttributes (toVertexAttributes a)
+                                       (toVertexAttributes b)
+        fromVertexAttributes v = let (va, vb) = breakVertexAttributes v
+                                 in ( fromVertexAttributes va
+                                    , fromVertexAttributes vb
+                                    )
+
+instance ( GeometryVertex a
+         , GeometryVertex b
+         , GeometryVertex c
+         , BreakVertex (AttributeTypes a) (Append (AttributeTypes b)
+                                                  (AttributeTypes c))
+         , BreakVertex (AttributeTypes b) (AttributeTypes c)
+         , AppendVertex (AttributeTypes a) (Append (AttributeTypes b)
+                                                   (AttributeTypes c))
+         , AppendVertex (AttributeTypes b) (AttributeTypes c)
+         ) => GeometryVertex (a, b, c) where
+        type AttributeTypes (a, b, c) = Append (AttributeTypes a)
+                                               (Append (AttributeTypes b)
+                                                       (AttributeTypes c))
+        type Vertex (a, b, c) = (Vertex a, Vertex b, Vertex c)
+        toVertexAttributes (a, b, c) =
+                appendVertexAttributes (toVertexAttributes a) $
+                        appendVertexAttributes (toVertexAttributes b)
+                                               (toVertexAttributes c)
+        fromVertexAttributes v = let (va, vbc) = breakVertexAttributes v
+                                     (vb, vc) = breakVertexAttributes vbc
+                                 in ( fromVertexAttributes va
+                                    , fromVertexAttributes vb
+                                    , fromVertexAttributes vc
+                                    )
+
+instance GLES => GeometryVertex GFloat where
+        type AttributeTypes GFloat = '[GFloat]
+        type Vertex GFloat = Float
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x
+
+instance GLES => GeometryVertex GBool where
+        type AttributeTypes GBool = '[GBool]
+        type Vertex GBool = Bool
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x
+
+instance GLES => GeometryVertex GInt where
+        type AttributeTypes GInt = '[GInt]
+        type Vertex GInt = Int32
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x
+
+instance GLES => GeometryVertex GVec2 where
+        type AttributeTypes GVec2 = '[GVec2]
+        type Vertex GVec2 = Vec2
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x
+
+instance GLES => GeometryVertex GVec3 where
+        type AttributeTypes GVec3 = '[GVec3]
+        type Vertex GVec3 = Vec3
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x
+
+instance GLES => GeometryVertex GVec4 where
+        type AttributeTypes GVec4 = '[GVec4]
+        type Vertex GVec4 = Vec4
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x
+
+instance GLES => GeometryVertex GIVec2 where
+        type AttributeTypes GIVec2 = '[GIVec2]
+        type Vertex GIVec2 = IVec2
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x
+
+instance GLES => GeometryVertex GIVec3 where
+        type AttributeTypes GIVec3 = '[GIVec3]
+        type Vertex GIVec3 = IVec3
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x
+
+instance GLES => GeometryVertex GIVec4 where
+        type AttributeTypes GIVec4 = '[GIVec4]
+        type Vertex GIVec4 = IVec4
+        toVertexAttributes x = Attr x
+        fromVertexAttributes (Attr x) = x

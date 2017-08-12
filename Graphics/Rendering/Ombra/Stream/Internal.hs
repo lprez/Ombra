@@ -10,7 +10,7 @@ import Graphics.Rendering.Ombra.Shader
 class MapShader f s | f -> s where
         mapShader :: Shader s i o -> f i -> f o
 
-data VertexStream v = forall i. (GVertex i, ShaderInput i) =>
+data VertexStream v = forall i. (GeometryVertex i, ShaderInput i) =>
                                 VertexStream (VertexShader i v) (Geometry i)
 
 data FragmentStream f = forall v. ShaderInput v =>

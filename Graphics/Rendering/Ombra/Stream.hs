@@ -15,7 +15,7 @@ import Graphics.Rendering.Ombra.Shader.GLSL
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Stream.Internal
 
-vertexStream :: (ShaderInput i, GVertex i)
+vertexStream :: (ShaderInput i, GeometryVertex i)
              => VertexShader i v
              -> Geometry i
              -> VertexStream v
@@ -27,7 +27,7 @@ rasterize :: ShaderInput v
           -> FragmentStream f
 rasterize = FragmentStream
 
-fragmentStream :: (ShaderInput v, ShaderInput i, GVertex i)
+fragmentStream :: (ShaderInput v, ShaderInput i, GeometryVertex i)
                => VertexShader i (GVec4, v)
                -> FragmentShader v f
                -> Geometry i

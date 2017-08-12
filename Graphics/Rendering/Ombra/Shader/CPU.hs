@@ -187,17 +187,22 @@ instance GLES => BaseAttribute GFloat where
 
 -- Bool
 
-type instance CPUBase GBool = Int32
-type instance CPUBase (GArray n GBool) = [Int32]
+type instance CPUBase GBool = Bool
+type instance CPUBase (GArray n GBool) = [Bool]
+
+toBool :: Bool -> Int32
+toBool True = 1
+toBool False = 0
 
 instance GLES => BaseUniform GBool where
-        setUniform l _ = uniform1i l
+        setUniform l _ = uniform1i l . toBool
 
 instance (GLES, KnownNat n) => BaseUniform (GArray n GBool) where
-        setUniform l _ v = liftIO (encodeInts v) >>= uniform1iv l
+        setUniform l _ v = liftIO (encodeInts $ map toBool v) >>= uniform1iv l
 
 instance GLES => BaseAttribute GBool where
-        encodeAttribute _ a = liftIO . fmap fromInt32Array $ encodeInts a
+        encodeAttribute _ a = liftIO . fmap fromInt32Array $
+                                encodeInts (map toBool a)
         setAttribute _ i = attr gl_INT i 1
 
 -- Int

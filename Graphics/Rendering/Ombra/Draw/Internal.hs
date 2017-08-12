@@ -236,7 +236,7 @@ left _ = Nothing
 
 -- | Manually allocate a 'Geometry' in the GPU. Eventually returns an error
 -- string.
-preloadGeometry :: (GLES, GVertex g) => Geometry g -> Draw (Maybe String)
+preloadGeometry :: (GLES, GeometryVertex g) => Geometry g -> Draw (Maybe String)
 preloadGeometry g = left <$> getGeometry g
 
 -- | Manually allocate a 'Texture' in the GPU.
@@ -248,7 +248,7 @@ preloadProgram :: GLES => Program gs is -> Draw (Maybe String)
 preloadProgram p = left <$> getProgram p
 
 -- | Manually delete a 'Geometry' from the GPU.
-removeGeometry :: (GLES, GVertex g) => Geometry g -> Draw ()
+removeGeometry :: (GLES, GeometryVertex g) => Geometry g -> Draw ()
 removeGeometry g = removeDrawResource id geometries g
 
 -- | Manually delete a 'Texture' from the GPU.
@@ -262,7 +262,7 @@ removeProgram :: GLES => Program gs is -> Draw ()
 removeProgram = removeDrawResource gl programs
 
 -- | Check if a 'Geometry' failed to load.
-checkGeometry :: (GLES, GVertex g) => Geometry g -> Draw (ResStatus ())
+checkGeometry :: (GLES, GeometryVertex g) => Geometry g -> Draw (ResStatus ())
 checkGeometry g = fmap (const ()) <$> checkDrawResource id geometries g
 
 -- | Check if a 'Texture' failed to load. Eventually returns the texture width
