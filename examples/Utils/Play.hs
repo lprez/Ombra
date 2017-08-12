@@ -10,8 +10,7 @@ module Utils.Play (
         static
 ) where
 
-import Graphics.Rendering.Ombra
-import qualified Graphics.Rendering.Ombra.D2 as D2
+import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Draw
 import Control.Monad.IO.Class
 import Data.Hashable
@@ -170,13 +169,13 @@ checkExtensions requireAllExtensions ctx =
                          [] -> Nothing
                          errs -> Just $ "ERROR:" ++ concat errs
 
-animation :: (Float -> Layer) -> IO ()
+animation :: (Float -> Draw ()) -> IO ()
 animation f = play 512 512
                    False
                    (return ())
-                   (\t _ -> return $ drawLayer (f t))
+                   (\t _ -> return $ f t)
                    (const (return ()))
                    (const (return ()))
 
-static :: Layer -> IO ()
+static :: Draw () -> IO ()
 static = animation . const

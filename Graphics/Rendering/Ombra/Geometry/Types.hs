@@ -1,9 +1,11 @@
 {-# LANGUAGE GADTs, TypeOperators, KindSignatures, DataKinds, FlexibleContexts,
              FlexibleInstances, UndecidableInstances, TypeFamilies, RankNTypes,
-             GeneralizedNewtypeDeriving, ConstraintKinds #-}
+             GeneralizedNewtypeDeriving, ConstraintKinds,
+             TypeFamilyDependencies #-}
 
 module Graphics.Rendering.Ombra.Geometry.Types (
-        Vertex(..),
+        GVertex(..),
+        VertexAttributes(..),
         Triangle(..),
         AttrTable(..),
         AttrCol,
@@ -25,39 +27,52 @@ import qualified Data.Hashable as H
 import Data.Functor.Identity (Identity)
 import Data.Word (Word16)
 
+import Graphics.Rendering.Ombra.Internal.TList
 import Graphics.Rendering.Ombra.Shader.CPU
+
+class Attributes (AttributeTypes a) => GVertex a where
+        type AttributeTypes a :: [*]
+        type Vertex a = v | v -> a
+        toVertexAttributes :: Vertex a -> VertexAttributes (AttributeTypes a)
+        fromVertexAttributes :: VertexAttributes (AttributeTypes a) -> Vertex a
+
+{-
+instance Attributes is => GVertex (HList is) where
+        type AttributeTypes (VertexAttributes is) = is
+        type Vertex (VertexAttributes is) = VertexAttributes is
+        toVertexAttributes = id
+        fromVertexAttributes = id
+-}
 
 data Triangle a = Triangle a a a
 
--- | A list of the attributes of a vertex.
---
--- For instance: @Attr Position3 p :~ Attr UV u :~ Attr Normal3 n@
-data Vertex (is :: [*]) where
-        Attr :: (Eq (CPU S i), H.Hashable (CPU S i), Attribute S i)
-             => (a -> i)
-             -> CPU S i
-             -> Vertex '[i]
-        (:~) :: Vertex '[i] -> Vertex is -> Vertex (i ': is)
+data VertexAttributes (is :: [*]) where
+        Attr :: (Eq (CPUBase i), H.Hashable (CPUBase i), BaseAttribute i)
+             => CPUBase i
+             -> VertexAttributes '[i]
+        (:~) :: VertexAttributes '[i]
+             -> VertexAttributes is
+             -> VertexAttributes (i ': is)
 
 infixr 5 :~
 
 data Elements is = Triangles Int [Triangle (AttrVertex is)]
 
 -- | A set of triangles.
-data Geometry (is :: [*]) where
-        Geometry :: Attributes is
+data Geometry g where
+        Geometry :: GVertex g
                  => { topHash :: Int            -- TODO: ?
                     , geometryHash :: Int       -- TODO: ?
-                    , top :: AttrCol is
-                    , elements :: Elements is
+                    , top :: AttrCol (AttributeTypes g)
+                    , elements :: Elements (AttributeTypes g)
                     , lastIndex :: Int
                     }
-                 -> Geometry is
+                 -> Geometry g
 
-newtype GeometryBuilderT is m a = GeometryBuilderT (StateT (Geometry is) m a)
+newtype GeometryBuilderT g m a = GeometryBuilderT (StateT (Geometry g) m a)
         deriving (Functor, Applicative, Monad, MonadTrans)
 
-type GeometryBuilder is = GeometryBuilderT is Identity
+type GeometryBuilder g = GeometryBuilderT g Identity
 
 -- | A vertex in a 'Geometry'.
 data AttrVertex (is :: [*]) where
@@ -76,13 +91,13 @@ type family Previous (p :: AttrPosition) :: AttrPosition where
 data AttrTable (b :: AttrPosition) (is :: [*]) where
         AttrNil :: AttrTable b '[]
         AttrEnd :: AttrTable End is
-        AttrTop :: (NotTop p, Attribute 'S i)
+        AttrTop :: (NotTop p, BaseAttribute i)
                 => Int
                 -> AttrTable Top is
                 -> AttrTable p (i ': is)
                 -> AttrTable Top (i ': is)
-        AttrCell :: (H.Hashable (CPU S i), Attribute 'S i)
-                 => CPU 'S i
+        AttrCell :: (H.Hashable (CPUBase i), BaseAttribute i)
+                 => CPUBase i
                  -> AttrTable (Previous p) is
                  -> AttrTable p (i ': is)
                  -> AttrTable (Previous p) (i ': is)
@@ -90,50 +105,54 @@ data AttrTable (b :: AttrPosition) (is :: [*]) where
 type AttrCol = AttrTable Top
 type NotTop p = Previous p ~ Previous p
 
-class Attributes is where
+class Empty is ~ 'False => Attributes is where
         emptyAttrCol :: AttrCol is
-        cell :: Vertex is -> AttrTable p is -> AttrTable (Previous p) is
-        addTop :: Vertex is -> AttrCol is -> AttrCol is
+        cell :: VertexAttributes is
+             -> AttrTable p is
+             -> AttrTable (Previous p) is
+        addTop :: VertexAttributes is -> AttrCol is -> AttrCol is
         foldTop :: (forall i is. b -> AttrCol (i ': is) -> b)
                 -> b
                 -> AttrCol is
                 -> b
-        rowToVertex :: NotTop p => AttrTable p is -> Vertex is
+        rowToVertexAttributes :: NotTop p
+                              => AttrTable p is
+                              -> VertexAttributes is
 
-instance (Attribute 'S i, Eq (CPU 'S i)) => Attributes '[i] where
+instance (BaseAttribute i, Eq (CPUBase i)) => Attributes '[i] where
         emptyAttrCol = AttrTop (H.hash (0 :: Int)) AttrNil AttrEnd
-        cell (Attr _ x) down = AttrCell x AttrNil down
-        addTop v@(Attr _ x) (AttrTop thash next down) =
+        cell (Attr x) down = AttrCell x AttrNil down
+        addTop v@(Attr x) (AttrTop thash next down) =
                 AttrTop (H.hashWithSalt (H.hash x + thash) thash)
                         next
                         (cell v down)
         foldTop f acc top = f acc top
-        rowToVertex (AttrCell x _ _) = Attr (const undefined) x
+        rowToVertexAttributes (AttrCell x _ _) = Attr x
 
-instance (Attribute 'S i1, Eq (CPU 'S i1), Attributes (i2 ': is)) =>
+instance (BaseAttribute i1, Eq (CPUBase i1), Attributes (i2 ': is)) =>
         Attributes (i1 ': (i2 ': is)) where
         emptyAttrCol = AttrTop (H.hash (0 :: Int)) emptyAttrCol AttrEnd
-        cell (Attr _ x :~ v) down1@(AttrCell _ down2 _) =
+        cell (Attr x :~ v) down1@(AttrCell _ down2 _) =
                 AttrCell x (cell v down2) down1
-        cell (Attr _ x :~ v) AttrEnd = AttrCell x (cell v AttrEnd) AttrEnd
-        addTop v1@(Attr _ x :~ v2) (AttrTop thash next down) =
+        cell (Attr x :~ v) AttrEnd = AttrCell x (cell v AttrEnd) AttrEnd
+        addTop v1@(Attr x :~ v2) (AttrTop thash next down) =
                 AttrTop (H.hashWithSalt (H.hash x + thash) thash)
                         (addTop v2 next)
                         (cell v1 down)
         foldTop f acc top@(AttrTop _ next _) = foldTop f (f acc top) next
-        rowToVertex (AttrCell x next _) =
-                Attr (const undefined) x :~ rowToVertex next
+        rowToVertexAttributes (AttrCell x next _) =
+                Attr x :~ rowToVertexAttributes next
 
 instance Functor Triangle where
         fmap f (Triangle x y z) = Triangle (f x) (f y) (f z)
 
-instance H.Hashable (Vertex is) where
-        hashWithSalt s (Attr _ a) = H.hashWithSalt s a
+instance H.Hashable (VertexAttributes is) where
+        hashWithSalt s (Attr a) = H.hashWithSalt s a
         hashWithSalt s (x :~ y) = H.hashWithSalt (H.hashWithSalt s x) y
 
-instance Eq (Vertex is) where
-        (Attr _ x) == (Attr _ x') = x == x'
-        (Attr _ x :~ v) == (Attr _ x' :~ v') = x == x' && v == v'
+instance Eq (VertexAttributes is) where
+        (Attr x) == (Attr x') = x == x'
+        (Attr x :~ v) == (Attr x' :~ v') = x == x' && v == v'
 
 instance H.Hashable a => H.Hashable (Triangle a) where
         hashWithSalt salt (Triangle x y z) = H.hashWithSalt salt (x, y, z)

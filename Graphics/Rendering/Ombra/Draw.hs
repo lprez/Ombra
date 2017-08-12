@@ -16,10 +16,11 @@ module Graphics.Rendering.Ombra.Draw (
         evalDrawCtx,
         drawState,
         -- * Draw actions
+        Buffer(..),
         MonadScreen(resizeViewport),
         drawInit,
         clearBuffers,
-        drawLayer,
+        draw,
         -- ** Resources
         -- $resources
         ResStatus(..),
@@ -43,9 +44,8 @@ module Graphics.Rendering.Ombra.Draw (
 
 import Data.IORef
 import Graphics.Rendering.Ombra.Draw.Internal
-import Graphics.Rendering.Ombra.Object.Internal
+import Graphics.Rendering.Ombra.Stream (draw)
 import Graphics.Rendering.Ombra.Internal.GL hiding (Buffer)
-import Graphics.Rendering.Ombra.Layer
 import Graphics.Rendering.Ombra.Screen
 
 -- | Run a Draw action using an IORef to hold the state.

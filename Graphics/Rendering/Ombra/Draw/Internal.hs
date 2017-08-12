@@ -6,11 +6,10 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         Draw,
         DrawState,
         ResStatus(..),
+        Buffer(..),
         drawState,
         drawInit,
         clearBuffers,
-        drawLayer,
-        drawObject,
         preloadGeometry,
         preloadTexture,
         preloadProgram,
@@ -32,12 +31,9 @@ module Graphics.Rendering.Ombra.Draw.Internal (
 
 import qualified Graphics.Rendering.Ombra.Blend.Internal as Blend
 import Graphics.Rendering.Ombra.Color
+import Graphics.Rendering.Ombra.Culling
 import Graphics.Rendering.Ombra.Geometry.Internal
 import Graphics.Rendering.Ombra.Geometry.Types
-import Graphics.Rendering.Ombra.Layer.Internal
-import Graphics.Rendering.Ombra.Layer.Types
-import Graphics.Rendering.Ombra.Object.Internal
-import Graphics.Rendering.Ombra.Object.Types
 import Graphics.Rendering.Ombra.Texture.Internal
 import Graphics.Rendering.Ombra.Texture.Types
 import Graphics.Rendering.Ombra.Backend (GLES)
@@ -79,6 +75,10 @@ data DrawState = DrawState {
         colorMask :: (Bool, Bool, Bool, Bool)
 }
 
+data Buffer = ColorBuffer
+            | DepthBuffer
+            | StencilBuffer
+
 -- | The Draw monad lets you render the 'Layer's on the screen.
 --
 -- __The first action must be 'drawInit'__
@@ -108,14 +108,15 @@ instance GLES => MonadProgram Draw where
                                                        }
                                                     act lp
                                      Left _ -> return ()
-        getUniform name = do mprg <- loadedProgram <$> Draw get
-                             case mprg of
-                                  Just prg -> do map <- uniforms <$> Draw get
-                                                 gl $ getResource' prg
-                                                                   (prg, name)
-                                                                   map
-                                  Nothing -> return $ Left "No loaded program."
+        getUniform id = do mprg <- loadedProgram <$> Draw get
+                           case mprg of
+                                Just prg -> do map <- uniforms <$> Draw get
+                                               gl $ getResource' (Just prg)
+                                                                 (prg, id)
+                                                                 map
+                                Nothing -> return $ Left "No loaded program."
 
+{-
 instance GLES => MonadDrawingMode Draw where
         withBlendMode m a = stateReset blendMode setBlendMode m a
         withStencilMode m a = stateReset stencilMode setStencilMode m a
@@ -123,6 +124,7 @@ instance GLES => MonadDrawingMode Draw where
         withDepthMask m a = stateReset depthMask setDepthMask m a
         withColorMask m a = stateReset colorMask setColorMask m a
         withCulling face a = stateReset cullFace setCullFace face a
+-}
 
         -- where tupleToVec (x, y) = Vec2 (fromIntegral x) (fromIntegral y)
 
@@ -234,7 +236,7 @@ left _ = Nothing
 
 -- | Manually allocate a 'Geometry' in the GPU. Eventually returns an error
 -- string.
-preloadGeometry :: GLES => Geometry (i ': is) -> Draw (Maybe String)
+preloadGeometry :: (GLES, GVertex g) => Geometry g -> Draw (Maybe String)
 preloadGeometry g = left <$> getGeometry g
 
 -- | Manually allocate a 'Texture' in the GPU.
@@ -246,7 +248,7 @@ preloadProgram :: GLES => Program gs is -> Draw (Maybe String)
 preloadProgram p = left <$> getProgram p
 
 -- | Manually delete a 'Geometry' from the GPU.
-removeGeometry :: GLES => Geometry (i ': is) -> Draw ()
+removeGeometry :: (GLES, GVertex g) => Geometry g -> Draw ()
 removeGeometry g = removeDrawResource id geometries g
 
 -- | Manually delete a 'Texture' from the GPU.
@@ -260,7 +262,7 @@ removeProgram :: GLES => Program gs is -> Draw ()
 removeProgram = removeDrawResource gl programs
 
 -- | Check if a 'Geometry' failed to load.
-checkGeometry :: GLES => Geometry (i ': is) -> Draw (ResStatus ())
+checkGeometry :: (GLES, GVertex g) => Geometry g -> Draw (ResStatus ())
 checkGeometry g = fmap (const ()) <$> checkDrawResource id geometries g
 
 -- | Check if a 'Texture' failed to load. Eventually returns the texture width
@@ -289,7 +291,7 @@ getTextureImage :: GLES => TextureImage
 getTextureImage = getDrawResource gl textureImages
 
 getProgram :: GLES => Program gs is -> Draw (Either String LoadedProgram)
-getProgram = getDrawResource gl programs
+getProgram = getDrawResource' gl programs Nothing
 
 setBlendMode :: GLES => Maybe Blend.Mode -> Draw ()
 setBlendMode Nothing = do m <- blendMode <$> Draw get
@@ -402,6 +404,16 @@ getDrawResource lft mg i = do
         map <- mg <$> Draw get
         lft $ getResource i map
 
+getDrawResource' :: Resource i r m
+                => (m (Either String r) -> Draw (Either String r))
+                -> (DrawState -> ResMap r)
+                -> Maybe k
+                -> i
+                -> Draw (Either String r)
+getDrawResource' lft mg k i = do
+        map <- mg <$> Draw get
+        lft $ getResource' k i map
+
 checkDrawResource :: Resource i r m
                   => (m (ResStatus r) -> Draw (ResStatus r))
                   -> (DrawState -> ResMap r)
@@ -422,6 +434,12 @@ removeDrawResource lft mg i = do
 
 textureCacheMaxSize :: Num a => a
 textureCacheMaxSize = 16
+
+clearBuffers :: (GLES, MonadGL m) => [Buffer] -> m ()
+clearBuffers = mapM_ $ gl . GL.clear . buffer
+        where buffer ColorBuffer = gl_COLOR_BUFFER_BIT
+              buffer DepthBuffer = gl_DEPTH_BUFFER_BIT
+              buffer StencilBuffer = gl_STENCIL_BUFFER_BIT
 
 -- | Get the 'DrawState'.
 drawGet :: Draw DrawState

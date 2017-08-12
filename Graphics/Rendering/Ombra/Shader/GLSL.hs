@@ -2,127 +2,95 @@
              DataKinds, TypeOperators, ConstraintKinds #-}
 
 module Graphics.Rendering.Ombra.Shader.GLSL (
-        vertexToGLSLAttr,
-        vertexToGLSL,
-        fragmentToGLSL,
-        shaderToGLSL,
+        compileVertexShader,
+        compileFragmentShader,
         uniformName
 ) where
 
+import Control.Arrow
 import Data.List (find)
-import Data.Hashable (hash) -- TODO: use ST hashtables
+import Data.Hashable (hash)
 import qualified Data.HashMap.Strict as H
 import Data.Typeable
-import Graphics.Rendering.Ombra.Shader.ShaderVar
-import Graphics.Rendering.Ombra.Shader.Language.Types hiding (Int, Bool)
-import Graphics.Rendering.Ombra.Shader.Stages (VertexShader, FragmentShader,
-                                               VOShaderVars)
+import Graphics.Rendering.Ombra.Shader
+import Graphics.Rendering.Ombra.Shader.Language.Types
 import Text.Printf
 
-data VarPrefix = Global | Varying | Attribute
+-- TODO: IntMap instead of HashMap
+-- TODO: use DList/ShowS
+-- TODO: use fgl
+-- TODO: detect identical uniforms
 
-data SV = SV {
-        uniformVars :: [(String, String)],
-        inputVars :: [(String, String, Int)],
-        outputVars :: [(String, String, Expr)]
-}
+compileVertexShader :: (ShaderInput i, MultiShaderType o)
+                    => VertexShader i (GVec4, o)
+                    -> (String, (UniformID, [(String, Int)]))
+compileVertexShader s = compileShader True header ["gl_Position"] 0 exprShader
+        where exprShader = s >>^ \(pos, outs) -> ([toExpr pos], outExprs outs)
+              outExprs = foldrMST (\x l -> (typeName x, toExpr x) : l) []
+              header = "#version 100\nprecision mediump float;"
 
-vertexToGLSLAttr :: (ShaderVars g, ShaderVars i, VOShaderVars o)
-                 => VertexShader g i o 
-                 -> (String, [(String, Int)])
-vertexToGLSLAttr v =
-        let r@(SV _ is _) = vars False v
-        in ( shaderToGLSL "#version 100\nprecision mediump float;\n"
-                          "attribute" "varying"
-                          r [("hvVertexShaderOutput0", "gl_Position")]
-           , map (\(_, n, s) -> (n, s)) is)
+compileFragmentShader :: ShaderInput i
+                      => UniformID
+                      -> FragmentShader i [GVec4]
+                      -> String
+compileFragmentShader i s = fst $ compileShader False header outs i exprShader
+        where exprShader = s >>^ flip (,) [] . map toExpr
+              header = concat [ "#version 100\n"
+                              , ext "GL_EXT_draw_buffers"
+                              , ext "GL_OES_standard_derivatives"
+                              , "precision mediump float;"
+                              ]
+              ext e = "#extension " ++ e ++ " : enable\n"
+              outs = map (\n -> "gl_FragData[" ++ show n ++ "]") [0 .. 15]
 
-vertexToGLSL :: (ShaderVars g, ShaderVars i, VOShaderVars o)
-             => VertexShader g i o -> String
-vertexToGLSL = fst . vertexToGLSLAttr
+compileShader :: ShaderInput i
+              => Bool
+              -> String
+              -> [String]
+              -> UniformID
+              -> Shader s i ([Expr], [(String, Expr)])
+              -> (String, (UniformID, [(String, Int)]))
+compileShader useAttributes header outNames uniformID (Shader shaderFun _) =
+        let inputFun | useAttributes = Attribute
+                     | otherwise = Input
+            (input, _) = buildMST (fromExpr . inputFun) 0
+            inputTypes = foldrMST (\x -> (typeName x :)) [] input
+            ((uniformID', uniMap), (outs, outVaryings)) =
+                    shaderFun ((uniformID, []), input)
+            (outVaryingTypes, outVaryingExprs) = unzip outVaryings
 
-fragmentToGLSL :: (ShaderVars g, ShaderVars i) => FragmentShader g i -> String
-fragmentToGLSL v =
-        let r@(SV _ _ os) = vars True v
-            header | Just _ <- find (\(_, n, _) -> requiresMRT n) os = 
-                    "#extension GL_EXT_draw_buffers : require\n"
-                   | otherwise = ""
-        in shaderToGLSL ("#version 100\n" ++ header ++
-                         "#extension GL_OES_standard_derivatives : enable\n" ++
-                         "precision mediump float;")
-                        "varying" "" (vars True v) subst
-        where subst = [ ("hvFragmentShaderOutput0", "gl_FragData[0]")
-                      , ("hvFragmentShaderOutput1", "gl_FragData[1]")
-                      , ("hvFragmentShaderOutput2", "gl_FragData[2]")
-                      , ("hvFragmentShaderOutput3", "gl_FragData[3]")
-                      , ("hvFragmentShaderOutput4", "gl_FragData[4]")
-                      , ("hvFragmentShaderOutput5", "gl_FragData[5]")
-                      , ("hvFragmentShaderOutput6", "gl_FragData[6]")
-                      , ("hvFragmentShaderOutput7", "gl_FragData[7]")
-                      , ("hvFragmentShaderOutput8", "gl_FragData[8]")
-                      , ("hvFragmentShaderOutput9", "gl_FragData[9]")
-                      , ("hvFragmentShaderOutput10", "gl_FragData[10]")
-                      , ("hvFragmentShaderOutput11", "gl_FragData[11]")
-                      , ("hvFragmentShaderOutput12", "gl_FragData[12]")
-                      , ("hvFragmentShaderOutput13", "gl_FragData[13]")
-                      , ("hvFragmentShaderOutput14", "gl_FragData[14]")
-                      , ("hvFragmentShaderOutput15", "gl_FragData[15]") ]
-              requiresMRT "hvFragmentShaderOutput0" = False
-              requiresMRT _ = True
+            showVar qual ty nm = concat [qual, " ", ty, " ", nm, ";"]
+            showVars qual name vars = concatMap (\(ty, n) -> showVar qual ty
+                                                                     (name n))
+                                                (zip vars [0 ..])
+            uniVars = showVars "uniform" uniformName $ map (fst . snd) uniMap
+            inputVars | useAttributes = showVars "attribute" attributeName
+                                                 inputTypes
+                      | otherwise = showVars "varying" varyingName inputTypes
+            outVaryingVars = showVars "varying" varyingName outVaryingTypes
 
-shaderToGLSL :: String -> String -> String -> SV -> [(String, String)] -> String
-shaderToGLSL header ins outs (SV gs is os) predec = concat
-        [ header
-        , concatMap (var "uniform") gs
-        , concatMap (\(t, n, _) -> var ins (t, n)) is
-        , concatMap (\(t, n, _) -> if any ((== n) . fst) predec
-                                          then []
-                                          else var outs (t, n)
-                    ) os
-        , "void main(){"
-        , actions
-        , concatMap (\(n, s) -> replace n predec ++ "=" ++ s ++ ";")
-                    compiledOuts
-        , "}" ]
-        where var qual (ty, nm) = qual ++ " " ++ ty ++ " " ++ nm ++ ";"
-              replace x xs = case filter ((== x) . fst) xs of
-                                        [(_, y)] -> y
-                                        _ -> x
-              (_, outNames, outExprs) = unzip3 os
-              (actions, outStrs) = compile outExprs
-              compiledOuts = zip outNames outStrs
-
-vars :: (ShaderVars gs, ShaderVars is, ShaderVars os)
-     => Bool -> Shader gs is os -> SV
-vars isFragment (shader :: Shader gs is os) =
-        SV (svToList globalVar globals)
-           (svToList inputVar inputs)
-           (svToList outputVar outputs)
-        where globals = staticSVList (Proxy :: Proxy gs) $ varExpr Global
-              inputs = staticSVList (Proxy :: Proxy is) $ varExpr inputPrefix
-              outputs = shader globals inputs
-
-              inputPrefix = if isFragment then Varying else Attribute
-
-              globalVar :: ShaderVar v => v -> [(String, String)]
-              globalVar var = varToList
-                                (\n x -> (typeName x, varName Global var n))
-                                var
-
-              inputVar :: ShaderVar v => v -> [(String, String, Int)]
-              inputVar var = varToList (\n x -> ( typeName x
-                                                , varName inputPrefix var n
-                                                , size x )) var
-
-              outputVar :: ShaderVar v => v -> [(String, String, Expr)]
-              outputVar var = varToList (\n x -> ( typeName x
-                                                 , varName Varying var n
-                                                 , toExpr x )) var
-
-              varExpr :: ShaderVar v => VarPrefix -> Proxy v -> v
-              varExpr p (pvar :: Proxy v) =
-                      varBuild (fromExpr . Read . varName p var) pvar
-                where var = undefined :: v
+            outVaryingNames = map varyingName [0 ..]
+            (compiledActions, outStrs) = compile (outs ++ outVaryingExprs)
+            compiledOuts = concat $ zipWith (\n s -> concat [n, "=", s, ";"])
+                                            (outNames ++ outVaryingNames)
+                                            outStrs
+        in ( concat [ header
+                    , uniVars
+                    , inputVars
+                    , outVaryingVars
+                    , "void main(){"
+                    , compiledActions
+                    , compiledOuts
+                    , "}"
+                    ]
+            , ( uniformID'
+              , if useAttributes
+                   then zipWith (\size n -> (attributeName n, size))
+                               (foldrMST (\x -> (size x :)) [] input)
+                               [0 ..]
+                   else []
+              )
+            )
 
 type ActionID = Int
 type ActionMap = H.HashMap ActionID Action
@@ -253,9 +221,13 @@ compileExpr (Y e) = first3 (++ "[1]") $ compileExpr e
 compileExpr (Z e) = first3 (++ "[2]") $ compileExpr e
 compileExpr (W e) = first3 (++ "[3]") $ compileExpr e
 compileExpr (Literal s) = (s, H.empty, H.empty)
+compileExpr (Input i) = (varyingName i, H.empty, H.empty)
+compileExpr (Attribute i) = (attributeName i, H.empty, H.empty)
+compileExpr (Uniform i) = (uniformName i, H.empty, H.empty)
 compileExpr (Action a) = let h = hash a
                          in (actionName h, H.singleton h a, H.empty)
 compileExpr (Dummy _) = error "compileExpr: Dummy"
+compileExpr (HashDummy _) = error "compileExpr: HashDummy"
 compileExpr (ArrayIndex eArr ei) = let (arr, aArr, cArr) = compileExpr eArr
                                        (i, ai, ci) = compileExpr ei
                                    in ( "(" ++ arr ++ "[" ++ i ++ "])"
@@ -316,11 +288,11 @@ contextVarName LoopValue = actionName
 hashName :: ActionID -> String
 hashName = printf "%x"
 
-uniformName :: ShaderVar v => v -> Int -> String
-uniformName = varName Global
+uniformName :: Int -> String
+uniformName = ('u' :) . show
 
-varName :: ShaderVar v => VarPrefix -> v -> Int -> String
-varName prefix var n = prefixName prefix ++ varPreName var ++ show n
-        where prefixName Global = "hg"
-              prefixName Varying = "hv"
-              prefixName Attribute = "ha"
+varyingName :: Int -> String
+varyingName = ('v' :) . show
+
+attributeName :: Int -> String
+attributeName = ('t' :) . show

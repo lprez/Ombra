@@ -587,4 +587,3 @@ class GLTypes GLEnum GLUInt GLInt GLSize
         gl_RENDERBUFFER_BINDING :: GLEnum
         gl_MAX_RENDERBUFFER_SIZE :: GLEnum
         gl_INVALID_FRAMEBUFFER_OPERATION :: GLEnum
-        {-# MINIMAL #-}

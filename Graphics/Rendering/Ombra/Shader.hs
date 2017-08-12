@@ -1,6 +1,6 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, RankNTypes, MultiParamTypeClasses,
-             TypeFamilyDependencies, TypeFamilies, FlexibleInstances,
-             UndecidableInstances, DeriveGeneric #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables, DataKinds, KindSignatures,
+             TypeFamilies, FlexibleContexts, UndecidableInstances,
+             FlexibleInstances #-}
 
 {-|
 Module:      Graphics.Rendering.Ombra.Shader
@@ -8,473 +8,405 @@ License:     BSD3
 Maintainer:  ziocroc@gmail.com
 Stability:   experimental
 Portability: GHC only
-
-This module exports the shader EDSL. This is used to create shader variables
-(that can be used as uniforms or attributes), vertex shaders and fragment shaders.
-
-An example of shader variable:
-
-@
-        data Transform2 = Transform2 GMat3 deriving Generic
-@
-
-An example of vertex shader:
-
-@
-        vertexShader :: VertexShader
-        -- The types of the uniforms:
-                                '[Transform2, View2, Depth]
-        -- The types of the attributes:
-                                '[Position2, UV]
-        -- The types of the varying (outputs), excluding 'VertexShaderOutput'.
-                                '[UV]
-        vertexShader 
-        -- Set of uniforms:
-                     (Transform2 trans :- View2 view :- Depth z :- N)
-        -- Set of attributes:
-                     (Position2 (GVec2 x y) :- uv@(UV _) :- N) =
-        -- Matrix and vector multiplication:
-                        let GVec3 x' y' _ = view .*. trans .* GVec3 x y 1
-        -- Set of outputs:
-                        in Vertex (GVec4 x' y' z 1) -- Vertex position.
-                           :- uv :- N
-@
-
 -}
 
 module Graphics.Rendering.Ombra.Shader (
-        module Data.Boolean,
-        module Data.VectorSpace,
-        module Data.Cross,
-        -- * Types
-        Shader.Shader,
-        Shader.VertexShader,
-        Shader.FragmentShader,
-        Shader.VertexShaderOutput(..),
-        Shader.FragmentShaderOutput(..),
-        Shader.ShaderVars,
-        Shader.VOShaderVars,
-        Shader.Uniform,
-        Shader.Attribute,
-        Shader.SVList(..),
-        Generic,
-        -- ** GPU types
-        Shader.GBool,
-        Shader.GFloat,
-        Shader.GInt,
-        Shader.GSampler2D,
-        -- Shader.GSamplerCube,
-        Shader.GVec2(..),
-        Shader.GVec3(..),
-        Shader.GVec4(..),
-        Shader.GBVec2(..),
-        Shader.GBVec3(..),
-        Shader.GBVec4(..),
-        Shader.GIVec2(..),
-        Shader.GIVec3(..),
-        Shader.GIVec4(..),
-        Shader.GMat2(..),
-        Shader.GMat3(..),
-        Shader.GMat4(..),
-        Shader.GenType,
-        Shader.GenTypeGFloat,
-        Shader.GArray,
-        -- * GPU functions
-        (Shader.!),
-        Shader.loop,
-        Shader.store,
-        Shader.texture2D,
-        {-
-        Shader.texture2DBias,
-        Shader.texture2DProj,
-        Shader.texture2DProjBias,
-        Shader.texture2DProj4,
-        Shader.texture2DProjBias4,
-        Shader.texture2DLod,
-        Shader.texture2DProjLod,
-        Shader.texture2DProjLod4,
-        -}
-        Shader.arrayLength,
-        -- ** Various math functions
-        Matrix(..),
-        Ext(..),
-        minG,
-        maxG,
-        modG,
-        floorG,
-        ceilingG,
-        Shader.radians,
-        Shader.degrees,
-        Shader.exp2,
-        Shader.log2,
-        Shader.inversesqrt,
-        Shader.fract,
-        Shader.clamp,
-        Shader.mix,
-        Shader.step,
-        -- Shader.smoothstep,
-        Shader.distance, -- TODO: implement AffineSpace?
-        -- Shader.length,
-        Shader.faceforward,
-        Shader.reflect,
-        Shader.refract,
-        Shader.matrixCompMult,
-        -- *** Partial derivatives
-        -- | These are available only in the fragment shader.
-        Shader.dFdx,
-        Shader.dFdy,
-        Shader.fwidth,
-        -- *** Vector relational functions
-        Shader.VecOrd,
-        Shader.VecEq,
-        Shader.lessThan,
-        Shader.lessThanEqual,
-        Shader.greaterThan,
-        Shader.greaterThanEqual,
-        Shader.equal,
-        Shader.notEqual,
-        Shader.GBoolVector,
-        Shader.anyBV,
-        Shader.allBV,
-        Shader.notBV,
-        -- ** Constructors
-        Shader.ToGBool,
-        Shader.bool,
-        Shader.ToGInt,
-        Shader.int,
-        Shader.ToGFloat,
-        Shader.float,
-        -- TODO: better vector constructors
-        {-
-        Shader.Components,
-        Shader.CompList,
-        Shader.ToCompList,
-        (Shader.#),
-        Shader.ToGVec2,
-        Shader.vec2,
-        Shader.ToGVec3,
-        Shader.vec3,
-        Shader.ToGVec4,
-        Shader.vec4,
-        Shader.ToGBVec2,
-        Shader.bvec2,
-        Shader.ToGBVec3,
-        Shader.bvec3,
-        Shader.ToGBVec4,
-        Shader.bvec4,
-        Shader.ToGIVec2,
-        Shader.ivec2,
-        Shader.ToGIVec3,
-        Shader.ivec3,
-        Shader.ToGIVec4,
-        Shader.ivec4,
-        Shader.ToGMat2,
-        Shader.mat2,
-        Shader.ToGMat3,
-        Shader.mat3,
-        Shader.ToGMat4,
-        Shader.mat4,
-        -}
-        -- ** Other
-        Shader.position,
-        Shader.fragData,
-        Shader.fragCoord,
-        Shader.fragFrontFacing,
-        -- * Common shader variables
-        UV(..)
+        module Graphics.Rendering.Ombra.Shader.Language,
+        MultiShaderType(..),
+        ShaderInput(..),
+        ShaderStage(..),
+        Shader(..),
+        VertexShader,
+        FragmentShader,
+        uniform,
+        (~~),
+        -- * Optimized shaders
+        UniformSetter(..),
+        uniformSetter,
+        shader,
+        shader1,
+        uniform',
+        withUniformSetter,
+        -- * Stage-specific shader functionalities
+        sample,
+        -- ** Derivatives
+        dFdx,
+        dFdy,
+        fwidth,
+        -- ** Variables
+        -- position,
+        -- fragData,
+        fragCoord,
+        fragFrontFacing,
+        -- *
+        UniformID,
+        uniformList
 ) where
 
+import Control.Arrow
+import Control.Category
+import Data.Hashable
+import Data.MemoTrie
 import Data.Proxy
-import GHC.Generics (Generic)
+import GHC.TypeLits
+import Graphics.Rendering.Ombra.Internal.GL (GL, UniformLocation)
+import Graphics.Rendering.Ombra.Shader.Language
+import qualified Graphics.Rendering.Ombra.Shader.Language.Functions as Shader
+import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Shader.CPU
-import Graphics.Rendering.Ombra.Shader.Language ((#))
-import qualified Graphics.Rendering.Ombra.Shader.Language as Shader
-import Graphics.Rendering.Ombra.Shader.ShaderVar hiding (Shader)
-import Graphics.Rendering.Ombra.Shader.Stages
-import Graphics.Rendering.Ombra.Vector
+import Prelude hiding (id, (.))
 
-import Data.Boolean
-import qualified Data.Boolean.Numbers as B
-import Data.Cross
-import Data.VectorSpace
-import Prelude
+-- | A type that contains a finite amount of 'ShaderType's.
+class MultiShaderType a => ShaderInput a where
+        buildMST :: (forall x. ShaderType x => Int -> x) -> Int -> (a, Int)
 
--- | UV coordinates.
-data UV = UV Shader.GVec2 deriving Generic
+-- si potrebbe evitare di dover istanziare HasTrie per ogni MST utilizzando Reg
+-- come ExprMST
 
-type instance BooleanOf Shader.GBool = Shader.GBool
-type instance BooleanOf Shader.GFloat = Shader.GBool
-type instance BooleanOf Shader.GInt = Shader.GBool
-type instance BooleanOf Shader.GSampler2D = Shader.GBool
--- type instance BooleanOf Shader.GSamplerCube = Shader.GBool
-type instance BooleanOf Shader.GVec2 = Shader.GBool
-type instance BooleanOf Shader.GVec3 = Shader.GBool
-type instance BooleanOf Shader.GVec4 = Shader.GBool
-type instance BooleanOf Shader.GBVec2 = Shader.GBool
-type instance BooleanOf Shader.GBVec3 = Shader.GBool
-type instance BooleanOf Shader.GBVec4 = Shader.GBool
-type instance BooleanOf Shader.GIVec2 = Shader.GBool
-type instance BooleanOf Shader.GIVec3 = Shader.GBool
-type instance BooleanOf Shader.GIVec4 = Shader.GBool
-type instance BooleanOf Shader.GMat2 = Shader.GBool
-type instance BooleanOf Shader.GMat3 = Shader.GBool
-type instance BooleanOf Shader.GMat4 = Shader.GBool
-type instance BooleanOf (Shader.GArray n t) = Shader.GBool
+-- | A type that contains zero or more 'ShaderType's.
+class HasTrie (ExprMST a) => MultiShaderType a where
+        type ExprMST a
+        mapMST :: (forall x. ShaderType x => x -> x) -> a -> a
+        foldrMST :: (forall x. ShaderType x => x -> b -> b) -> b -> a -> b
+        toExprMST :: a -> ExprMST a
+        fromExprMST :: ExprMST a -> a
 
-instance Boolean Shader.GBool where
-        true = Shader.true
-        false = Shader.false
-        (&&*) = (Shader.&&)
-        (||*) = (Shader.||)
-        notB = Shader.not
+instance MultiShaderType GBool where
+        type ExprMST GBool = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance (Shader.ShaderType a, BooleanOf a ~ Shader.GBool) => IfB a where
-        ifB = Shader.ifThenElse
+instance ShaderInput GBool where
+        buildMST f i = (f i, i + 1)
 
-instance (Shader.ShaderType a, BooleanOf a ~ Shader.GBool) => EqB a where
-        (==*) = (Shader.==)
-        (/=*) = (Shader./=)
+instance MultiShaderType GFloat where
+        type ExprMST GFloat = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance (Shader.ShaderType a, BooleanOf a ~ Shader.GBool) => OrdB a where
-        (<*) = (Shader.<)
-        (<=*) = (Shader.<=)
-        (>*) = (Shader.>)
-        (>=*) = (Shader.>=)
-        
--- | Faster GPU 'max'/'B.maxB'.
-maxG :: Shader.GenTypeGFloat a b => a -> b -> a
-maxG = Shader.max
+instance ShaderInput GFloat where
+        buildMST f i = (f i, i + 1)
 
--- | Faster GPU 'min'/'B.minB'.
-minG :: Shader.GenTypeGFloat a b => a -> b -> a
-minG = Shader.min
+instance MultiShaderType GInt where
+        type ExprMST GInt = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance Num Shader.GFloat where
-        (+) = (Shader.+)
-        (-) = (Shader.-)
-        (*) = (Shader.*)
-        abs = Shader.abs
-        signum = Shader.sign
-        fromInteger = Shader.fromInteger
-        negate = Shader.negate
+instance ShaderInput GInt where
+        buildMST f i = (f i, i + 1)
 
-instance Num Shader.GInt where
-        (+) = (Shader.+)
-        (-) = (Shader.-)
-        (*) = (Shader.*)
-        abs = Shader.absI
-        signum = Shader.signI
-        fromInteger = Shader.fromInteger
-        negate = Shader.negateI
+instance MultiShaderType GSampler2D where
+        type ExprMST GSampler2D = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance B.NumB Shader.GFloat where
-        type IntegerOf Shader.GFloat = Shader.GInt
-        fromIntegerB = Shader.float
+instance ShaderInput GSampler2D where
+        buildMST f i = (f i, i + 1)
 
-instance B.NumB Shader.GInt where
-        type IntegerOf Shader.GInt = Shader.GInt
-        fromIntegerB = id
+instance MultiShaderType GVec2 where
+        type ExprMST GVec2 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance AdditiveGroup Shader.GFloat where
-        zeroV = Shader.zero
-        (^+^) = (Shader.+)
-        (^-^) = (Shader.-)
-        negateV = Shader.negate
+instance ShaderInput GVec2 where
+        buildMST f i = (f i, i + 1)
 
--- | GPU 'mod' that can be used on floats and float vectors.
-modG :: Shader.GenType a => a -> a -> a
-modG = Shader.mod
+instance MultiShaderType GVec3 where
+        type ExprMST GVec3 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance B.IntegralB Shader.GInt where
-        quotRem a b = let q = a Shader./ b in (q, a - b * q)
-        -- XXX: ???
-        divMod a b = let (q, r) = B.quotRem a b
-                         f = 1 - abs (signum r + signum b)
-                     in (q - f, r + b * f)
-        toIntegerB = id
+instance ShaderInput GVec3 where
+        buildMST f i = (f i, i + 1)
 
-instance Fractional Shader.GFloat where
-        (/) = (Shader./)
-        fromRational = Shader.fromRational
+instance MultiShaderType GVec4 where
+        type ExprMST GVec4 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance Floating Shader.GFloat where
-        pi = 3.1415926535897932384626433832795
-        exp = Shader.exp
-        log = Shader.log
-        sqrt = Shader.sqrt
-        (**) = (Shader.^)
-        sin = Shader.sin
-        cos = Shader.cos
-        tan = Shader.tan
-        asin = Shader.asin
-        acos = Shader.acos
-        atan = Shader.atan
-        -- TODO
-        sinh = error "Hyperbolic functions are not implemented."
-        cosh = error "Hyperbolic functions are not implemented."
-        asinh = error "Hyperbolic functions are not implemented."
-        acosh = error "Hyperbolic functions are not implemented."
-        atanh = error "Hyperbolic functions are not implemented."
+instance ShaderInput GVec4 where
+        buildMST f i = (f i, i + 1)
 
-floatToInt :: (B.NumB b, B.IntegerOf b ~ Shader.GInt) => Shader.GFloat -> b
-floatToInt = B.fromIntegerB . Shader.int
+instance MultiShaderType GIVec2 where
+        type ExprMST GIVec2 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance B.RealFracB Shader.GFloat where
-        properFraction x = let tx = signum x * floorG (abs x)
-                           in (floatToInt tx, x - tx)
-        -- truncate x = floatToInt $ signum x * floorG (abs x)
-        round x = floatToInt . floorG $ x + 0.5
-        ceiling = floatToInt . ceilingG
-        floor = floatToInt . floorG
+instance ShaderInput GIVec2 where
+        buildMST f i = (f i, i + 1)
 
-floorG :: Shader.GenType a => a -> a
-floorG = Shader.floor
+instance MultiShaderType GIVec3 where
+        type ExprMST GIVec3 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-ceilingG :: Shader.GenType a => a -> a
-ceilingG = Shader.ceil
+instance ShaderInput GIVec3 where
+        buildMST f i = (f i, i + 1)
 
-instance B.RealFloatB Shader.GFloat where
-        isNaN = error "isNaN: not supported"
-        isInfinite = error "isInfinite: not supported"
-        isNegativeZero = error "isNegativeZero: not supported"
-        isIEEE = error "isIEEE: not supported"
-        atan2 = Shader.atan2
+instance MultiShaderType GIVec4 where
+        type ExprMST GIVec4 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
--- Vectors
+instance ShaderInput GIVec4 where
+        buildMST f i = (f i, i + 1)
 
-instance AdditiveGroup Shader.GVec2 where
-        zeroV = Shader.zero
-        (^+^) = (Shader.+)
-        (^-^) = (Shader.-)
-        negateV = Shader.negate
+instance MultiShaderType GBVec2 where
+        type ExprMST GBVec2 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance VectorSpace Shader.GVec2 where
-        type Scalar Shader.GVec2 = Shader.GFloat
-        (*^) = (Shader.*)
+instance ShaderInput GBVec2 where
+        buildMST f i = (f i, i + 1)
 
-instance InnerSpace Shader.GVec2 where
-        (<.>) = Shader.dot
+instance MultiShaderType GBVec3 where
+        type ExprMST GBVec3 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance Ext Shader.GVec2 where
-        type Extended Shader.GVec2 = Shader.GVec3
-        v ^| z = Shader.vec3 $ v # z
-        v ^|^ Shader.GVec3 _ _ z = Shader.vec3 $ v # z
-        extract = Shader.vec2
+instance ShaderInput GBVec3 where
+        buildMST f i = (f i, i + 1)
 
-instance AdditiveGroup Shader.GVec3 where
-        zeroV = Shader.zero
-        (^+^) = (Shader.+)
-        (^-^) = (Shader.-)
-        negateV = Shader.negate
+instance MultiShaderType GBVec4 where
+        type ExprMST GBVec4 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance VectorSpace Shader.GVec3 where
-        type Scalar Shader.GVec3 = Shader.GFloat
-        (*^) = (Shader.*)
+instance ShaderInput GBVec4 where
+        buildMST f i = (f i, i + 1)
 
-instance InnerSpace Shader.GVec3 where
-        (<.>) = Shader.dot
+instance MultiShaderType GMat2 where
+        type ExprMST GMat2 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance HasCross3 Shader.GVec3 where
-        cross3 = Shader.cross
+instance ShaderInput GMat2 where
+        buildMST f i = (f i, i + 1)
 
-instance Ext Shader.GVec3 where
-        type Extended Shader.GVec3 = Shader.GVec4
-        v ^| w = Shader.vec4 $ v # w
-        v ^|^ Shader.GVec4 _ _ _ w = Shader.vec4 $ v # w
-        extract = Shader.vec3
+instance MultiShaderType GMat3 where
+        type ExprMST GMat3 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance AdditiveGroup Shader.GVec4 where
-        zeroV = Shader.zero
-        (^+^) = (Shader.+)
-        (^-^) = (Shader.-)
-        negateV = Shader.negate
+instance ShaderInput GMat3 where
+        buildMST f i = (f i, i + 1)
 
-instance VectorSpace Shader.GVec4 where
-        type Scalar Shader.GVec4 = Shader.GFloat
-        (*^) = (Shader.*)
+instance MultiShaderType GMat4 where
+        type ExprMST GMat4 = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance InnerSpace Shader.GVec4 where
-        (<.>) = Shader.dot
+instance ShaderInput GMat4 where
+        buildMST f i = (f i, i + 1)
 
--- Matrices
+instance MultiShaderType () where
+        type ExprMST () = ()
+        mapMST _ = id
+        foldrMST _ x _ = x
+        toExprMST = id
+        fromExprMST = id
 
-instance AdditiveGroup Shader.GMat2 where
-        zeroV = Shader.zero
-        (^+^) = (Shader.+)
-        (^-^) = (Shader.-)
-        negateV = Shader.negateM
+instance (KnownNat n, ShaderType t) => MultiShaderType (GArray n t) where
+        type ExprMST (GArray n t) = Expr
+        mapMST f = f
+        foldrMST f = flip f
+        toExprMST = toExpr
+        fromExprMST = fromExpr
 
-instance VectorSpace Shader.GMat2 where
-        type Scalar Shader.GMat2 = Shader.GFloat
-        (*^) = (Shader.*)
+instance (KnownNat n, ShaderType t) => ShaderInput (GArray n t) where
+        buildMST f i = (f i, i + 1)
 
-instance AdditiveGroup Shader.GMat3 where
-        zeroV = Shader.zero
-        (^+^) = (Shader.+)
-        (^-^) = (Shader.-)
-        negateV = Shader.negateM
+instance (MultiShaderType a, MultiShaderType b) => MultiShaderType (a, b) where
+        type ExprMST (x, y) = (ExprMST x, ExprMST y)
+        mapMST f (x, y) = (mapMST f x, mapMST f y)
+        foldrMST f s (x, y) = foldrMST f (foldrMST f s y) x
+        toExprMST (x, y) = (toExprMST x, toExprMST y)
+        fromExprMST (x, y) = (fromExprMST x, fromExprMST y)
 
-instance Ext Shader.GMat2 where
-        type Extended Shader.GMat2 = Shader.GMat3
-        v ^| z = Shader.mat3 $ v # z # z # z # z # z
-        Shader.GMat2 x y ^|^ Shader.GMat3 x' y' z' =
-                Shader.GMat3 (x ^|^ x') (y ^|^ y') z'
-        extract = Shader.mat2
+instance (ShaderInput a, ShaderInput b, ShaderType a, ShaderType b) =>
+        ShaderInput (a, b) where
+        buildMST f i = ((f i, f (i + 1)), i + 2)
 
-instance Matrix Shader.GMat2 where
-        type Row Shader.GMat2 = Shader.GVec2
-        idmtx = Shader.mat2 (1.0 :: Shader.GFloat)
-        (.*.) = (Shader.*)
-        (.*) = (Shader.*)
-        (*.) = (Shader.*)
-        transpose (Shader.GMat2 (Shader.GVec2 a b) (Shader.GVec2 c d)) =
-                Shader.GMat2 (Shader.GVec2 a c) (Shader.GVec2 b d)
+instance MultiShaderType a => MultiShaderType [a] where
+        type ExprMST [x] = [ExprMST x]
+        mapMST f = map $ mapMST f
+        foldrMST f = foldr . flip $ foldrMST f
+        toExprMST = map toExprMST
+        fromExprMST = map fromExprMST
 
-instance VectorSpace Shader.GMat3 where
-        type Scalar Shader.GMat3 = Shader.GFloat
-        (*^) = (Shader.*)
+{-
+-- Data.HList.HList
+-- forse è meglio lasciar perdere e preferire sempre i generics?
+instance All MultiShaderType as => MultiShaderType (HList as) where
+        foldrMST f s HNil = s
+        foldrMST f s (HCons x xs) = foldrMST f (foldrMST f s xs) x
+-}
 
-instance Ext Shader.GMat3 where
-        type Extended Shader.GMat3 = Shader.GMat4
-        v ^| z = Shader.mat4 $ v # z # z # z # z # z # z # z
-        Shader.GMat3 x y z ^|^ Shader.GMat4 x' y' z' w' =
-                Shader.GMat4 (x ^|^ x') (y ^|^ y') (z ^|^ z') w'
-        extract = Shader.mat3
+hashMST :: MultiShaderType a => a -> a
+hashMST = mapMST (fromExpr . HashDummy . hash . toExpr)
 
-instance Matrix Shader.GMat3 where
-        type Row Shader.GMat3 = Shader.GVec3
-        idmtx = Shader.mat3 (1.0 :: Shader.GFloat)
-        (.*.) = (Shader.*)
-        (.*) = (Shader.*)
-        (*.) = (Shader.*)
-        transpose (Shader.GMat3 (Shader.GVec3 a b c)
-                                (Shader.GVec3 d e f)
-                                (Shader.GVec3 g h i)) =
-                        Shader.GMat3 (Shader.GVec3 a d g)
-                                     (Shader.GVec3 b e h)
-                                     (Shader.GVec3 c f i)
+hashListMST :: MultiShaderType a => a -> [Int]
+hashListMST = foldrMST (\x l -> hash (toExpr x) : l) []
 
-instance AdditiveGroup Shader.GMat4 where
-        zeroV = Shader.zero
-        (^+^) = (Shader.+)
-        (^-^) = (Shader.-)
-        negateV = Shader.negateM
+type UniformID = Int
+-- TODO: use an existential type instead?
+type UniformValue = (String, UniformLocation -> GL ())
+type Unistate = (UniformID, [(UniformID, UniformValue)])
 
-instance VectorSpace Shader.GMat4 where
-        type Scalar Shader.GMat4 = Shader.GFloat
-        (*^) = (Shader.*)
+data Shader (s :: ShaderStage) i o =
+        Shader ((Unistate, i) -> (Unistate, o))         -- Real shader function
+               ((UniformID, i) -> (UniformID, o))       -- Shader function optimized for hashing
 
-instance Matrix Shader.GMat4 where
-        type Row Shader.GMat4 = Shader.GVec4
-        idmtx = Shader.mat4 (1.0 :: Shader.GFloat)
-        (.*.) = (Shader.*)
-        (.*) = (Shader.*)
-        (*.) = (Shader.*)
-        transpose (Shader.GMat4 (Shader.GVec4 a b c d)
-                                (Shader.GVec4 e f g h)
-                                (Shader.GVec4 i j k l)
-                                (Shader.GVec4 m n o p)) =
-                        Shader.GMat4 (Shader.GVec4 a e i m)
-                                     (Shader.GVec4 b f j n)
-                                     (Shader.GVec4 c g k o)
-                                     (Shader.GVec4 d h l p)
+instance Category (Shader s) where
+        Shader f hf . Shader g hg = Shader (f . g) (hf . hg)
+        id = Shader id id
+
+instance Arrow (Shader s) where
+        arr f = Shader (second f) (second f)
+        Shader f hf *** Shader g hg = Shader (split f g) (split hf hg)
+                where split f g (s, (fin, gin)) = let (s', fout) = f (s, fin)
+                                                      (s'', gout) = g (s', gin)
+                                                  in (s'', (fout, gout))
+
+instance ArrowApply (Shader s) where
+        app = Shader (\(s, (Shader f _, i)) -> f (s, i))
+                     (\(s, (Shader _ hf, i)) -> hf (s, i))
+
+instance (ShaderInput i, MultiShaderType o) => Hashable (Shader s i o) where
+        hashWithSalt salt (Shader _ hf) =
+                let (input, _) = buildMST (fromExpr . Input) 0
+                    (_, output) = hf (0, input)
+                in hashWithSalt salt $ hashListMST output
+
+data ShaderStage = VertexShaderStage | FragmentShaderStage
+type VertexShader = Shader VertexShaderStage
+type FragmentShader = Shader FragmentShaderStage
+
+newtype UniformSetter x = UniformSetter { unUniformSetter :: x }
+
+uniformList :: Shader s i o -> [(UniformID, UniformValue)]
+uniformList (Shader f _) = let err = "uniformList: input must not be evaluated"
+                               ((_, map), _) = f ((0, []), error err)
+                           in map
+
+-- | Create a shader function that can be reused efficiently.
+shader :: (MultiShaderType i, MultiShaderType o) => Shader s i o -> Shader s i o
+shader (Shader f hf) = Shader f (memoHash hf)
+-- BUG: shader modifies the hash of the shader
+
+uniformSetter :: x -> UniformSetter x
+uniformSetter = UniformSetter
+
+-- | 'shader' with an additional parameter that can be used to set the values of
+-- the uniforms.
+shader1 :: (MultiShaderType i, MultiShaderType o)
+        => (Shader s (UniformSetter x, i) o)
+        -> (UniformSetter x -> Shader s i o)
+shader1 (Shader f hf) = let err = "shader1: not an uniform value"
+                            hf' = memoHash $ hf . second ((,) (error err))
+                        in \x -> Shader (\(s, i) -> f (s, (x, i))) hf'
+
+memoHash :: (MultiShaderType i, MultiShaderType o)
+         => ((UniformID, i) -> (UniformID, o))
+         -> ((UniformID, i) -> (UniformID, o))
+memoHash hf = let mf = memo $ second hashMST . hf . second fromExprMST
+              in mf . second toExprMST
+
+-- | Add a global shader variable that can be set with a CPU value.
+uniform :: forall u i o s. BaseUniform u
+        => Shader s (u, i) o
+        -> Shader s (CPUBase u, i) o
+uniform (Shader f hf) = Shader (\((uid, umap), (u, i)) ->
+                                let set l = setUniform l (Proxy :: Proxy u) u
+                                    ty = typeName (undefined :: u)
+                                in f ( (uid + 1, (uid, (ty, set)) : umap)
+                                     , (fromExpr $ Uniform uid, i)
+                                     )
+                               )
+                               (\(uid, (_, i)) ->
+                                hf (uid + 1, (fromExpr $ Uniform uid, i))
+                               )
+
+-- | Like 'uniform' but uses a 'UniformSetter'.
+uniform' :: BaseUniform u
+         => (x -> CPUBase u)
+         -> Shader s (u, i) o
+         -> Shader s (UniformSetter x, i) o
+uniform' f shader = first (f . unUniformSetter) ^>> uniform shader
+
+-- | Add a uniform and directly set it with the second operand.
+infixl 9 ~~
+(~~) :: BaseUniform u => Shader s (u, i) o -> CPUBase u -> Shader s i o
+shader ~~ u = const u &&& id ^>> uniform shader
+
+-- | Like ('~~') but uses a 'UniformSetter'.
+withUniformSetter :: BaseUniform u
+                  => UniformSetter x
+                  -> (x -> CPUBase u)
+                  -> Shader s (u, i) o
+                  -> Shader s i o
+withUniformSetter u f shader = const u &&& id ^>> uniform' f shader
+
+-- | Sample a texel from the texture associated with the sampler.
+sample :: FragmentShader (GSampler2D, GVec2) GVec4
+sample = arr $ uncurry Shader.texture2D
+
+-- | Partial derivative of the argument with respect to the window X coordinate.
+dFdx :: GenType a => FragmentShader a a
+dFdx = arr Shader.dFdx
+
+-- | Partial derivative of the argument with respect to the window Y coordinate.
+dFdy :: GenType a => FragmentShader a a
+dFdy = arr Shader.dFdy
+
+-- | Sum of the absolute values of 'dFdx' and 'dFdy'.
+fwidth :: GenType a => FragmentShader a a
+fwidth = arr Shader.fwidth
+
+-- | The position of the vertex.
+position :: VertexShader a GVec4
+position = arr $ const Shader.position
+
+-- | The data of the fragment.
+fragData :: FragmentShader a (GArray 16 GVec4)
+fragData = arr $ const Shader.fragData
+
+-- | The coordinates of the fragment.
+fragCoord :: FragmentShader a GVec4
+fragCoord = arr $ const Shader.fragCoord
+
+-- | If the fragment belongs to a front-facing primitive.
+fragFrontFacing :: FragmentShader a GBool
+fragFrontFacing = arr $ const Shader.fragFrontFacing

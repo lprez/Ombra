@@ -59,10 +59,10 @@ checkResource' _ i (ResMap map) = do m <- liftIO $ H.lookup map i
 
 
 getResource :: Resource i r m => i -> ResMap r -> m (Either String r)
-getResource i = getResource' i i
+getResource i = getResource' (Just i) i
 
-getResource' :: Resource i r m => k -> i -> ResMap r -> m (Either String r)
-getResource' k (i :: i) rmap@(ResMap map) =
+getResource' :: Resource i r m => Maybe k -> i -> ResMap r -> m (Either String r)
+getResource' mk (i :: i) rmap@(ResMap map) =
         do status <- checkResource i rmap
            case status of
                    Unloaded ->
@@ -72,9 +72,12 @@ getResource' k (i :: i) rmap@(ResMap map) =
                                          Left s -> H.insert map ihash $ Left s
                                          Right r -> H.insert map ihash $ Right r
 
-                           embedIO (addFinalizer k) $
-                                   removeResource' (Nothing :: Maybe i)
-                                                   ihash rmap
+                           case mk of
+                                Just k -> embedIO (addFinalizer k) $
+                                        removeResource' (Nothing :: Maybe i)
+                                                        ihash rmap
+                                Nothing -> return ()
+
                            meRes <- liftIO . H.lookup map $ ihash
                            return $ case meRes of
                                          Just eRes -> eRes

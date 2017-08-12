@@ -15,7 +15,6 @@ module Graphics.Rendering.Ombra.Geometry.Internal (
         buildGeometryT,
         decompose,
         mapVertices,
-        removeAttribute,
         drawGeometry
 ) where
 
@@ -38,11 +37,13 @@ import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType(size))
 import Graphics.Rendering.Ombra.Vector
 
 class (GLES, MonadGL m) => MonadGeometry m where
-        getAttribute :: Attribute 'S i
+        getAttribute :: BaseAttribute i
                      => AttrCol (i ': is)
                      -> m (Either String LoadedAttribute)
         getElementBuffer :: Elements is -> m (Either String LoadedBuffer)
-        getGeometry :: Geometry (i ': is) -> m (Either String LoadedGeometry)
+        getGeometry :: GVertex g
+                    => Geometry g
+                    -> m (Either String LoadedGeometry)
 
 
 data LoadedGeometry = LoadedGeometry {
@@ -55,14 +56,14 @@ newtype LoadedBuffer = LoadedBuffer Buffer
 
 data LoadedAttribute = LoadedAttribute GLUInt [(Buffer, GLUInt -> GL ())]
 
-rehashGeometry :: Geometry is -> Geometry is
+rehashGeometry :: Geometry g -> Geometry g
 rehashGeometry g = let Triangles elemsHash _ = elements g
                    in g { geometryHash = H.hashWithSalt (topHash g) elemsHash }
 
-emptyGeometry :: Attributes is => Geometry is
+emptyGeometry :: GVertex g => Geometry g
 emptyGeometry = rehashGeometry $ Geometry 0 0 emptyAttrCol (Triangles 0 []) (-1)
 
-downList :: NotTop p => AttrTable p (i ': is) -> [CPU 'S i] -> [CPU 'S i]
+downList :: NotTop p => AttrTable p (i ': is) -> [CPUBase i] -> [CPUBase i]
 downList AttrEnd xs = xs
 downList (AttrCell x _ down) xs = downList down $ x : xs
 
@@ -78,10 +79,10 @@ foldVertices f acc cell@(AttrCell _ _ down) =
             widx = fromIntegral idx
         in (idx, f (AttrVertex widx cell) acc')
 
-addVertex :: Attributes is
-          => Vertex is
-          -> Geometry is
-          -> (AttrVertex is, Geometry is)
+addVertex :: GVertex g
+          => VertexAttributes (AttributeTypes g)
+          -> Geometry g
+          -> (AttrVertex (AttributeTypes g), Geometry g)
 addVertex v g =
         let top' = addTop v $ top g
             topHash = H.hash top'
@@ -95,91 +96,101 @@ addVertex v g =
                                 }
            )
 
-addTriangle :: Attributes is
-            => Triangle (AttrVertex is)
-            -> Geometry is
-            -> Geometry is
+addTriangle :: GVertex g
+            => Triangle (AttrVertex (AttributeTypes g))
+            -> Geometry g
+            -> Geometry g
 addTriangle t g = let Triangles h ts = elements g
                       elements' = Triangles (H.hashWithSalt (H.hash t) h)
                                             (t : ts)
                   in rehashGeometry $ g { elements = elements' }
 
 -- | Create a new vertex that can be used in 'addTriangle'.
-vertex :: (Monad m, Attributes is)
-       => Vertex is
-       -> GeometryBuilderT is m (AttrVertex is)
-vertex = GeometryBuilderT . state . addVertex
+vertex :: (Monad m, GVertex g)
+       => Vertex g
+       -> GeometryBuilderT g m (AttrVertex (AttributeTypes g))
+vertex = GeometryBuilderT . state . addVertex . toVertexAttributes
 
 -- | Add a triangle to the current geometry.
-triangle :: (Monad m, Attributes is)
-         => AttrVertex is
-         -> AttrVertex is
-         -> AttrVertex is
-         -> GeometryBuilderT is m ()
+triangle :: (Monad m, GVertex g)
+         => AttrVertex (AttributeTypes g)
+         -> AttrVertex (AttributeTypes g)
+         -> AttrVertex (AttributeTypes g)
+         -> GeometryBuilderT g m ()
 triangle x y z = GeometryBuilderT . state $ \g -> ((), addTriangle t g)
         where t = Triangle x y z
 
 -- | Create a 'Geometry' using the 'GeometryBuilder' monad. This is more
 -- efficient than 'mkGeometry'.
-buildGeometry :: Attributes (i ': is)
-              => GeometryBuilder (i ': is) ()
-              -> Geometry (i ': is)
+buildGeometry :: GVertex g => GeometryBuilder g () -> Geometry g
 buildGeometry (GeometryBuilderT m) = execState m emptyGeometry
 
-buildGeometryT :: (Monad m, Attributes (i ': is))
-               => GeometryBuilderT (i ': is) m ()
-               -> m (Geometry (i ': is))
+buildGeometryT :: (Monad m, GVertex g)
+               => GeometryBuilderT g m ()
+               -> m (Geometry g)
 buildGeometryT (GeometryBuilderT m) = execStateT m emptyGeometry
 
 -- | Create a 'Geometry' using a list of triangles.
-mkGeometry :: (GLES, Attributes (i ': is))
-           => [Triangle (Vertex (i ': is))]
-           -> Geometry (i ': is)
+mkGeometry :: (GLES, GVertex g)
+           => [Triangle (Vertex g)]
+           -> Geometry g
 mkGeometry t = buildGeometry (foldlM add H.empty t >> return ())
-        where add vertices (Triangle v1 v2 v3) =
-                do (vertices1, av1) <- mvertex vertices v1
-                   (vertices2, av2) <- mvertex vertices1 v2
-                   (vertices3, av3) <- mvertex vertices2 v3
+        where add verts (Triangle v1 v2 v3) =
+                do (verts1, av1) <- mvertex verts $ toVertexAttributes v1
+                   (verts2, av2) <- mvertex verts1 $ toVertexAttributes v2
+                   (verts3, av3) <- mvertex verts2 $ toVertexAttributes v3
                    triangle av1 av2 av3
-                   return vertices3
+                   return verts3
               mvertex vertices v =
                 case H.lookup v vertices of
                      Just av -> return (vertices, av)
-                     Nothing -> do av <- vertex v
+                     Nothing -> do av <- vertex $ fromVertexAttributes v
                                    return (H.insert v av vertices, av)
 
-attrVertexToVertex :: Attributes is => AttrVertex is -> Vertex is
-attrVertexToVertex (AttrVertex _ tab) = rowToVertex tab
+attrVertexToVertex :: Attributes is => AttrVertex is -> VertexAttributes is
+attrVertexToVertex (AttrVertex _ tab) = rowToVertexAttributes tab
 
 -- | Convert a 'Geometry' back to a list of triangles.
-decompose :: Geometry (i ': is) -> [Triangle (Vertex (i ': is))] 
+decompose :: GVertex g => Geometry g -> [Triangle (Vertex g)] 
 decompose g@(Geometry _ _ _ (Triangles _ triangles) _) =
-        flip map triangles $ fmap attrVertexToVertex
+        flip map triangles $ fmap (fromVertexAttributes . attrVertexToVertex)
 
 type AttrVertexMap is v = H.HashMap (AttrVertex is) v
 
 -- | Transform each vertex of a geometry. You can create a value for each
 -- triangle so that the transforming function will receive a list of the values
 -- of the triangles the vertex belongs to.
-mapVertices :: (Attributes is, Attributes is', GLES)
-            => (Triangle (Vertex is) -> a)
-            -> ([a] -> Vertex is -> Vertex is')
-            -> Geometry is
-            -> Geometry is'
+mapVertices :: forall a g g'. (GLES, GVertex g, GVertex g')
+            => (Triangle (Vertex g) -> a)
+            -> ([a] -> Vertex g -> Vertex g')
+            -> Geometry g
+            -> Geometry g'
 mapVertices getValue (transVert :: [a] -> Vertex is -> Vertex is')
             (Geometry _ _ (AttrTop _ _ row0) (Triangles thash triangles) _) =
         let accTriangle vertMap tri@(Triangle v1 v2 v3) (values, triangles) =
-                    let value = getValue $ fmap attrVertexToVertex tri
+                    let value = getValue $ fmap ( fromVertexAttributes
+                                                . attrVertexToVertex
+                                                ) tri
                         values' = foldr (flip (H.insertWith (++)) [value])
                                         values
                                         [v1, v2, v3]
                         tri' = fmap (vertMap H.!) tri
                     in (values', tri' : triangles)
 
+            accVertex :: H.HashMap (AttrVertex (AttributeTypes g)) [a]
+                      -> AttrVertex (AttributeTypes g)
+                      -> ( H.HashMap (AttrVertex (AttributeTypes g))
+                                     (AttrVertex (AttributeTypes g'))
+                         , Geometry g'
+                         )
+                      -> ( H.HashMap (AttrVertex (AttributeTypes g))
+                                     (AttrVertex (AttributeTypes g'))
+                         , Geometry g'
+                         )
             accVertex valueMap avert (vertMap, geom) =
                     let value = valueMap H.! avert
-                        vert = attrVertexToVertex avert
-                        vert' = transVert value vert
+                        vert = fromVertexAttributes $ attrVertexToVertex avert
+                        vert' = toVertexAttributes $ transVert value vert
                         (avert', geom') = addVertex vert' geom
                         vertMap' = H.insert avert avert' vertMap
                     in (vertMap', geom')
@@ -194,6 +205,7 @@ mapVertices getValue (transVert :: [a] -> Vertex is -> Vertex is')
             geom' = Geometry tophash' 0 top' (Triangles thash triangles') lidx
         in rehashGeometry geom'
 
+{-
 -- | Remove an attribute from a geometry.
 removeAttribute :: ( RemoveAttr i is
                    , Attributes is
@@ -221,22 +233,18 @@ instance {-# OVERLAPPABLE #-} ( RemoveAttr i is'
                               ) => RemoveAttr i (i' ': is') where
         removeAttr g (Attr g' x) = Attr g' x
         removeAttr g (Attr g' x :~ v) = Attr g' x :~ removeAttr g v
+-}
 
 instance GLES => Resource (AttrCol (i ': is)) LoadedAttribute GL where
         loadResource (AttrTop _ _ down :: AttrCol (i ': is)) =
                 fmap (Right . uncurry LoadedAttribute) .
                 flip execStateT (0, []) $
-                        withAttributes (Proxy :: Proxy 'S) (undefined :: i) vs $
-                                \_ (g :: Proxy g) c ->
-                                        do (i, as) <- get
-                                           arr <- lift $ encodeAttribute g c
-                                           buf <- lift $
-                                                   loadBuffer gl_ARRAY_BUFFER
-                                                              arr
-                                           let sz = fromIntegral . size $
-                                                        (undefined :: g)
-                                               set = setAttribute g . (+ i)
-                                           put (i + sz, (buf, set) : as)
+                        do (i, as) <- get
+                           arr <- lift $ encodeAttribute (Proxy :: Proxy i) vs
+                           buf <- lift $ loadBuffer gl_ARRAY_BUFFER arr
+                           let sz = fromIntegral . size $ (undefined :: i)
+                               set = setAttribute (Proxy :: Proxy i) . (+ i)
+                           put (i + sz, (buf, set) : as)
                 where vs = downList down []
         unloadResource _ (LoadedAttribute _ as) =
                 mapM_ (\(buf, _) -> deleteBuffer buf) as
@@ -253,13 +261,13 @@ instance GLES => Resource (Elements is) LoadedBuffer GL where
                                     (AttrVertex z _)) = [x, y, z]
         unloadResource _ (LoadedBuffer buf) = deleteBuffer buf
 
-instance (GLES, MonadGeometry m, EmbedIO m) =>
-        Resource (Geometry (i ': is)) LoadedGeometry m where
+instance (GLES, MonadGeometry m, EmbedIO m, GVertex g) =>
+        Resource (Geometry g) LoadedGeometry m where
         loadResource = loadGeometry
         unloadResource _ = gl . deleteGeometry
 
-loadGeometry :: (GLES, MonadGeometry m)
-             => Geometry (i ': is)
+loadGeometry :: (GLES, MonadGeometry m, GVertex g)
+             => Geometry g
              -> m (Either String LoadedGeometry)
 loadGeometry geometry@(Geometry _ _ _ _ _) = runExceptT $
         do vao <- lift $ gl createVertexArray
@@ -276,9 +284,9 @@ loadGeometry geometry@(Geometry _ _ _ _ _) = runExceptT $
            return $ LoadedGeometry (elementCount $ elements geometry) vao
         where elementCount (Triangles _ ts) = 3 * length ts
 
-setAttrTop :: (GLES, MonadGeometry m, Attributes (i ': is))
+setAttrTop :: (GLES, MonadGeometry m, Attributes is)
            => GLUInt
-           -> AttrCol (i ': is)
+           -> AttrCol is
            -> m (Either String ())
 setAttrTop i0 col0 = runExceptT . (>> return ()) $
         foldTop (\geti col@(AttrTop _ _ _) ->
@@ -304,7 +312,7 @@ loadBuffer ty bufData =
            bindBuffer ty noBuffer
            return buffer
 
-drawGeometry :: MonadGeometry m => Geometry (i ': is) -> m ()
+drawGeometry :: (MonadGeometry m, GVertex g) => Geometry g -> m ()
 drawGeometry g = getGeometry g >>= \eg ->
         case eg of
              Left _ -> return ()

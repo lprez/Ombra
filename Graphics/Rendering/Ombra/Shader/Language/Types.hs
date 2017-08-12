@@ -1,22 +1,24 @@
-{-# LANGUAGE MultiParamTypeClasses, DataKinds, KindSignatures,
-             ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses, DataKinds, KindSignatures, TypeOperators,
+             ScopedTypeVariables, DeriveGeneric, TypeFamilies #-}
 
 module Graphics.Rendering.Ombra.Shader.Language.Types where
 
 import Data.Typeable
 import GHC.TypeLits
+import Data.MemoTrie
 import Data.Hashable
-import Prelude (String, ($), error, Eq(..), (++), (*), fromInteger, (&&), Int)
+import Prelude (String, ($), error, Eq(..), (++), (*), (&&), Int, map, (.))
 import qualified Prelude
 
 -- | An expression.
 data Expr = Empty | Read String | Op1 String Expr | Op2 String Expr Expr
           | Apply String [Expr] | X Expr | Y Expr | Z Expr | W Expr
           | Literal String | Action Action | Dummy Int | ArrayIndex Expr Expr
-          | ContextVar Int ContextVarType
+          | ContextVar Int ContextVarType | HashDummy Int | Uniform Int
+          | Input Int | Attribute Int
           deriving Eq
 
--- | Expressions that are transformed to statements.
+-- | Expressions that are transformed into statements.
 data Action = Store String Expr | If Expr String Expr Expr
             | For Int String Expr (Expr -> Expr -> (Expr, Expr))
 
@@ -106,7 +108,7 @@ instance (ShaderType t, KnownNat n) => ShaderType (GArray n t) where
                 typeName (zero :: t) ++
                 "[" ++ Prelude.show (natVal (Proxy :: Proxy n)) ++ "]"
         size (GArray _ :: GArray n t) =
-                size (zero :: t) * fromInteger (natVal (Proxy :: Proxy n))
+                size (zero :: t) * Prelude.fromInteger (natVal (Proxy :: Proxy n))
 
 instance ShaderType GBool where
         zero = GBool $ Literal "false"
@@ -152,6 +154,8 @@ instance ShaderType GSampler2D where
 
         size _ = 1
 
+{-
+
 instance ShaderType GSamplerCube where
         zero = GSamplerCube $ Literal "0"
 
@@ -163,9 +167,12 @@ instance ShaderType GSamplerCube where
 
         size _ = 1
 
+-}
+
 instance ShaderType GVec2 where
         zero = GVec2 zero zero
 
+        -- TODO: Remove Apply!
         toExpr (GVec2 (GFloat (X v)) (GFloat (Y v'))) | v == v' =
                 Apply "vec2" [v]
 
@@ -413,6 +420,16 @@ instance Hashable Expr where
                                 ContextVar i LoopIteration -> hash2 s 12 i
                                 ContextVar i LoopValue -> hash2 s 13 i
                                 ArrayIndex arr i -> hash2 s 14 (arr, i)
+                                Uniform i -> hash2 s 15 i
+                                Input i -> hash2 s 16 i
+                                Attribute i -> hash2 s 17 i
+                                HashDummy h -> h
+
+instance HasTrie Expr where
+        newtype (Expr :->: a) = ExprTrie { unExprTrie :: Int :->: a }
+        trie f = ExprTrie . trie $ f . HashDummy
+        untrie t = untrie (unExprTrie t) . hash
+        enumerate = map (\(i, b) -> (HashDummy i, b)) . enumerate . unExprTrie
 
 instance Hashable Action where
         hashWithSalt s (Store t e) = hash2 s 0 (t, e)
