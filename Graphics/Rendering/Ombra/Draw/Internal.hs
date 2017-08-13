@@ -32,8 +32,8 @@ module Graphics.Rendering.Ombra.Draw.Internal (
 import qualified Graphics.Rendering.Ombra.Blend.Internal as Blend
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Culling
-import Graphics.Rendering.Ombra.Geometry.Internal
-import Graphics.Rendering.Ombra.Geometry.Types
+import Graphics.Rendering.Ombra.Geometry
+import Graphics.Rendering.Ombra.Geometry.Draw
 import Graphics.Rendering.Ombra.Texture.Internal
 import Graphics.Rendering.Ombra.Texture.Types
 import Graphics.Rendering.Ombra.Backend (GLES)

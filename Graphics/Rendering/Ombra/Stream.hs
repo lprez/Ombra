@@ -8,8 +8,8 @@ module Graphics.Rendering.Ombra.Stream (
 ) where
 
 import Graphics.Rendering.Ombra.Internal.GL (gl)
-import Graphics.Rendering.Ombra.Geometry.Internal
-import Graphics.Rendering.Ombra.Geometry.Types
+import Graphics.Rendering.Ombra.Geometry
+import Graphics.Rendering.Ombra.Geometry.Draw
 import Graphics.Rendering.Ombra.Shader
 import Graphics.Rendering.Ombra.Shader.GLSL
 import Graphics.Rendering.Ombra.Shader.Program

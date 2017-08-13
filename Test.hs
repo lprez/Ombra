@@ -6,8 +6,7 @@ import Control.Arrow
 import Data.MemoTrie
 import GHC.Generics
 import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Geometry.Internal
-import Graphics.Rendering.Ombra.Geometry.Types
+import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Shader
 import Graphics.Rendering.Ombra.Shader.Language.Types (Expr)
 import Graphics.Rendering.Ombra.Stream
