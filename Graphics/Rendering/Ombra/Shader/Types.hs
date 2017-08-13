@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes, ScopedTypeVariables, DataKinds, KindSignatures,
              TypeFamilies, FlexibleContexts, UndecidableInstances,
-             FlexibleInstances, DefaultSignatures, TypeOperators #-}
+             FlexibleInstances, DefaultSignatures, TypeOperators,
+             MultiParamTypeClasses #-}
 
 module Graphics.Rendering.Ombra.Shader.Types where
 
@@ -8,21 +9,15 @@ import Control.Arrow
 import Control.Category
 import Data.Hashable
 import Data.MemoTrie
+import Data.Proxy
 import GHC.Generics
 import GHC.TypeLits
+import Graphics.Rendering.Ombra.Backend (GLES)
 import Graphics.Rendering.Ombra.Internal.GL (GL, UniformLocation)
+import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Language
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Prelude hiding (id, (.))
-
--- | A type that contains a finite amount of 'ShaderType's.
-class MultiShaderType a => ShaderInput a where
-        buildMST :: (forall x. ShaderType x => Int -> x) -> Int -> (a, Int)
-        default buildMST :: (Generic a, GShaderInput (Rep a))
-                         => (forall x. ShaderType x => Int -> x)
-                         -> Int
-                         -> (a, Int)
-        buildMST f = first to . gbuildMST f
 
 -- | A type that contains zero or more 'ShaderType's.
 class HasTrie (ExprMST a) => MultiShaderType a where
@@ -56,6 +51,44 @@ class HasTrie (ExprMST a) => MultiShaderType a where
                             => GExprMST (Rep a)
                             -> a
         fromExprMST = to . gfromExprMST
+
+-- | A type that contains a finite amount of 'ShaderType's.
+class MultiShaderType a => ShaderInput a where
+        buildMST :: (forall x. ShaderType x => Int -> x) -> Int -> (a, Int)
+        default buildMST :: (Generic a, GShaderInput (Rep a))
+                         => (forall x. ShaderType x => Int -> x)
+                         -> Int
+                         -> (a, Int)
+        buildMST f = first to . gbuildMST f
+
+class ShaderInput a => Uniform a where
+        type CPUUniform a
+        foldrUniform :: Proxy a
+                     -> (forall g. BaseUniform g
+                                => Proxy g
+                                -> CPUBase g
+                                -> b
+                                -> b)
+                     -> b
+                     -> CPUUniform a
+                     -> b
+        default foldrUniform :: ( Generic a
+                                , Generic (CPUUniform a)
+                                , GUniform (Rep a) (Rep (CPUUniform a))
+                                )
+                             => Proxy a
+                             -> (forall g. BaseUniform g
+                                        => Proxy g
+                                        -> CPUBase g
+                                        -> b
+                                        -> b
+                                )
+                             -> b
+                             -> CPUUniform a
+                             -> b
+        foldrUniform (Proxy :: Proxy a) f s u =
+                gfoldrUniform (Proxy :: Proxy (Rep a)) f s $ from u
+
 
 type UniformID = Int
 -- TODO: use an existential type instead?
@@ -101,6 +134,10 @@ instance MultiShaderType GBool where
 instance ShaderInput GBool where
         buildMST f i = (f i, i + 1)
 
+instance GLES => Uniform GBool where
+        type CPUUniform GBool = CPUBase GBool
+        foldrUniform proxy f s u = f proxy u s
+
 instance MultiShaderType GFloat where
         type ExprMST GFloat = Expr
         mapMST f = f
@@ -110,6 +147,10 @@ instance MultiShaderType GFloat where
 
 instance ShaderInput GFloat where
         buildMST f i = (f i, i + 1)
+
+instance GLES => Uniform GFloat where
+        type CPUUniform GFloat = CPUBase GFloat
+        foldrUniform proxy f s u = f proxy u s
 
 instance MultiShaderType GInt where
         type ExprMST GInt = Expr
@@ -121,6 +162,10 @@ instance MultiShaderType GInt where
 instance ShaderInput GInt where
         buildMST f i = (f i, i + 1)
 
+instance GLES => Uniform GInt where
+        type CPUUniform GInt = CPUBase GInt
+        foldrUniform proxy f s u = f proxy u s
+
 instance MultiShaderType GSampler2D where
         type ExprMST GSampler2D = Expr
         mapMST f = f
@@ -130,6 +175,10 @@ instance MultiShaderType GSampler2D where
 
 instance ShaderInput GSampler2D where
         buildMST f i = (f i, i + 1)
+
+instance GLES => Uniform GSampler2D where
+        type CPUUniform GSampler2D = CPUBase GSampler2D
+        foldrUniform proxy f s u = f proxy u s
 
 instance MultiShaderType GVec2 where
         type ExprMST GVec2 = Expr
@@ -141,6 +190,10 @@ instance MultiShaderType GVec2 where
 instance ShaderInput GVec2 where
         buildMST f i = (f i, i + 1)
 
+instance GLES => Uniform GVec2 where
+        type CPUUniform GVec2 = CPUBase GVec2
+        foldrUniform proxy f s u = f proxy u s
+
 instance MultiShaderType GVec3 where
         type ExprMST GVec3 = Expr
         mapMST f = f
@@ -150,6 +203,10 @@ instance MultiShaderType GVec3 where
 
 instance ShaderInput GVec3 where
         buildMST f i = (f i, i + 1)
+
+instance GLES => Uniform GVec3 where
+        type CPUUniform GVec3 = CPUBase GVec3
+        foldrUniform proxy f s u = f proxy u s
 
 instance MultiShaderType GVec4 where
         type ExprMST GVec4 = Expr
@@ -161,6 +218,10 @@ instance MultiShaderType GVec4 where
 instance ShaderInput GVec4 where
         buildMST f i = (f i, i + 1)
 
+instance GLES => Uniform GVec4 where
+        type CPUUniform GVec4 = CPUBase GVec4
+        foldrUniform proxy f s u = f proxy u s
+
 instance MultiShaderType GIVec2 where
         type ExprMST GIVec2 = Expr
         mapMST f = f
@@ -170,6 +231,10 @@ instance MultiShaderType GIVec2 where
 
 instance ShaderInput GIVec2 where
         buildMST f i = (f i, i + 1)
+
+instance GLES => Uniform GIVec2 where
+        type CPUUniform GIVec2 = CPUBase GIVec2
+        foldrUniform proxy f s u = f proxy u s
 
 instance MultiShaderType GIVec3 where
         type ExprMST GIVec3 = Expr
@@ -181,6 +246,10 @@ instance MultiShaderType GIVec3 where
 instance ShaderInput GIVec3 where
         buildMST f i = (f i, i + 1)
 
+instance GLES => Uniform GIVec3 where
+        type CPUUniform GIVec3 = CPUBase GIVec3
+        foldrUniform proxy f s u = f proxy u s
+
 instance MultiShaderType GIVec4 where
         type ExprMST GIVec4 = Expr
         mapMST f = f
@@ -190,6 +259,10 @@ instance MultiShaderType GIVec4 where
 
 instance ShaderInput GIVec4 where
         buildMST f i = (f i, i + 1)
+
+instance GLES => Uniform GIVec4 where
+        type CPUUniform GIVec4 = CPUBase GIVec4
+        foldrUniform proxy f s u = f proxy u s
 
 instance MultiShaderType GBVec2 where
         type ExprMST GBVec2 = Expr
@@ -201,6 +274,10 @@ instance MultiShaderType GBVec2 where
 instance ShaderInput GBVec2 where
         buildMST f i = (f i, i + 1)
 
+instance GLES => Uniform GBVec2 where
+        type CPUUniform GBVec2 = CPUBase GBVec2
+        foldrUniform proxy f s u = f proxy u s
+
 instance MultiShaderType GBVec3 where
         type ExprMST GBVec3 = Expr
         mapMST f = f
@@ -210,6 +287,10 @@ instance MultiShaderType GBVec3 where
 
 instance ShaderInput GBVec3 where
         buildMST f i = (f i, i + 1)
+
+instance GLES => Uniform GBVec3 where
+        type CPUUniform GBVec3 = CPUBase GBVec3
+        foldrUniform proxy f s u = f proxy u s
 
 instance MultiShaderType GBVec4 where
         type ExprMST GBVec4 = Expr
@@ -221,6 +302,10 @@ instance MultiShaderType GBVec4 where
 instance ShaderInput GBVec4 where
         buildMST f i = (f i, i + 1)
 
+instance GLES => Uniform GBVec4 where
+        type CPUUniform GBVec4 = CPUBase GBVec4
+        foldrUniform proxy f s u = f proxy u s
+
 instance MultiShaderType GMat2 where
         type ExprMST GMat2 = Expr
         mapMST f = f
@@ -230,6 +315,10 @@ instance MultiShaderType GMat2 where
 
 instance ShaderInput GMat2 where
         buildMST f i = (f i, i + 1)
+
+instance GLES => Uniform GMat2 where
+        type CPUUniform GMat2 = CPUBase GMat2
+        foldrUniform proxy f s u = f proxy u s
 
 instance MultiShaderType GMat3 where
         type ExprMST GMat3 = Expr
@@ -241,6 +330,10 @@ instance MultiShaderType GMat3 where
 instance ShaderInput GMat3 where
         buildMST f i = (f i, i + 1)
 
+instance GLES => Uniform GMat3 where
+        type CPUUniform GMat3 = CPUBase GMat3
+        foldrUniform proxy f s u = f proxy u s
+
 instance MultiShaderType GMat4 where
         type ExprMST GMat4 = Expr
         mapMST f = f
@@ -251,12 +344,9 @@ instance MultiShaderType GMat4 where
 instance ShaderInput GMat4 where
         buildMST f i = (f i, i + 1)
 
-instance MultiShaderType () where
-        type ExprMST () = ()
-        mapMST _ = id
-        foldrMST _ x _ = x
-        toExprMST = id
-        fromExprMST = id
+instance GLES => Uniform GMat4 where
+        type CPUUniform GMat4 = CPUBase GMat4
+        foldrUniform proxy f s u = f proxy u s
 
 instance (KnownNat n, ShaderType t) => MultiShaderType (GArray n t) where
         type ExprMST (GArray n t) = Expr
@@ -267,6 +357,25 @@ instance (KnownNat n, ShaderType t) => MultiShaderType (GArray n t) where
 
 instance (KnownNat n, ShaderType t) => ShaderInput (GArray n t) where
         buildMST f i = (f i, i + 1)
+
+instance (KnownNat n, ShaderType t, BaseUniform (GArray n t), GLES) =>
+        Uniform (GArray n t) where
+        type CPUUniform (GArray n t) = CPUBase (GArray n t)
+        foldrUniform proxy f s u = f proxy u s
+
+instance MultiShaderType () where
+        type ExprMST () = ()
+        mapMST _ = id
+        foldrMST _ x _ = x
+        toExprMST = id
+        fromExprMST = id
+
+instance ShaderInput () where
+        buildMST _ i = ((), i)
+
+instance Uniform () where
+        type CPUUniform () = ()
+        foldrUniform _ _ s _ = s
 
 instance (MultiShaderType a, MultiShaderType b) => MultiShaderType (a, b) where
         type ExprMST (x, y) = (ExprMST x, ExprMST y)
@@ -283,14 +392,33 @@ instance (MultiShaderType a, MultiShaderType b, MultiShaderType c) =>
         toExprMST (x, y, z) = (toExprMST x, toExprMST y, toExprMST z)
         fromExprMST (x, y, z) = (fromExprMST x, fromExprMST y, fromExprMST z)
 
-instance (ShaderInput a, ShaderInput b, ShaderType a, ShaderType b) =>
-        ShaderInput (a, b) where
-        buildMST f i = ((f i, f (i + 1)), i + 2)
+instance (ShaderInput a, ShaderInput b) => ShaderInput (a, b) where
+        buildMST f i = let (a, i') = buildMST f i
+                           (b, i'') = buildMST f i'
+                       in ((a, b), i'')
 
 instance ( ShaderInput a, ShaderInput b, ShaderInput c
-         , ShaderType a, ShaderType b, ShaderType c
          ) => ShaderInput (a, b, c) where
-        buildMST f i = ((f i, f (i + 1), f (i + 2)), i + 3)
+        buildMST f i = let (a, i1) = buildMST f i
+                           (b, i2) = buildMST f i1
+                           (c, i3) = buildMST f i2
+                       in ((a, b, c), i3)
+
+instance (Uniform a, Uniform b) => Uniform (a, b) where
+        type CPUUniform (a, b) = (CPUUniform a, CPUUniform b)
+        foldrUniform (Proxy :: Proxy (a, b)) f s (a, b) =
+                foldrUniform (Proxy :: Proxy a)
+                             f
+                             (foldrUniform (Proxy :: Proxy b) f s b)
+                             a
+                             
+
+instance (Uniform a, Uniform b, Uniform c) => Uniform (a, b, c) where
+        type CPUUniform (a, b, c) = (CPUUniform a, CPUUniform b, CPUUniform c)
+        foldrUniform (Proxy :: Proxy (a, b, c)) f s (a, b, c) =
+                let s' = foldrUniform (Proxy :: Proxy c) f s c
+                    s'' = foldrUniform (Proxy :: Proxy b) f s' b
+                in foldrUniform (Proxy :: Proxy a) f s'' a
 
 instance MultiShaderType a => MultiShaderType [a] where
         type ExprMST [x] = [ExprMST x]
@@ -341,6 +469,32 @@ instance (GShaderInput a, GShaderInput b) => GShaderInput (a :*: b) where
         gbuildMST f i = let (a, i') = gbuildMST f i
                             (b, i'') = gbuildMST f i'
                         in (a :*: b, i'')
+
+class GUniform (a :: * -> *) (c :: * -> *) where
+        gfoldrUniform :: Proxy a
+                      -> (forall g. BaseUniform g
+                                 => Proxy g
+                                 -> CPUBase g
+                                 -> b
+                                 -> b)
+                      -> b
+                      -> c p
+                      -> b
+
+instance GUniform a c => GUniform (M1 i d a) (M1 i' d' c) where
+        gfoldrUniform (Proxy :: Proxy (M1 i d a)) f s (M1 u) =
+                gfoldrUniform (Proxy :: Proxy a) f s u
+
+instance (Uniform a, c ~ CPUUniform a) => GUniform (K1 i a) (K1 i' c) where
+        gfoldrUniform (Proxy :: Proxy (K1 i a)) f s (K1 u) =
+                foldrUniform (Proxy :: Proxy a) f s u
+
+instance (GUniform a c, GUniform a' c') => GUniform (a :*: a') (c :*: c') where
+        gfoldrUniform (Proxy :: Proxy (a :*: a')) f s (u :*: u') =
+                gfoldrUniform (Proxy :: Proxy a)
+                              f
+                              (gfoldrUniform (Proxy :: Proxy a') f s u')
+                              u
 
 {-
 ... Data.HList.HList

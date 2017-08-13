@@ -12,19 +12,24 @@ Portability: GHC only
 
 module Graphics.Rendering.Ombra.Shader (
         module Graphics.Rendering.Ombra.Shader.Language,
+        MultiShaderType(..),
+        ShaderInput(..),
         ShaderStage(..),
         Shader(..),
         VertexShader,
         FragmentShader,
+        -- * Uniforms
+        Uniform(..),
         uniform,
+        (~~),
         -- * Optimized shaders
         UniformSetter,
         shader,
         shader1,
         uniform',
-        (~~),
         (~*),
-        -- * Stage-specific shader functionalities
+        -- * Fragment shader functionalities
+        Sampler2D,
         sample,
         -- ** Derivatives
         dFdx,
@@ -35,9 +40,6 @@ module Graphics.Rendering.Ombra.Shader (
         -- fragData,
         fragCoord,
         fragFrontFacing,
-        -- * Shader types
-        MultiShaderType(..),
-        ShaderInput(..),
 ) where
 
 import Control.Arrow
@@ -48,7 +50,7 @@ import Data.MemoTrie
 import Data.Proxy
 import GHC.Generics
 import GHC.TypeLits
-import Graphics.Rendering.Ombra.Internal.GL (GL, UniformLocation)
+import Graphics.Rendering.Ombra.Internal.GL (GL, UniformLocation, Sampler2D)
 import Graphics.Rendering.Ombra.Shader.Language
 import qualified Graphics.Rendering.Ombra.Shader.Language.Functions as Shader
 import Graphics.Rendering.Ombra.Shader.Language.Types
@@ -96,36 +98,44 @@ memoHash hf = let mf = memo $ second hashMST . hf . second fromExprMST
               in mf . second toExprMST
 
 -- | Add a global shader variable that can be set with a CPU value.
-uniform :: forall u i o s. BaseUniform u
+uniform :: forall u i o s. Uniform u
         => Shader s (u, i) o
-        -> Shader s (CPUBase u, i) o
-uniform (Shader f hf) = Shader (\((uid, umap), (u, i)) ->
-                                let set l = setUniform l (Proxy :: Proxy u) u
-                                    ty = typeName (undefined :: u)
-                                in f ( (uid + 1, (uid, (ty, set)) : umap)
-                                     , (fromExpr $ Uniform uid, i)
-                                     )
-                               )
-                               (\(uid, (_, i)) ->
-                                hf (uid + 1, (fromExpr $ Uniform uid, i))
-                               )
+        -> Shader s (CPUUniform u, i) o
+uniform (Shader f hf) =
+        Shader (\((uid, umap), (u, i)) ->
+                        let (uniExpr, uid') = buildMST (fromExpr . Uniform) uid
+                            acc (proxy :: BaseUniform g => Proxy g)
+                                value (uid, umap) =
+                                let set l = setUniform l proxy value
+                                    ty = typeName (undefined :: g)
+                                in (uid - 1, (uid, (ty, set)) : umap)
+                            (_, umap') = foldrUniform (Proxy :: Proxy u)
+                                                      acc
+                                                      (uid' - 1, umap)
+                                                      u
+                        in f ((uid', umap'), (uniExpr, i))
+               )
+               (\(uid, (_, i)) ->
+                       let (uniExpr, uid') = buildMST (fromExpr . Uniform) uid
+                       in hf (uid', (uniExpr, i))
+               )
 
 -- | Like 'uniform' but uses a 'UniformSetter'.
-uniform' :: BaseUniform u
+uniform' :: Uniform u
          => Shader s (u, i) o
-         -> Shader s (UniformSetter (CPUBase u), i) o
+         -> Shader s (UniformSetter (CPUUniform u), i) o
 uniform' shader = first unUniformSetter ^>> uniform shader
 
 -- | Add a uniform and directly set it with the second operand.
 infixl 9 ~~
-(~~) :: BaseUniform u => Shader s (u, i) o -> CPUBase u -> Shader s i o
+(~~) :: Uniform u => Shader s (u, i) o -> CPUUniform u -> Shader s i o
 shader ~~ u = const u &&& id ^>> uniform shader
 
 -- | Add a uniform and directly set it with a 'UniformSetter'.
 infixl 9 ~*
-(~*) :: BaseUniform u
+(~*) :: Uniform u
      => Shader s (u, i) o
-     -> UniformSetter (CPUBase u)
+     -> UniformSetter (CPUUniform u)
      -> Shader s i o
 shader ~* u = const u &&& id ^>> uniform' shader
 
