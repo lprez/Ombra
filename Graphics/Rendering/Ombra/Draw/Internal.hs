@@ -29,13 +29,14 @@ module Graphics.Rendering.Ombra.Draw.Internal (
         drawGet
 ) where
 
-import qualified Graphics.Rendering.Ombra.Blend.Internal as Blend
+import qualified Graphics.Rendering.Ombra.Blend.Draw as Blend
+import qualified Graphics.Rendering.Ombra.Blend.Types as Blend
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Culling
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Geometry.Draw
-import Graphics.Rendering.Ombra.Texture.Internal
-import Graphics.Rendering.Ombra.Texture.Types
+import Graphics.Rendering.Ombra.Texture
+import Graphics.Rendering.Ombra.Texture.Draw
 import Graphics.Rendering.Ombra.Backend (GLES)
 import qualified Graphics.Rendering.Ombra.Backend as GL
 import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, Buffer,
@@ -45,7 +46,8 @@ import qualified Graphics.Rendering.Ombra.Internal.GL as GL
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Screen
 import Graphics.Rendering.Ombra.Shader.Program
-import qualified Graphics.Rendering.Ombra.Stencil.Internal as Stencil
+import qualified Graphics.Rendering.Ombra.Stencil.Draw as Stencil
+import qualified Graphics.Rendering.Ombra.Stencil.Types as Stencil
 import Graphics.Rendering.Ombra.Vector
 
 import Data.Hashable (Hashable)
@@ -116,10 +118,12 @@ instance GLES => MonadProgram Draw where
                                                                  map
                                 Nothing -> return $ Left "No loaded program."
 
-{-
-instance GLES => MonadDrawingMode Draw where
+instance GLES => Blend.MonadBlend Draw where
         withBlendMode m a = stateReset blendMode setBlendMode m a
+
+instance GLES => Stencil.MonadStencil Draw where
         withStencilMode m a = stateReset stencilMode setStencilMode m a
+{-
         withDepthTest d a = stateReset depthTest setDepthTest d a
         withDepthMask m a = stateReset depthMask setDepthMask m a
         withColorMask m a = stateReset colorMask setColorMask m a

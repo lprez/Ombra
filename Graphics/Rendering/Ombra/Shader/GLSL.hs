@@ -14,6 +14,7 @@ import qualified Data.HashMap.Strict as H
 import Data.Typeable
 import Graphics.Rendering.Ombra.Shader
 import Graphics.Rendering.Ombra.Shader.Language.Types
+import Graphics.Rendering.Ombra.Shader.Types
 import Text.Printf
 
 -- TODO: IntMap instead of HashMap

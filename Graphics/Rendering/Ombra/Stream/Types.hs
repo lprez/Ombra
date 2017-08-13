@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification, FunctionalDependencies, DataKinds #-}
 
-module Graphics.Rendering.Ombra.Stream.Internal where
+module Graphics.Rendering.Ombra.Stream.Types where
 
 import Control.Arrow
 import qualified Data.IntMap as M

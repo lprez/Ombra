@@ -13,7 +13,8 @@ import Graphics.Rendering.Ombra.Geometry.Draw
 import Graphics.Rendering.Ombra.Shader
 import Graphics.Rendering.Ombra.Shader.GLSL
 import Graphics.Rendering.Ombra.Shader.Program
-import Graphics.Rendering.Ombra.Stream.Internal
+import Graphics.Rendering.Ombra.Shader.Types
+import Graphics.Rendering.Ombra.Stream.Types
 
 vertexStream :: (ShaderInput i, GeometryVertex i)
              => VertexShader i v

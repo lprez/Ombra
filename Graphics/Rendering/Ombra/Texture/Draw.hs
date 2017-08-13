@@ -1,7 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Graphics.Rendering.Ombra.Texture.Internal (
+module Graphics.Rendering.Ombra.Texture.Draw (
         MonadTexture(..),
+        Texture(..),
+        TextureImage,
+        LoadedTexture(..),
         withActiveTexture,
         textureSize,
         emptyTexture
@@ -33,18 +36,18 @@ instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i
         unloadResource _ (LoadedTexture _ _ _ t) = deleteTexture t
 
-makeActive :: MonadTexture m => (ActiveTexture -> m a) -> m a
+makeActive :: MonadTexture m => (Sampler2D -> m a) -> m a
 makeActive f = do atn <- getActiveTexturesCount
                   setActiveTexturesCount $ atn + 1
                   gl . activeTexture $ gl_TEXTURE0 + fromIntegral atn
-                  ret <- f . ActiveTexture . fromIntegral $ atn
+                  ret <- f . Sampler2D . fromIntegral $ atn
                   setActiveTexturesCount $ atn
                   return ret
 
 withActiveTexture :: MonadTexture m
                   => Texture
                   -> a
-                  -> (ActiveTexture -> m a)
+                  -> (Sampler2D -> m a)
                   -> m a
 withActiveTexture tex fail f = getTexture tex >>= \etex ->
         case etex of

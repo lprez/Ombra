@@ -10,7 +10,7 @@
 module Graphics.Rendering.Ombra.Internal.GL (
         MonadGL(..),
         GL,
-        ActiveTexture(..),
+        Sampler2D(..),
         module Graphics.Rendering.Ombra.Backend,
         liftIO,
         evalGL,
@@ -162,7 +162,7 @@ instance MonadGL GL where
         gl = id
 
 -- | A Texture ready to be passed as an uniform.
-newtype ActiveTexture = ActiveTexture Word
+newtype Sampler2D = Sampler2D Word
 
 instance EmbedIO GL where
         embedIO f a = GL ask >>= \c -> liftIO . f $ evalGL a c

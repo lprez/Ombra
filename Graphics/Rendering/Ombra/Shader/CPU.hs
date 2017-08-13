@@ -223,11 +223,11 @@ instance GLES => BaseAttribute GInt where
 -- TODO: sampler arrays (they're problematic to safely access in the shaders)
 -- Samplers
 
-type instance CPUBase GSampler2D = ActiveTexture
-type instance CPUBase GSamplerCube = ActiveTexture
+type instance CPUBase GSampler2D = Sampler2D
+-- type instance CPUBase GSamplerCube = ActiveTexture
 
 instance GLES => BaseUniform GSampler2D where
-        setUniform l _ (ActiveTexture v) = uniform1i l $ fromIntegral v
+        setUniform l _ (Sampler2D v) = uniform1i l $ fromIntegral v
 
 {-
 instance GLES => BaseUniform GSamplerCube where

@@ -19,6 +19,7 @@ import qualified Data.HashMap.Strict as H
 import Graphics.Rendering.Ombra.Shader
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.GLSL
+import Graphics.Rendering.Ombra.Shader.Types
 import Graphics.Rendering.Ombra.Internal.GL hiding (Program, UniformLocation)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
 import Graphics.Rendering.Ombra.Internal.Resource
