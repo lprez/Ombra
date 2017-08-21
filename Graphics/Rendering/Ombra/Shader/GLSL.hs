@@ -30,12 +30,12 @@ compileVertexShader s = compileShader True header ["gl_Position"] 0 exprShader
               outExprs = foldrMST (\x l -> (typeName x, toExpr x) : l) []
               header = "#version 100\nprecision mediump float;"
 
-compileFragmentShader :: ShaderInput i
+compileFragmentShader :: (ShaderInput i, FragmentShaderOutput o)
                       => UniformID
-                      -> FragmentShader i [GVec4]
+                      -> FragmentShader i o
                       -> String
 compileFragmentShader i s = fst $ compileShader False header outs i exprShader
-        where exprShader = s >>^ flip (,) [] . map toExpr
+        where exprShader = s >>^ flip (,) [] . map toExpr . toGVec4s
               header = concat [ "#version 100\n"
                               , ext "GL_EXT_draw_buffers"
                               , ext "GL_OES_standard_derivatives"

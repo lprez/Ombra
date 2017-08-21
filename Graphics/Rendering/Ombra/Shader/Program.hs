@@ -58,9 +58,9 @@ instance GLES => Resource (LoadedProgram, UniformID) UniformLocation GL where
         unloadResource _ _ = return ()
 
 -- | Create a 'Program' from the shaders.
-program :: (ShaderInput i, ShaderInput v)
+program :: (ShaderInput i, ShaderInput v, FragmentShaderOutput o)
         => VertexShader i (GVec4, v)
-        -> FragmentShader v [GVec4]
+        -> FragmentShader v o
         -> Program i o
 program vs fs = let (vss, (uid, attrs)) = compileVertexShader vs
                     fss = compileFragmentShader uid fs

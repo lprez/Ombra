@@ -3,7 +3,7 @@
 -- License:     BSD3
 -- Maintainer:  ziocroc@gmail.com
 -- Stability:   experimental
--- Portability: portable
+-- Portability: GHC only
 
 module Graphics.Rendering.Ombra.Draw (
         Draw,
@@ -20,7 +20,6 @@ module Graphics.Rendering.Ombra.Draw (
         MonadScreen(resizeViewport),
         drawInit,
         clearBuffers,
-        draw,
         -- ** Resources
         -- $resources
         ResStatus(..),
@@ -43,29 +42,34 @@ module Graphics.Rendering.Ombra.Draw (
 ) where
 
 import Data.IORef
-import Graphics.Rendering.Ombra.Draw.Internal
-import Graphics.Rendering.Ombra.Stream (draw)
+import Graphics.Rendering.Ombra.Draw.Monad
 import Graphics.Rendering.Ombra.Internal.GL hiding (Buffer)
+import Graphics.Rendering.Ombra.Shader.Language.Types (GVec4)
 import Graphics.Rendering.Ombra.Screen
 
 -- | Run a Draw action using an IORef to hold the state.
-refDrawCtx :: GLES => Ctx -> Draw a -> IORef DrawState -> IO a
+refDrawCtx :: GLES
+           => Ctx
+           -> Draw t GVec4 a
+           -> IORef DrawState
+           -> IO a
 refDrawCtx ctx d ref = do state <- readIORef ref
                           (ret, state') <- runDrawCtx ctx d state
                           writeIORef ref state'
                           return ret
 
-runDrawCtx :: Ctx               -- ^ Context (use the appropriate backend
-                                -- functions)
-           -> Draw a            -- ^ Draw action
-           -> DrawState         -- ^ State (create it with 'drawState')
+runDrawCtx :: Ctx                           -- ^ Context (use the appropriate
+                                            -- backend functions)
+           -> Draw t GVec4 a                -- ^ Draw action
+           -> DrawState                     -- ^ State (create it with
+                                            -- 'drawState')
            -> IO (a, DrawState)
 runDrawCtx ctx d = flip evalGL ctx . runDraw d
 
-execDrawCtx :: Ctx -> Draw a -> DrawState -> IO DrawState
+execDrawCtx :: Ctx -> Draw t GVec4 a -> DrawState -> IO DrawState
 execDrawCtx ctx d = flip evalGL ctx . execDraw d
 
-evalDrawCtx :: Ctx -> Draw a -> DrawState -> IO a
+evalDrawCtx :: Ctx -> Draw t GVec4 a -> DrawState -> IO a
 evalDrawCtx ctx d = flip evalGL ctx . evalDraw d
 
 -- renderSubLayer :: 

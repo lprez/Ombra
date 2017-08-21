@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes, ScopedTypeVariables, DataKinds, KindSignatures,
              TypeFamilies, FlexibleContexts, UndecidableInstances,
              FlexibleInstances, DefaultSignatures, TypeOperators,
-             MultiParamTypeClasses #-}
+             MultiParamTypeClasses, FunctionalDependencies #-}
 
 module Graphics.Rendering.Ombra.Shader.Types where
 
@@ -89,6 +89,42 @@ class ShaderInput a => Uniform a where
         foldrUniform (Proxy :: Proxy a) f s u =
                 gfoldrUniform (Proxy :: Proxy (Rep a)) f s $ from u
 
+fromGVec4s :: FragmentShaderOutput o => [GVec4] -> o
+fromGVec4s = fst . fromGFloats . toGFloatsList
+        where toGFloatsList [] = []
+              toGFloatsList (GVec4 x y z w : xs) =
+                      x : y : z : w : toGFloatsList xs
+
+toGVec4s :: FragmentShaderOutput o => o -> [GVec4]
+toGVec4s = reverse . toGVec4sList . flip toGFloats []
+        where toGVec4sList [] = []
+              toGVec4sList [x] = [GVec4 x 0 0 0]
+              toGVec4sList [x, y] = [GVec4 x y 0 0]
+              toGVec4sList [x, y, z] = [GVec4 x y z 0]
+              toGVec4sList (x : y : z : w : xs) =
+                      GVec4 x y z w : toGVec4sList xs
+
+class MultiShaderType o => FragmentShaderOutput o where
+        -- TODO: useless?
+        type NFloats o :: Nat
+        type NFloats o = GNFloats (Rep o)
+
+        fromGFloats :: [GFloat] -> (o, [GFloat])
+        default fromGFloats :: (Generic o, GFragmentShaderOutput (Rep o))
+                            => [GFloat]
+                            -> (o, [GFloat])
+        fromGFloats = first to . gfromGFloats
+
+        toGFloats :: o -> [GFloat] -> [GFloat]
+        default toGFloats :: (Generic o, GFragmentShaderOutput (Rep o))
+                          => o
+                          -> [GFloat]
+                          -> [GFloat]
+        toGFloats x = gtoGFloats $ from x
+
+
+class MapShader f s | f -> s where
+        mapShader :: Shader s i o -> f i -> f o
 
 type UniformID = Int
 -- TODO: use an existential type instead?
@@ -152,6 +188,11 @@ instance GLES => Uniform GFloat where
         type CPUUniform GFloat = CPUBase GFloat
         foldrUniform proxy f s u = f proxy u s
 
+instance FragmentShaderOutput GFloat where
+        type NFloats GFloat = 1
+        fromGFloats (x : xs) = (x, xs)
+        toGFloats x = (x :)
+
 instance MultiShaderType GInt where
         type ExprMST GInt = Expr
         mapMST f = f
@@ -194,6 +235,11 @@ instance GLES => Uniform GVec2 where
         type CPUUniform GVec2 = CPUBase GVec2
         foldrUniform proxy f s u = f proxy u s
 
+instance FragmentShaderOutput GVec2 where
+        type NFloats GVec2 = 2
+        fromGFloats (x : y : xs) = (GVec2 x y, xs)
+        toGFloats (GVec2 x y) xs = x : y : xs
+
 instance MultiShaderType GVec3 where
         type ExprMST GVec3 = Expr
         mapMST f = f
@@ -208,6 +254,11 @@ instance GLES => Uniform GVec3 where
         type CPUUniform GVec3 = CPUBase GVec3
         foldrUniform proxy f s u = f proxy u s
 
+instance FragmentShaderOutput GVec3 where
+        type NFloats GVec3 = 3
+        fromGFloats (x : y : z : xs) = (GVec3 x y z, xs)
+        toGFloats (GVec3 x y z) xs = x : y : z : xs
+
 instance MultiShaderType GVec4 where
         type ExprMST GVec4 = Expr
         mapMST f = f
@@ -221,6 +272,11 @@ instance ShaderInput GVec4 where
 instance GLES => Uniform GVec4 where
         type CPUUniform GVec4 = CPUBase GVec4
         foldrUniform proxy f s u = f proxy u s
+
+instance FragmentShaderOutput GVec4 where
+        type NFloats GVec4 = 4
+        fromGFloats (x : y : z : w : xs) = (GVec4 x y z w, xs)
+        toGFloats (GVec4 x y z w) xs = x : y : z : w : xs
 
 instance MultiShaderType GIVec2 where
         type ExprMST GIVec2 = Expr
@@ -377,6 +433,11 @@ instance Uniform () where
         type CPUUniform () = ()
         foldrUniform _ _ s _ = s
 
+instance FragmentShaderOutput () where
+        type NFloats () = 0
+        fromGFloats xs = ((), xs)
+        toGFloats () = id
+
 instance (MultiShaderType a, MultiShaderType b) => MultiShaderType (a, b) where
         type ExprMST (x, y) = (ExprMST x, ExprMST y)
         mapMST f (x, y) = (mapMST f x, mapMST f y)
@@ -419,6 +480,25 @@ instance (Uniform a, Uniform b, Uniform c) => Uniform (a, b, c) where
                 let s' = foldrUniform (Proxy :: Proxy c) f s c
                     s'' = foldrUniform (Proxy :: Proxy b) f s' b
                 in foldrUniform (Proxy :: Proxy a) f s'' a
+
+instance (FragmentShaderOutput a, FragmentShaderOutput b) =>
+        FragmentShaderOutput (a, b) where
+        type NFloats (a, b) = NFloats a + NFloats b
+        fromGFloats xs = let (x, xs') = fromGFloats xs
+                             (y, xs'') = fromGFloats xs'
+                        in ((x, y), xs'')
+        toGFloats (x, y) = toGFloats x . toGFloats y
+
+instance ( FragmentShaderOutput a
+         , FragmentShaderOutput b
+         , FragmentShaderOutput c
+         ) => FragmentShaderOutput (a, b, c) where
+        type NFloats (a, b, c) = NFloats a + NFloats b + NFloats c
+        fromGFloats xs = let (x, xs1) = fromGFloats xs
+                             (y, xs2) = fromGFloats xs1
+                             (z, xs3) = fromGFloats xs2
+                        in ((x, y, z), xs3)
+        toGFloats (x, y, z) = toGFloats x . toGFloats y . toGFloats z
 
 instance MultiShaderType a => MultiShaderType [a] where
         type ExprMST [x] = [ExprMST x]
@@ -496,12 +576,28 @@ instance (GUniform a c, GUniform a' c') => GUniform (a :*: a') (c :*: c') where
                               (gfoldrUniform (Proxy :: Proxy a') f s u')
                               u
 
-{-
-... Data.HList.HList
-instance All MultiShaderType as => MultiShaderType (HList as) where
-        foldrMST f s HNil = s
-        foldrMST f s (HCons x xs) = foldrMST f (foldrMST f s xs) x
--}
+class GFragmentShaderOutput g where
+        type GNFloats g :: Nat
+        gfromGFloats :: [GFloat] -> (g p, [GFloat])
+        gtoGFloats :: g p -> [GFloat] -> [GFloat]
+
+instance GFragmentShaderOutput a => GFragmentShaderOutput (M1 i d a) where
+        type GNFloats (M1 i d a) = GNFloats a
+        gfromGFloats = first M1 . gfromGFloats
+        gtoGFloats (M1 x) = gtoGFloats x
+
+instance FragmentShaderOutput a => GFragmentShaderOutput (K1 i a) where
+        type GNFloats (K1 i a) = NFloats a
+        gfromGFloats = first K1 . fromGFloats
+        gtoGFloats (K1 x) = toGFloats x
+
+instance (GFragmentShaderOutput a, GFragmentShaderOutput b) =>
+        GFragmentShaderOutput (a :*: b) where
+        type GNFloats (a :*: b) = GNFloats a + GNFloats b
+        gfromGFloats xs = let (x, xs') = gfromGFloats xs
+                              (y, xs'') = gfromGFloats xs'
+                          in (x :*: y, xs'')
+        gtoGFloats (x :*: y) = gtoGFloats x . gtoGFloats y
 
 hashListMST :: MultiShaderType a => a -> [Int]
 hashListMST = foldrMST (\x l -> hash (toExpr x) : l) []

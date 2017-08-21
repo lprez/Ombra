@@ -12,6 +12,7 @@ Portability: GHC only
 
 module Graphics.Rendering.Ombra.Shader (
         module Graphics.Rendering.Ombra.Shader.Language,
+        MapShader(..),
         MultiShaderType(..),
         ShaderInput(..),
         ShaderStage(..),
@@ -78,9 +79,6 @@ hashMST = mapMST (fromExpr . HashDummy . hash . toExpr)
 shader :: (MultiShaderType i, MultiShaderType o) => Shader s i o -> Shader s i o
 shader (Shader f hf) = Shader f (memoHash hf)
 -- BUG: shader modifies the hash of the shader
-
-uniformSetter :: x -> UniformSetter x
-uniformSetter = UniformSetter
 
 -- | 'shader' with an additional parameter that can be used to set the values of
 -- the uniforms.
