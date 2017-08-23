@@ -1,7 +1,8 @@
 {-# LANGUAGE RankNTypes, ScopedTypeVariables, DataKinds, KindSignatures,
              TypeFamilies, FlexibleContexts, UndecidableInstances,
              FlexibleInstances, DefaultSignatures, TypeOperators,
-             MultiParamTypeClasses, FunctionalDependencies #-}
+             MultiParamTypeClasses, FunctionalDependencies,
+             ExistentialQuantification #-}
 
 module Graphics.Rendering.Ombra.Shader.Types where
 
@@ -13,10 +14,10 @@ import Data.Proxy
 import GHC.Generics
 import GHC.TypeLits
 import Graphics.Rendering.Ombra.Backend (GLES)
-import Graphics.Rendering.Ombra.Internal.GL (GL, UniformLocation)
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Language
 import Graphics.Rendering.Ombra.Shader.Language.Types
+import Graphics.Rendering.Ombra.Texture (Texture)
 import Prelude hiding (id, (.))
 
 -- | A type that contains zero or more 'ShaderType's.
@@ -64,11 +65,7 @@ class MultiShaderType a => ShaderInput a where
 class ShaderInput a => Uniform a where
         type CPUUniform a
         foldrUniform :: Proxy a
-                     -> (forall g. BaseUniform g
-                                => Proxy g
-                                -> CPUBase g
-                                -> b
-                                -> b)
+                     -> (UniformValue -> b -> b)
                      -> b
                      -> CPUUniform a
                      -> b
@@ -77,12 +74,7 @@ class ShaderInput a => Uniform a where
                                 , GUniform (Rep a) (Rep (CPUUniform a))
                                 )
                              => Proxy a
-                             -> (forall g. BaseUniform g
-                                        => Proxy g
-                                        -> CPUBase g
-                                        -> b
-                                        -> b
-                                )
+                             -> (UniformValue -> b -> b)
                              -> b
                              -> CPUUniform a
                              -> b
@@ -95,6 +87,9 @@ fromGVec4s = fst . fromGFloats . toGFloatsList
               toGFloatsList (GVec4 x y z w : xs) =
                       x : y : z : w : toGFloatsList xs
 
+textureCount :: FragmentShaderOutput o => Proxy o -> Integer
+textureCount (_ :: Proxy o) = natVal (Proxy :: Proxy (NFloats o)) `quot` 4
+
 toGVec4s :: FragmentShaderOutput o => o -> [GVec4]
 toGVec4s = reverse . toGVec4sList . flip toGFloats []
         where toGVec4sList [] = []
@@ -104,8 +99,7 @@ toGVec4s = reverse . toGVec4sList . flip toGFloats []
               toGVec4sList (x : y : z : w : xs) =
                       GVec4 x y z w : toGVec4sList xs
 
-class MultiShaderType o => FragmentShaderOutput o where
-        -- TODO: useless?
+class (MultiShaderType o, KnownNat (NFloats o)) => FragmentShaderOutput o where
         type NFloats o :: Nat
         type NFloats o = GNFloats (Rep o)
 
@@ -127,12 +121,16 @@ class MapShader f s | f -> s where
         mapShader :: Shader s i o -> f i -> f o
 
 type UniformID = Int
--- TODO: use an existential type instead?
-type UniformValue = (String, UniformLocation -> GL ())
-type Unistate = (UniformID, [(UniformID, UniformValue)])
+data UniformValue = forall g. BaseUniform g => UniformValue (Proxy g)
+                                                            (CPUBase g)
+                  | UniformTexture Texture
+
+data ShaderState = ShaderState UniformID
+                               [(UniformID, UniformValue)]
+                               [Texture]
 
 data Shader (s :: ShaderStage) i o =
-        Shader ((Unistate, i) -> (Unistate, o))
+        Shader ((ShaderState, i) -> (ShaderState, o))
                ((UniformID, i) -> (UniformID, o))
 
 instance Category (Shader s) where
@@ -172,7 +170,7 @@ instance ShaderInput GBool where
 
 instance GLES => Uniform GBool where
         type CPUUniform GBool = CPUBase GBool
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GFloat where
         type ExprMST GFloat = Expr
@@ -186,7 +184,7 @@ instance ShaderInput GFloat where
 
 instance GLES => Uniform GFloat where
         type CPUUniform GFloat = CPUBase GFloat
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance FragmentShaderOutput GFloat where
         type NFloats GFloat = 1
@@ -205,7 +203,7 @@ instance ShaderInput GInt where
 
 instance GLES => Uniform GInt where
         type CPUUniform GInt = CPUBase GInt
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GSampler2D where
         type ExprMST GSampler2D = Expr
@@ -218,8 +216,8 @@ instance ShaderInput GSampler2D where
         buildMST f i = (f i, i + 1)
 
 instance GLES => Uniform GSampler2D where
-        type CPUUniform GSampler2D = CPUBase GSampler2D
-        foldrUniform proxy f s u = f proxy u s
+        type CPUUniform GSampler2D = Texture
+        foldrUniform _ f s u = f (UniformTexture u) s
 
 instance MultiShaderType GVec2 where
         type ExprMST GVec2 = Expr
@@ -233,7 +231,7 @@ instance ShaderInput GVec2 where
 
 instance GLES => Uniform GVec2 where
         type CPUUniform GVec2 = CPUBase GVec2
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance FragmentShaderOutput GVec2 where
         type NFloats GVec2 = 2
@@ -252,7 +250,7 @@ instance ShaderInput GVec3 where
 
 instance GLES => Uniform GVec3 where
         type CPUUniform GVec3 = CPUBase GVec3
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance FragmentShaderOutput GVec3 where
         type NFloats GVec3 = 3
@@ -271,7 +269,7 @@ instance ShaderInput GVec4 where
 
 instance GLES => Uniform GVec4 where
         type CPUUniform GVec4 = CPUBase GVec4
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance FragmentShaderOutput GVec4 where
         type NFloats GVec4 = 4
@@ -290,7 +288,7 @@ instance ShaderInput GIVec2 where
 
 instance GLES => Uniform GIVec2 where
         type CPUUniform GIVec2 = CPUBase GIVec2
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GIVec3 where
         type ExprMST GIVec3 = Expr
@@ -304,7 +302,7 @@ instance ShaderInput GIVec3 where
 
 instance GLES => Uniform GIVec3 where
         type CPUUniform GIVec3 = CPUBase GIVec3
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GIVec4 where
         type ExprMST GIVec4 = Expr
@@ -318,7 +316,7 @@ instance ShaderInput GIVec4 where
 
 instance GLES => Uniform GIVec4 where
         type CPUUniform GIVec4 = CPUBase GIVec4
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GBVec2 where
         type ExprMST GBVec2 = Expr
@@ -332,7 +330,7 @@ instance ShaderInput GBVec2 where
 
 instance GLES => Uniform GBVec2 where
         type CPUUniform GBVec2 = CPUBase GBVec2
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GBVec3 where
         type ExprMST GBVec3 = Expr
@@ -346,7 +344,7 @@ instance ShaderInput GBVec3 where
 
 instance GLES => Uniform GBVec3 where
         type CPUUniform GBVec3 = CPUBase GBVec3
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GBVec4 where
         type ExprMST GBVec4 = Expr
@@ -360,7 +358,7 @@ instance ShaderInput GBVec4 where
 
 instance GLES => Uniform GBVec4 where
         type CPUUniform GBVec4 = CPUBase GBVec4
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GMat2 where
         type ExprMST GMat2 = Expr
@@ -374,7 +372,7 @@ instance ShaderInput GMat2 where
 
 instance GLES => Uniform GMat2 where
         type CPUUniform GMat2 = CPUBase GMat2
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GMat3 where
         type ExprMST GMat3 = Expr
@@ -388,7 +386,7 @@ instance ShaderInput GMat3 where
 
 instance GLES => Uniform GMat3 where
         type CPUUniform GMat3 = CPUBase GMat3
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType GMat4 where
         type ExprMST GMat4 = Expr
@@ -402,7 +400,7 @@ instance ShaderInput GMat4 where
 
 instance GLES => Uniform GMat4 where
         type CPUUniform GMat4 = CPUBase GMat4
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance (KnownNat n, ShaderType t) => MultiShaderType (GArray n t) where
         type ExprMST (GArray n t) = Expr
@@ -417,7 +415,7 @@ instance (KnownNat n, ShaderType t) => ShaderInput (GArray n t) where
 instance (KnownNat n, ShaderType t, BaseUniform (GArray n t), GLES) =>
         Uniform (GArray n t) where
         type CPUUniform (GArray n t) = CPUBase (GArray n t)
-        foldrUniform proxy f s u = f proxy u s
+        foldrUniform proxy f s u = f (UniformValue proxy u) s
 
 instance MultiShaderType () where
         type ExprMST () = ()
@@ -481,7 +479,10 @@ instance (Uniform a, Uniform b, Uniform c) => Uniform (a, b, c) where
                     s'' = foldrUniform (Proxy :: Proxy b) f s' b
                 in foldrUniform (Proxy :: Proxy a) f s'' a
 
-instance (FragmentShaderOutput a, FragmentShaderOutput b) =>
+instance ( FragmentShaderOutput a
+         , FragmentShaderOutput b
+         , KnownNat (NFloats a + NFloats b)
+         ) =>
         FragmentShaderOutput (a, b) where
         type NFloats (a, b) = NFloats a + NFloats b
         fromGFloats xs = let (x, xs') = fromGFloats xs
@@ -492,6 +493,7 @@ instance (FragmentShaderOutput a, FragmentShaderOutput b) =>
 instance ( FragmentShaderOutput a
          , FragmentShaderOutput b
          , FragmentShaderOutput c
+         , KnownNat (NFloats a + NFloats b + NFloats c)
          ) => FragmentShaderOutput (a, b, c) where
         type NFloats (a, b, c) = NFloats a + NFloats b + NFloats c
         fromGFloats xs = let (x, xs1) = fromGFloats xs
@@ -552,11 +554,7 @@ instance (GShaderInput a, GShaderInput b) => GShaderInput (a :*: b) where
 
 class GUniform (a :: * -> *) (c :: * -> *) where
         gfoldrUniform :: Proxy a
-                      -> (forall g. BaseUniform g
-                                 => Proxy g
-                                 -> CPUBase g
-                                 -> b
-                                 -> b)
+                      -> (UniformValue -> b -> b)
                       -> b
                       -> c p
                       -> b
@@ -602,7 +600,10 @@ instance (GFragmentShaderOutput a, GFragmentShaderOutput b) =>
 hashListMST :: MultiShaderType a => a -> [Int]
 hashListMST = foldrMST (\x l -> hash (toExpr x) : l) []
 
-uniformList :: Shader s i o -> [(UniformID, UniformValue)]
+uniformList :: Shader s i o -> ([(UniformID, UniformValue)], [Texture])
 uniformList (Shader f _) = let err = "uniformList: input must not be evaluated"
-                               ((_, map), _) = f ((0, []), error err)
-                           in map
+                               zeroState = ShaderState 0 [] []
+                               ((ShaderState _ umap tmap), _) = f ( zeroState
+                                                                  , error err
+                                                                  )
+                           in (umap, tmap)

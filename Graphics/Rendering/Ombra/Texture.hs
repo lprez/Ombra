@@ -12,7 +12,6 @@ module Graphics.Rendering.Ombra.Texture (
         mkTextureFloat,
         mkTextureRaw,
         colorTex,
-        withActiveTexture,
         -- * Filters
         Filter(..),
         setFilter

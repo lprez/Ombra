@@ -56,15 +56,17 @@ compileShader useAttributes header outNames uniformID (Shader shaderFun _) =
                      | otherwise = Input
             (input, _) = buildMST (fromExpr . inputFun) 0
             inputTypes = foldrMST (\x -> (typeName x :)) [] input
-            ((uniformID', uniMap), (outs, outVaryings)) =
-                    shaderFun ((uniformID, []), input)
+            ((ShaderState uniformID' uniMap _), (outs, outVaryings)) =
+                    shaderFun (ShaderState uniformID [] [], input)
             (outVaryingTypes, outVaryingExprs) = unzip outVaryings
 
             showVar qual ty nm = concat [qual, " ", ty, " ", nm, ";"]
             showVars qual name vars = concatMap (\(ty, n) -> showVar qual ty
                                                                      (name n))
                                                 (zip vars [0 ..])
-            uniVars = showVars "uniform" uniformName $ map (fst . snd) uniMap
+            uniType (UniformValue (_ :: Proxy g) _) = typeName (undefined :: g)
+            uniType (UniformTexture _) = typeName (undefined :: GSampler2D)
+            uniVars = showVars "uniform" uniformName $ map (uniType . snd) uniMap
             inputVars | useAttributes = showVars "attribute" attributeName
                                                  inputTypes
                       | otherwise = showVars "varying" varyingName inputTypes

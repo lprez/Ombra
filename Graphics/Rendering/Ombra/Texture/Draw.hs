@@ -5,12 +5,13 @@ module Graphics.Rendering.Ombra.Texture.Draw (
         Texture(..),
         TextureImage,
         LoadedTexture(..),
-        withActiveTexture,
+        withActiveTextures,
         textureSize,
         emptyTexture
 ) where
 
 import Control.Monad (when)
+import Control.Monad.Trans.Except
 import Data.Hashable
 import Graphics.Rendering.Ombra.Backend (GLES)
 import Graphics.Rendering.Ombra.Color
@@ -36,25 +37,29 @@ instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i
         unloadResource _ (LoadedTexture _ _ _ t) = deleteTexture t
 
-makeActive :: MonadTexture m => (Sampler2D -> m a) -> m a
-makeActive f = do atn <- getActiveTexturesCount
-                  setActiveTexturesCount $ atn + 1
-                  gl . activeTexture $ gl_TEXTURE0 + fromIntegral atn
-                  ret <- f . Sampler2D . fromIntegral $ atn
-                  setActiveTexturesCount $ atn
-                  return ret
-
-withActiveTexture :: MonadTexture m
-                  => Texture
-                  -> a
-                  -> (Sampler2D -> m a)
-                  -> m a
-withActiveTexture tex fail f = getTexture tex >>= \etex ->
-        case etex of
-             Left _ -> return fail
-             Right (LoadedTexture _ _ _ wtex) -> makeActive $
-                        \at -> do gl $ bindTexture gl_TEXTURE_2D wtex
-                                  f at
+withActiveTextures :: MonadTexture m
+                   => [Texture]
+                   -> (String -> m a)
+                   -> ([Sampler2D] -> m a)
+                   -> m a
+withActiveTextures textures fail f =
+        do let n = length textures
+           eloadedTextures <- runExceptT $ mapM (ExceptT . getTexture) textures
+           atn <- getActiveTexturesCount
+           setActiveTexturesCount $ atn + n
+           let units = [atn .. atn + n - 1]
+           ret <- case eloadedTextures of
+                       Left err -> fail err
+                       Right loadedTextures ->
+                        do mapM_ (\(i, (LoadedTexture _ _ _ tex)) ->
+                                        gl $ do activeTexture $
+                                                    gl_TEXTURE0 + fromIntegral i
+                                                bindTexture gl_TEXTURE_2D tex
+                                 )
+                                 (zip units loadedTextures)
+                           f $ map (Sampler2D . fromIntegral) units
+           setActiveTexturesCount $ atn
+           return ret
 
 -- | Get the dimensions of a 'Texture'.
 textureSize :: (MonadTexture m, Num a) => Texture -> m (a, a)

@@ -42,6 +42,7 @@ module Graphics.Rendering.Ombra.Shader.Language (
         (Shader.!),
         Shader.loop,
         Shader.store,
+        sample,
         {-
         Shader.texture2DBias,
         Shader.texture2DProj,
@@ -421,3 +422,7 @@ instance Matrix Shader.GMat4 where
                                      (Shader.GVec4 b f j n)
                                      (Shader.GVec4 c g k o)
                                      (Shader.GVec4 d h l p)
+
+-- | Sample a texel from a texture.
+sample :: Shader.GSampler2D -> Shader.GVec2 -> Shader.GVec4
+sample = Shader.texture2D

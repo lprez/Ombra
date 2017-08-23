@@ -53,8 +53,8 @@ play :: MonadIO m
      => Int
      -> Int
      -> Bool
-     -> Draw t GVec4 ()
-     -> Float -> (Int, Int) -> m (Draw t GVec4 ())
+     -> Draw GVec4 ()
+     -> Float -> (Int, Int) -> m (Draw GVec4 ())
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
      -> m ()
@@ -75,8 +75,7 @@ play width height requireExts initialization frame inpCallback _ =
            let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
            liftDraw $ drawInit >> initialization
            loop $ \t -> do draw <- frame (realToFrac t) (width, height)
-                           liftDraw $ do clearBuffers [ColorBuffer, DepthBuffer]
-                           liftDraw draw
+                           liftDraw $ clearColor >> clearDepth >> draw
 
            return ()
         where loop a = do t <- liftIO waitFrame
@@ -96,8 +95,8 @@ play :: MonadIO m
      => Int
      -> Int
      -> Bool
-     -> Draw t GVec4 ()
-     -> (Float -> (Int, Int) -> m (Draw t GVec4 ()))
+     -> Draw GVec4 ()
+     -> (Float -> (Int, Int) -> m (Draw GVec4 ()))
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
      -> m ()
@@ -123,8 +122,7 @@ play width height requireExts initialization frame inpCallback sizeCallback =
 
            loop t0 $ \t -> do (width', height') <- liftIO $ getWindowSize w
                               draw <- frame t (width', height')
-                              liftDraw $ clearBuffers [ColorBuffer, DepthBuffer]
-                              liftDraw draw
+                              liftDraw $ clearColor >> clearDepth >> draw
                               liftIO $ do performMinorGC
                                           swapBuffers w
            return ()
@@ -170,7 +168,7 @@ checkExtensions requireAllExtensions ctx =
                          [] -> Nothing
                          errs -> Just $ "ERROR:" ++ concat errs
 
-animation :: (Float -> Draw t GVec4 ()) -> IO ()
+animation :: (Float -> Draw GVec4 ()) -> IO ()
 animation f = play 512 512
                    False
                    (return ())
@@ -178,5 +176,5 @@ animation f = play 512 512
                    (const (return ()))
                    (const (return ()))
 
-static :: Draw t GVec4 () -> IO ()
+static :: Draw GVec4 () -> IO ()
 static = animation . const

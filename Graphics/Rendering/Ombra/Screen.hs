@@ -5,7 +5,7 @@ module Graphics.Rendering.Ombra.Screen (
 
 import Graphics.Rendering.Ombra.Internal.GL
 
-class GLES => MonadScreen m where
+class (GLES, Monad m) => MonadScreen m where
         currentViewport :: m (Int, Int)
         -- | Resize the drawing space.
         resizeViewport :: Int -> Int -> m ()
