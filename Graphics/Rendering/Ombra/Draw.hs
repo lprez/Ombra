@@ -18,11 +18,9 @@ module Graphics.Rendering.Ombra.Draw (
         drawState,
         -- * Draw actions
         MonadDraw,
-        MonadDrawBuffers,
+        MonadDrawBuffers(drawBuffers, drawBuffers'),
         MonadScreen(resizeViewport),
         drawInit,
-        drawBuffers,
-        drawBuffers',
         clearColor,
         clearDepth,
         clearStencil,
@@ -31,13 +29,13 @@ module Graphics.Rendering.Ombra.Draw (
         ResStatus(..),
         preloadGeometry,
         preloadTexture,
-        preloadProgram,
+        -- preloadProgram,
         removeGeometry,
         removeTexture,
-        removeProgram,
+        -- removeProgram,
         checkGeometry,
         checkTexture,
-        checkProgram,
+        -- checkProgram,
         -- * Extensions
         hasVertexArrayObjects,
         hasFloatTextures,
@@ -84,7 +82,7 @@ evalDrawCtx ctx d = flip evalGL ctx . evalDraw d
 -- $resources
 -- In Ombra, GPU resources are allocated when they're needed, and they're kept
 -- alive by their corresponding CPU resources. Specifically, these resources are
--- Geometries, Textures and Programs. This means that, when a CPU resource is
+-- Geometries, Textures and Shaders. This means that, when a CPU resource is
 -- garbage collected, the GPU resource is also removed. The functions below let
 -- you manage allocation and deallocation manually. Note that if you try to use
 -- a resource that was deallocated with the remove* functions, it will be

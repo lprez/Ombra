@@ -37,6 +37,7 @@ import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Vector
 
+-- | Types that can be used as 'Geometry' vertices.
 class Attributes (AttributeTypes a) => GeometryVertex a where
         type AttributeTypes a :: [*]
         type AttributeTypes a = GAttributeTypes (Rep a) (Rep (Vertex a))

@@ -12,15 +12,11 @@ Portability: GHC only
 
 module Graphics.Rendering.Ombra.Shader (
         module Graphics.Rendering.Ombra.Shader.Language,
-        MapShader(..),
-        MultiShaderType(..),
-        ShaderInput(..),
         ShaderStage(..),
-        Shader(..),
+        Shader,
         VertexShader,
         FragmentShader,
         -- * Uniforms
-        Uniform(..),
         uniform,
         (~~),
         -- * Optimized shaders
@@ -40,6 +36,12 @@ module Graphics.Rendering.Ombra.Shader (
         -- fragData,
         fragCoord,
         fragFrontFacing,
+        -- * Classes
+        MultiShaderType(..),
+        ShaderInput(..),
+        FragmentShaderOutput(..),
+        MapShader(..),
+        Uniform(..)
 ) where
 
 import Control.Arrow

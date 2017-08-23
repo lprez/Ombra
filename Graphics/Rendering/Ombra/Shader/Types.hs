@@ -20,7 +20,7 @@ import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Texture (Texture)
 import Prelude hiding (id, (.))
 
--- | A type that contains zero or more 'ShaderType's.
+-- | Types that contain zero or more 'ShaderType's.
 class HasTrie (ExprMST a) => MultiShaderType a where
         type ExprMST a
         type ExprMST a = GExprMST (Rep a)
@@ -53,7 +53,7 @@ class HasTrie (ExprMST a) => MultiShaderType a where
                             -> a
         fromExprMST = to . gfromExprMST
 
--- | A type that contains a finite amount of 'ShaderType's.
+-- | Types that contain a finite amount of 'ShaderType's.
 class MultiShaderType a => ShaderInput a where
         buildMST :: (forall x. ShaderType x => Int -> x) -> Int -> (a, Int)
         default buildMST :: (Generic a, GShaderInput (Rep a))
@@ -62,6 +62,7 @@ class MultiShaderType a => ShaderInput a where
                          -> (a, Int)
         buildMST f = first to . gbuildMST f
 
+-- | Types that contain uniform values.
 class ShaderInput a => Uniform a where
         type CPUUniform a
         foldrUniform :: Proxy a
@@ -99,6 +100,7 @@ toGVec4s = reverse . toGVec4sList . flip toGFloats []
               toGVec4sList (x : y : z : w : xs) =
                       GVec4 x y z w : toGVec4sList xs
 
+-- | Types that contain 'GFloat's.
 class (MultiShaderType o, KnownNat (NFloats o)) => FragmentShaderOutput o where
         type NFloats o :: Nat
         type NFloats o = GNFloats (Rep o)
@@ -129,6 +131,7 @@ data ShaderState = ShaderState UniformID
                                [(UniformID, UniformValue)]
                                [Texture]
 
+-- | A function that runs in the GPU.
 data Shader (s :: ShaderStage) i o =
         Shader ((ShaderState, i) -> (ShaderState, o))
                ((UniformID, i) -> (UniformID, o))
@@ -155,7 +158,11 @@ instance (ShaderInput i, MultiShaderType o) => Hashable (Shader s i o) where
                 in hashWithSalt salt $ hashListMST output
 
 data ShaderStage = VertexShaderStage | FragmentShaderStage
+
+-- | A shader that transforms vertices.
 type VertexShader = Shader VertexShaderStage
+
+-- | A shader that transforms fragments.
 type FragmentShader = Shader FragmentShaderStage
 
 instance MultiShaderType GBool where

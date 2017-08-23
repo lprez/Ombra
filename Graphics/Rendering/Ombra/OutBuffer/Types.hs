@@ -80,10 +80,14 @@ instance Uniform (DepthBufferSampler t) where
         foldrUniform _ f s buf =
                 f (UniformTexture . TextureLoaded . head . textures $ buf) s
 
+-- | A container that can be used to store the output of some drawing operation.
 type GBuffer = OutBuffer
+-- | A container for depth/stencil values.
 type DepthBuffer t s = OutBuffer t s OutDepthBuffer
 
+-- | A 'GBuffer' that was previously drawn to.
 type UsedGBuffer t o = GBuffer t OutUsed o
+-- | A 'DepthBuffer' that was previously drawn to.
 type UsedDepthBuffer t = DepthBuffer t OutUsed
 
 textures :: OutBuffer t OutUsed o -> [LoadedTexture]

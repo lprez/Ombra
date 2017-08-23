@@ -27,7 +27,8 @@ flag webgl
   default:     False
 
 library
-  exposed-modules:     Graphics.Rendering.Ombra.Blend,
+  exposed-modules:     Graphics.Rendering.Ombra,
+                       Graphics.Rendering.Ombra.Blend,
                        Graphics.Rendering.Ombra.Culling,
                        Graphics.Rendering.Ombra.OutBuffer,
                        Graphics.Rendering.Ombra.Texture,

@@ -11,7 +11,6 @@
 -- Portability: GHC only
 
 module Graphics.Rendering.Ombra.Geometry (
-        GeometryVertex(..),
         Geometry,
         Triangle(..),
         mkGeometry,
@@ -25,7 +24,9 @@ module Graphics.Rendering.Ombra.Geometry (
         vertex,
         triangle,
         buildGeometry,
-        buildGeometryT
+        buildGeometryT,
+        -- *
+        GeometryVertex(..)
 ) where
 
 import Control.Monad.Trans.State

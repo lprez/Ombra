@@ -73,8 +73,8 @@ mkTextureFloat w h vs = TextureImage . TextureFloat ps (Linear, Nothing) Linear
                                 $ hash (w, h, take (w * h * 4) ps)
         where ps = vs >>= \(Vec4 x y z w) -> [x, y, z, w]
 
--- | Change the Texture minifying and magnifying functions. This doesn't work on
--- sublayer textures.
+-- | Change the Texture minifying and magnifying functions. This doesn't work
+-- on textures created from GBuffers.
 setFilter :: (Filter, Maybe Filter)     -- ^ Minification filter and mipmap
                                         -- filter.
           -> Filter                     -- ^ Magnification filter.

@@ -12,11 +12,13 @@ import Graphics.Rendering.Ombra.Texture.Draw
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Screen
 
+-- | Monads that can be used to draw 'Image's.
 class (MonadGeometry m, MonadProgram m, MonadTexture m, MonadScreen m) =>
         MonadDraw o m
 
+-- | Monads that support drawing to 'GBuffer's and 'DepthBuffer's.
 class MonadDrawBuffers m where
-        -- | Draw an image to some buffers instead of the screen.
+        -- | Draw an image to some buffers.
         drawBuffers :: Int                      -- ^ Width.
                     -> Int                      -- ^ Height.
                     -> GBuffer t s o            -- ^ The buffer that will
@@ -33,8 +35,8 @@ class MonadDrawBuffers m where
                     -> m o' b
 
         -- | Use this instead of 'drawBuffers' if you need to reuse the buffers
-        -- later. In this case, the buffers are deleted from the GPU when the
-        -- 'GBuffer'/'DepthBuffer' is garbage collected.
+        -- later. They will be deleted from the GPU after the
+        -- 'GBuffer' or 'DepthBuffer' is garbage collected.
         drawBuffers' :: Int
                      -> Int
                      -> GBuffer t s o

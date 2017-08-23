@@ -5,13 +5,8 @@ module Main where
 import Control.Arrow
 import Control.Applicative
 import GHC.Generics
-import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Geometry
-import Graphics.Rendering.Ombra.Shader
-import Graphics.Rendering.Ombra.Image
+import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.Vector
-import Graphics.Rendering.Ombra.Texture
 import Utils.Play
 
 data Vertex2D = Vertex2D Vec2 Vec3 deriving Generic

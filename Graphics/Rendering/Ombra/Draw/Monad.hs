@@ -92,7 +92,7 @@ data Buffer = ColorBuffer
             | DepthBuffer
             | StencilBuffer
 
--- | The Draw monad lets you render 'FragmentStream's on the screen.
+-- | An implementation of 'MonadDraw' and 'MonadDrawBuffers'.
 --
 -- __The first action must be 'drawInit'__
 newtype Draw o a = Draw { unDraw :: StateT DrawState GL a }
@@ -122,14 +122,6 @@ instance GLES => MonadDrawBuffers Draw where
                                                (Nothing :: Maybe TextureImage)
                                                lt
                               ) (textures buf)
-
-{-
-toTexture :: GBuffer GVec4 -> Texture
-toTexture2 :: GBuffer (GVec4, GVec4) -> (Texture, Texture)
-toTexture3 :: GBuffer (GVec4, GVec4, GVec4) -> (Texture, Texture, Texture)
-toTextures :: FragmentShaderType o => GBuffer o -> [Texture]
-
--}
 
 instance GLES => MonadScreen (Draw o) where
         currentViewport = viewportSize <$> Draw get

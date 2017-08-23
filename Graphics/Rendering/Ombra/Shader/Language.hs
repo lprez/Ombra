@@ -78,8 +78,6 @@ module Graphics.Rendering.Ombra.Shader.Language (
         Shader.reflect,
         Shader.refract,
         Shader.matrixCompMult,
-        -- *** Partial derivatives
-        -- | These are available only in the fragment shader.
         -- *** Vector relational functions
         Shader.VecOrd,
         Shader.VecEq,

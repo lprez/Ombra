@@ -1,4 +1,5 @@
 module Graphics.Rendering.Ombra.Image (
+        Image,
         image,
         image1,
         draw
@@ -20,6 +21,7 @@ import Graphics.Rendering.Ombra.Shader.Types
 import Graphics.Rendering.Ombra.Image.Types
 import Graphics.Rendering.Ombra.Texture.Draw
 
+-- | Create an 'Image'.
 image :: (ShaderInput i, GeometryVertex i, ShaderInput v)
       => VertexShader i (GVec4, v)
       -> FragmentShader v o
@@ -34,6 +36,7 @@ image1 :: (ShaderInput i, GeometryVertex i, ShaderInput v, Foldable t)
        -> Image o
 image1 vs fs g = Image g vs fs
 
+-- | Draw an 'Image'.
 draw :: (MonadDraw o m, FragmentShaderOutput o) => Image o -> m ()
 draw (Image geometries vs fs) =
         let prg = program (vs undefined) (fs undefined)
