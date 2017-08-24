@@ -6,11 +6,15 @@ module Graphics.Rendering.Ombra (
         module Graphics.Rendering.Ombra.Image,
         module Graphics.Rendering.Ombra.Texture,
 
-        -- * Backend constraint
-        GLES
+        -- * Backend
+        GLES( hasVertexArrayObjects
+            , hasFloatTextures
+            , hasDrawBuffers
+            , hasStandardDerivatives
+            )
 ) where
 
-import Graphics.Rendering.Ombra.Backend (GLES)
+import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.Draw
 import Graphics.Rendering.Ombra.Geometry

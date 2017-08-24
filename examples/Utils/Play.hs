@@ -54,7 +54,7 @@ play :: MonadIO m
      -> Int
      -> Bool
      -> Draw GVec4 ()
-     -> Float -> (Int, Int) -> m (Draw GVec4 ())
+     -> (Float -> (Int, Int) -> m (Draw GVec4 ()))
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
      -> m ()
@@ -70,7 +70,7 @@ play width height requireExts initialization frame inpCallback _ =
                 Just extError -> liftIO $ alert (fromString extError) >>
                                           exitFailure
                 Nothing -> return ()
-           stateRef <- newIORef $ drawState width height
+           stateRef <- liftIO . newIORef $ drawState width height
 
            let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
            liftDraw $ drawInit >> initialization

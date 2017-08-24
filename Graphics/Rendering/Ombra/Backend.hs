@@ -114,7 +114,7 @@ class GLTypes GLEnum GLUInt GLInt GLSize
         -- | Required for using float textures and GBuffers.
         hasFloatTextures :: Ctx -> IO Bool
 
-        -- | Required for using more GBuffers with more than 4 GFloats.
+        -- | Required for using GBuffers with more than 4 GFloats.
         hasDrawBuffers :: Ctx -> IO Bool
 
         -- | Required for the dFdx, dFdy and fwidth shader functions.

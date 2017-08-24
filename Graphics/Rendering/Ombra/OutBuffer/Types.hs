@@ -8,7 +8,10 @@ import Graphics.Rendering.Ombra.Shader.Types
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Texture.Types
 
+-- | A GPU object that can be used to retrieve data from a 'GBuffer'.
 data GBufferSampler t o = FragmentShaderOutput o => GBufferSampler [GSampler2D]
+
+-- | A GPU object that can be used to retrieve data from a 'DepthBuffer'.
 newtype DepthBufferSampler t = DepthBufferSampler GSampler2D
 
 data OutDepthBuffer

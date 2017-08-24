@@ -13,8 +13,14 @@ import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Screen
 
 -- | Monads that can be used to draw 'Image's.
-class (MonadGeometry m, MonadProgram m, MonadTexture m, MonadScreen m) =>
-        MonadDraw o m
+class ( MonadGeometry (m o)
+      , MonadProgram (m o)
+      , MonadTexture (m o)
+      , MonadScreen (m o)
+      ) => MonadDraw o m where
+        withColorMask :: (Bool, Bool, Bool, Bool) -> m o a -> m o a
+        withDepthTest :: Bool -> m o a -> m o a
+        withDepthMask :: Bool -> m o a -> m o a
 
 -- | Monads that support drawing to 'GBuffer's and 'DepthBuffer's.
 class MonadDrawBuffers m where

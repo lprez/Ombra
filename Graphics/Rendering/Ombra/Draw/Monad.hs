@@ -35,7 +35,8 @@ module Graphics.Rendering.Ombra.Draw.Monad (
 import qualified Graphics.Rendering.Ombra.Blend.Draw as Blend
 import qualified Graphics.Rendering.Ombra.Blend.Types as Blend
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Culling
+import Graphics.Rendering.Ombra.Culling.Draw
+import Graphics.Rendering.Ombra.Culling.Types
 import Graphics.Rendering.Ombra.Draw.Class
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Geometry.Draw
@@ -101,7 +102,10 @@ newtype Draw o a = Draw { unDraw :: StateT DrawState GL a }
 instance EmbedIO (Draw o) where
         embedIO f (Draw a) = Draw get >>= Draw . lift . embedIO f . evalStateT a
 
-instance (FragmentShaderOutput o, GLES) => MonadDraw o (Draw o)
+instance (FragmentShaderOutput o, GLES) => MonadDraw o Draw where
+        withColorMask m a = stateReset colorMask setColorMask m a
+        withDepthTest d a = stateReset depthTest setDepthTest d a
+        withDepthMask m a = stateReset depthMask setDepthMask m a
 
 instance GLES => MonadDrawBuffers Draw where
         drawBuffers w h gBuffer depthBuffer draw cont =
@@ -151,19 +155,14 @@ instance GLES => MonadProgram (Draw o) where
                                                                  map
                                 Nothing -> return $ Left "No loaded program."
 
+instance GLES => MonadCulling (Draw o) where
+        withCulling face a = stateReset cullFace setCullFace face a
+
 instance GLES => Blend.MonadBlend (Draw o) where
         withBlendMode m a = stateReset blendMode setBlendMode m a
 
 instance GLES => Stencil.MonadStencil (Draw o) where
         withStencilMode m a = stateReset stencilMode setStencilMode m a
-{-
-        withDepthTest d a = stateReset depthTest setDepthTest d a
-        withDepthMask m a = stateReset depthMask setDepthMask m a
-        withColorMask m a = stateReset colorMask setColorMask m a
-        withCulling face a = stateReset cullFace setCullFace face a
--}
-
-        -- where tupleToVec (x, y) = Vec2 (fromIntegral x) (fromIntegral y)
 
 instance GLES => MonadTexture (Draw o) where
         getTexture (TextureLoaded l) = return $ Right l

@@ -1,4 +1,4 @@
-module Graphics.Rendering.Ombra.Culling (
+module Graphics.Rendering.Ombra.Culling.Types (
         CullFace(..)
 ) where
 

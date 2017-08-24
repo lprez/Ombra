@@ -17,13 +17,16 @@ module Graphics.Rendering.Ombra.Draw (
         evalDrawCtx,
         drawState,
         -- * Draw actions
-        MonadDraw,
+        MonadDraw(..),
         MonadDrawBuffers(drawBuffers, drawBuffers'),
         MonadScreen(resizeViewport),
         drawInit,
         clearColor,
         clearDepth,
         clearStencil,
+        -- ** Culling
+        CullFace(..),
+        MonadCulling(withCulling),
         -- ** Resources
         -- $resources
         ResStatus(..),
@@ -36,15 +39,12 @@ module Graphics.Rendering.Ombra.Draw (
         checkGeometry,
         checkTexture,
         -- checkProgram,
-        -- * Extensions
-        hasVertexArrayObjects,
-        hasFloatTextures,
-        hasDrawBuffers,
-        hasStandardDerivatives,
 ) where
 
 import Data.IORef
 import Graphics.Rendering.Ombra.Backend
+import Graphics.Rendering.Ombra.Culling.Draw
+import Graphics.Rendering.Ombra.Culling.Types
 import Graphics.Rendering.Ombra.Draw.Class
 import Graphics.Rendering.Ombra.Draw.Monad
 import Graphics.Rendering.Ombra.Internal.GL (evalGL)

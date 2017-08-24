@@ -516,6 +516,16 @@ instance MultiShaderType a => MultiShaderType [a] where
         toExprMST = map toExprMST
         fromExprMST = map fromExprMST
 
+instance (ShaderInput a, MultiShaderType b) => MultiShaderType (a -> b) where
+        type ExprMST (a -> b) = ExprMST b
+        mapMST f g = \x -> mapMST f $ g x
+        foldrMST f s = foldrMST f s . dummyFun
+        toExprMST = toExprMST . dummyFun
+        fromExprMST x = const $ fromExprMST x
+
+dummyFun :: ShaderInput a => (a -> b) -> b
+dummyFun g = g . fst $ buildMST (fromExpr . Dummy) 0
+
 class GMultiShaderType (g :: * -> *) where
         type GExprMST g :: *
         gmapMST :: (forall x. ShaderType x => x -> x) -> g p -> g p

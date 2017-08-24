@@ -29,7 +29,6 @@ flag webgl
 library
   exposed-modules:     Graphics.Rendering.Ombra,
                        Graphics.Rendering.Ombra.Blend,
-                       Graphics.Rendering.Ombra.Culling,
                        Graphics.Rendering.Ombra.OutBuffer,
                        Graphics.Rendering.Ombra.Texture,
                        Graphics.Rendering.Ombra.Stencil,
@@ -54,6 +53,8 @@ library
                        Graphics.Rendering.Ombra.Shader.Types,
                        Graphics.Rendering.Ombra.Blend.Draw,
                        Graphics.Rendering.Ombra.Blend.Types,
+                       Graphics.Rendering.Ombra.Culling.Draw,
+                       Graphics.Rendering.Ombra.Culling.Types,
                        Graphics.Rendering.Ombra.Stencil.Draw,
                        Graphics.Rendering.Ombra.Stencil.Types,
                        Graphics.Rendering.Ombra.Draw.Class,

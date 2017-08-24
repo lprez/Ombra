@@ -22,7 +22,7 @@ import Text.Printf
 -- TODO: use fgl
 -- TODO: detect identical uniforms
 
-compileVertexShader :: (ShaderInput i, MultiShaderType o)
+compileVertexShader :: (ShaderInput i, ShaderInput o)
                     => VertexShader i (GVec4, o)
                     -> (String, (UniformID, [(String, Int)]))
 compileVertexShader s = compileShader True header ["gl_Position"] 0 exprShader

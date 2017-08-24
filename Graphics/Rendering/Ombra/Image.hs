@@ -37,7 +37,7 @@ image1 :: (ShaderInput i, GeometryVertex i, ShaderInput v, Foldable t)
 image1 vs fs g = Image g vs fs
 
 -- | Draw an 'Image'.
-draw :: (MonadDraw o m, FragmentShaderOutput o) => Image o -> m ()
+draw :: (MonadDraw o m, FragmentShaderOutput o) => Image o -> m o ()
 draw (Image geometries vs fs) =
         let prg = program (vs undefined) (fs undefined)
             -- XXX
