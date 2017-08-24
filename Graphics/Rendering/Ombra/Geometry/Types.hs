@@ -1,7 +1,8 @@
 {-# LANGUAGE GADTs, TypeOperators, KindSignatures, DataKinds, FlexibleContexts,
              FlexibleInstances, TypeFamilies, RankNTypes, UndecidableInstances,
              GeneralizedNewtypeDeriving, ConstraintKinds, MultiParamTypeClasses,
-             TypeFamilyDependencies, ScopedTypeVariables, DefaultSignatures #-}
+             TypeFamilyDependencies, ScopedTypeVariables, DefaultSignatures,
+             CPP #-}
 
 module Graphics.Rendering.Ombra.Geometry.Types (
         GeometryVertex(..),
@@ -48,11 +49,14 @@ class Attributes (AttributeTypes a) => GeometryVertex a where
         default toVertexAttributes :: ( Generic a
                                       , Generic (Vertex a)
                                       , GGeometryVertex (Rep a) (Rep (Vertex a))
+                                      , VertexAttributes (AttributeTypes a) ~ 
+                                        VertexAttributes
+                                            (GAttributeTypes (Rep a)
+                                                             (Rep (Vertex a)))
+
                                       )
                                    => Vertex a
-                                   -> VertexAttributes
-                                        (GAttributeTypes (Rep a)
-                                                         (Rep (Vertex a)))
+                                   -> VertexAttributes (AttributeTypes a)
         toVertexAttributes = gtoVertexAttributes (Proxy :: Proxy (Rep a)) . from
 
         fromVertexAttributes :: VertexAttributes (AttributeTypes a) -> Vertex a
@@ -60,10 +64,13 @@ class Attributes (AttributeTypes a) => GeometryVertex a where
                                         , Generic (Vertex a)
                                         , GGeometryVertex (Rep a)
                                                           (Rep (Vertex a))
+                                        , VertexAttributes (AttributeTypes a) ~ 
+                                          VertexAttributes
+                                              (GAttributeTypes (Rep a)
+                                                               (Rep (Vertex a)))
+
                                         )
-                                   => VertexAttributes
-                                        (GAttributeTypes (Rep a)
-                                                         (Rep (Vertex a)))
+                                   => VertexAttributes (AttributeTypes a)
                                    -> Vertex a
         fromVertexAttributes =
                 to . gfromVertexAttributes (Proxy :: Proxy (Rep a))

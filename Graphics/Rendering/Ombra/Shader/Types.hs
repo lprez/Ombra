@@ -42,14 +42,20 @@ class HasTrie (ExprMST a) => MultiShaderType a where
         foldrMST f s = gfoldrMST f s . from
 
         toExprMST :: a -> ExprMST a
-        default toExprMST :: (Generic a, GMultiShaderType (Rep a))
+        default toExprMST :: ( Generic a
+                             , GMultiShaderType (Rep a)
+                             , ExprMST a ~ GExprMST (Rep a)
+                             )
                           => a
-                          -> GExprMST (Rep a)
+                          -> ExprMST a
         toExprMST = gtoExprMST . from
 
         fromExprMST :: ExprMST a -> a
-        default fromExprMST :: (Generic a, GMultiShaderType (Rep a))
-                            => GExprMST (Rep a)
+        default fromExprMST :: ( Generic a
+                               , GMultiShaderType (Rep a)
+                               , ExprMST a ~ GExprMST (Rep a)
+                               )
+                            => ExprMST a
                             -> a
         fromExprMST = to . gfromExprMST
 
@@ -444,7 +450,7 @@ instance FragmentShaderOutput () where
         toGFloats () = id
 
 instance (MultiShaderType a, MultiShaderType b) => MultiShaderType (a, b) where
-        type ExprMST (x, y) = (ExprMST x, ExprMST y)
+        type ExprMST (a, b) = (ExprMST a, ExprMST b)
         mapMST f (x, y) = (mapMST f x, mapMST f y)
         foldrMST f s (x, y) = foldrMST f (foldrMST f s y) x
         toExprMST (x, y) = (toExprMST x, toExprMST y)
@@ -452,7 +458,7 @@ instance (MultiShaderType a, MultiShaderType b) => MultiShaderType (a, b) where
 
 instance (MultiShaderType a, MultiShaderType b, MultiShaderType c) =>
         MultiShaderType (a, b, c) where
-        type ExprMST (x, y, z) = (ExprMST x, ExprMST y, ExprMST z)
+        type ExprMST (a, b, c) = (ExprMST a, ExprMST b, ExprMST c)
         mapMST f (x, y, z) = (mapMST f x, mapMST f y, mapMST f z)
         foldrMST f s (x, y, z) = foldrMST f (foldrMST f (foldrMST f s z) y) x
         toExprMST (x, y, z) = (toExprMST x, toExprMST y, toExprMST z)
@@ -510,7 +516,7 @@ instance ( FragmentShaderOutput a
         toGFloats (x, y, z) = toGFloats x . toGFloats y . toGFloats z
 
 instance MultiShaderType a => MultiShaderType [a] where
-        type ExprMST [x] = [ExprMST x]
+        type ExprMST [a] = [ExprMST a]
         mapMST f = map $ mapMST f
         foldrMST f = foldr . flip $ foldrMST f
         toExprMST = map toExprMST
