@@ -389,7 +389,7 @@ ifThenElse b t f = fromExpr . Action $ If (toExpr b) (typeName t)
 loop :: ShaderType a 
      => Int -- ^ Maximum number of iterations (should be as low as possible)
      -> a -- ^ Initial value
-     -> (GInt -> a -> (a, GBool)) -- ^ Iteration -> Old value -> (Next, Stop)
+     -> (GFloat -> a -> (a, GBool)) -- ^ Iteration -> Old value -> (Next, Stop)
      -> a
 loop iters iv f =
         fromExpr . Action $
