@@ -66,7 +66,10 @@ compileShader useAttributes header outNames uniformID (Shader shaderFun _) =
                                                 (zip vars [0 ..])
             uniType (UniformValue (_ :: Proxy g) _) = typeName (undefined :: g)
             uniType (UniformTexture _) = typeName (undefined :: GSampler2D)
-            uniVars = showVars "uniform" uniformName $ map (uniType . snd) uniMap
+            uniVars = concatMap (\(uid, val) -> showVar "uniform"
+                                                         (uniType val)
+                                                         (uniformName uid))
+                                uniMap
             inputVars | useAttributes = showVars "attribute" attributeName
                                                  inputTypes
                       | otherwise = showVars "varying" varyingName inputTypes

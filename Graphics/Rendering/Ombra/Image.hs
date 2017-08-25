@@ -43,8 +43,8 @@ draw (Image geometries vs fs) =
             -- XXX
         in do setProgram prg
               for_ geometries $ \(geometry, vu, fu) ->
-                let (unisv, texsv) = uniformList (vs $ return vu)
-                    (unisf, texsf) = uniformList (fs $ return fu)
+                let (uid, unisv, texsv) = uniformList (vs $ return vu) 0
+                    (_, unisf, texsf) = uniformList (fs $ return fu) uid
                     unis = unisv ++ unisf
                     texs = texsv ++ texsf
                 in withActiveTextures texs (const $ return ()) $ \samplers ->

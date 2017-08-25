@@ -94,11 +94,12 @@ fromGVec4s = fst . fromGFloats . toGFloatsList
               toGFloatsList (GVec4 x y z w : xs) =
                       x : y : z : w : toGFloatsList xs
 
-textureCount :: FragmentShaderOutput o => Proxy o -> Integer
-textureCount (_ :: Proxy o) = natVal (Proxy :: Proxy (NFloats o)) `quot` 4
+textureCount :: (FragmentShaderOutput o, Integral b) => Proxy o -> b
+textureCount (_ :: Proxy o) = let nFloats = natVal (Proxy :: Proxy (NFloats o))
+                              in ceiling (fromIntegral nFloats / 4)
 
 toGVec4s :: FragmentShaderOutput o => o -> [GVec4]
-toGVec4s = reverse . toGVec4sList . flip toGFloats []
+toGVec4s = toGVec4sList . flip toGFloats []
         where toGVec4sList [] = []
               toGVec4sList [x] = [GVec4 x 0 0 0]
               toGVec4sList [x, y] = [GVec4 x y 0 0]
@@ -623,10 +624,12 @@ instance (GFragmentShaderOutput a, GFragmentShaderOutput b) =>
 hashListMST :: MultiShaderType a => a -> [Int]
 hashListMST = foldrMST (\x l -> hash (toExpr x) : l) []
 
-uniformList :: Shader s i o -> ([(UniformID, UniformValue)], [Texture])
-uniformList (Shader f _) = let err = "uniformList: input must not be evaluated"
-                               zeroState = ShaderState 0 [] []
-                               ((ShaderState _ umap tmap), _) = f ( zeroState
-                                                                  , error err
-                                                                  )
-                           in (umap, tmap)
+uniformList :: Shader s i o
+            -> UniformID
+            -> (UniformID, [(UniformID, UniformValue)], [Texture])
+uniformList (Shader f _) uid =
+        let err = "uniformList: the input must not be evaluated"
+            ((ShaderState uid' umap tmap), _) = f ( ShaderState uid [] []
+                                                  , error err
+                                                  )
+        in (uid', umap, tmap)

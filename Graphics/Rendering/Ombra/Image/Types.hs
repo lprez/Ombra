@@ -18,9 +18,11 @@ data Image o where
 
 instance Functor Image where
         fmap f (Image g vs fs) = Image g vs (\fu -> fs fu >>^ f)
+        fmap f (SeqImage i i') = SeqImage (fmap f i) (fmap f i')
 
 instance MapShader Image FragmentShaderStage where
         mapShader f (Image g vs fs) = Image g vs (\fu -> fs fu >>> f)
+        mapShader f (SeqImage i i') = SeqImage (mapShader f i) (mapShader f i')
 
 instance Semigroup (Image o) where
         (<>) = SeqImage

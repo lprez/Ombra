@@ -59,7 +59,7 @@ instance FragmentShaderOutput o => MultiShaderType (GBufferSampler t o) where
 
 instance FragmentShaderOutput o => ShaderInput (GBufferSampler t o) where
         buildMST f i = (GBufferSampler $ take n infiniteSamplers, i + n)
-                where n = fromIntegral $ textureCount (Proxy :: Proxy o)
+                where n = textureCount (Proxy :: Proxy o)
                       infiniteSamplers = map f [i ..]
 
 instance FragmentShaderOutput o => Uniform (GBufferSampler t o) where
