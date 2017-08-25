@@ -15,10 +15,6 @@ module Graphics.Rendering.Ombra.OutBuffer (
         emptyDepthBuffer,
         emptyDepthStencilBuffer,
         -- * Conversion between buffers and textures
-        toTexture,
-        toTexture2,
-        toTexture3,
-        toTextures,
         toGSampler2D,
         fromGSampler2D
 ) where
@@ -38,21 +34,6 @@ sampleDepthBuffer :: DepthBufferSampler t -> GVec2 -> GFloat
 sampleDepthBuffer (DepthBufferSampler sampler) st =
         let GVec4 x _ _ _ = sample sampler st
         in x
-
--- | Convert a 'GBuffer' to a 'Texture'.
-toTexture :: UsedGBuffer t GVec4 -> Texture
-toTexture = TextureLoaded . head . textures
-
-toTexture2 :: UsedGBuffer t (GVec4, GVec4) -> (Texture, Texture)
-toTexture2 buf = let (t1 : t2 : _) = map TextureLoaded $ textures buf
-                 in (t1, t2)
-
-toTexture3 :: UsedGBuffer t (GVec4, GVec4, GVec4) -> (Texture, Texture, Texture)
-toTexture3 buf = let (t1 : t2 : t3 : _) = map TextureLoaded $ textures buf
-                 in (t1, t2, t3)
-
-toTextures :: FragmentShaderOutput o => UsedGBuffer t o -> [Texture]
-toTextures = map TextureLoaded . textures
 
 fromGSampler2D :: GSampler2D -> GBufferSampler t GVec4
 fromGSampler2D sampler = GBufferSampler [sampler]
