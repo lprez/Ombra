@@ -13,6 +13,7 @@ module Graphics.Rendering.Ombra.Blend (
         Mode(..),
         Operator(..),
         Parameter(..),
+        withBlendMode,
 
         -- * Blending modes
         transparency,
