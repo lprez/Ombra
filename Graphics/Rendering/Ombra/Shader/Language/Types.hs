@@ -7,16 +7,68 @@ import Data.Typeable
 import GHC.TypeLits
 import Data.MemoTrie
 import Data.Hashable
-import Prelude (String, ($), error, Eq(..), (++), (*), (&&), Int, map, (.))
-import qualified Prelude
 
 -- | An expression.
-data Expr = Empty | Read String | Op1 String Expr | Op2 String Expr Expr
-          | Apply String [Expr] | X Expr | Y Expr | Z Expr | W Expr
-          | Literal String | Action Action | Dummy Int | ArrayIndex Expr Expr
-          | ContextVar Int ContextVarType | HashDummy Int | Uniform Int
-          | Input Int | Attribute Int
+data Expr = Empty | Read String String | Op1 String String Expr
+          | Op2 String String Expr Expr | Apply String String [Expr]
+          | X Expr | Y Expr | Z Expr | W Expr
+          | Literal String String | Action Action | Dummy Int
+          | ArrayIndex String Expr Expr | ContextVar String Int ContextVarType
+          | HashDummy Int | Uniform String Int | Input String Int
+          | Attribute String Int
           deriving Eq
+
+subExprs :: Expr -> [Expr]
+subExprs (Op1 _ _ e) = [e]
+subExprs (Op2 _ _ e1 e2) = [e1, e2]
+subExprs (Apply _ _ es) = es
+subExprs (X e) = [e]
+subExprs (Y e) = [e]
+subExprs (Z e) = [e]
+subExprs (W e) = [e]
+subExprs (ArrayIndex _ e1 e2) = [e1, e2]
+subExprs _ = []
+
+replaceSubExprs :: Expr -> [Expr] -> Expr
+replaceSubExprs (Op1 t f _) [e] = Op1 t f e
+replaceSubExprs (Op2 t f _ _) [e1, e2] = Op2 t f e1 e2
+replaceSubExprs (Apply t f _) es = Apply t f es
+replaceSubExprs (X _) [e] = X e
+replaceSubExprs (Y _) [e] = Y e
+replaceSubExprs (Z _) [e] = Z e
+replaceSubExprs (W _) [e] = W e
+replaceSubExprs (ArrayIndex t _ _) [e1, e2] = ArrayIndex t e1 e2
+replaceSubExprs x _ = x
+
+exprType :: Expr -> Maybe String
+exprType (Read t _) = Just t
+exprType (Op1 t _ _) = Just t
+exprType (Op2 t _ _ _) = Just t
+exprType (Apply t _ _) = Just t
+exprType (X e) = vecElemType e
+exprType (Y e) = vecElemType e
+exprType (Z e) = vecElemType e
+exprType (W e) = vecElemType e
+exprType (Literal t _) = Just t
+exprType (Action a) = Just $ actionType a
+exprType (ArrayIndex t _ _) = Just t
+exprType (ContextVar t _ _) = Just t
+exprType (Uniform t _) = Just t
+exprType (Input t _) = Just t
+exprType (Attribute t _) = Just t
+exprType _ = Nothing
+
+vecElemType :: Expr -> Maybe String
+vecElemType e = case exprType e of
+                     Just ('v' : 'e' : 'c' : _) -> Just "float"
+                     Just ('i': 'v' : 'e' : 'c' : _) -> Just "int"
+                     Just ('b': 'v' : 'e' : 'c' : _) -> Just "bool"
+                     _ -> Nothing
+
+actionType :: Action -> String
+actionType (Store t _) = t
+actionType (If _ t _ _) = t
+actionType (For _ t _ _) = t
 
 -- | Expressions that are transformed into statements.
 data Action = Store String Expr | If Expr String Expr Expr
@@ -106,12 +158,12 @@ instance (ShaderType t, KnownNat n) => ShaderType (GArray n t) where
         fromExpr = GArray
         typeName (GArray _ :: GArray n t) =
                 typeName (zero :: t) ++
-                "[" ++ Prelude.show (natVal (Proxy :: Proxy n)) ++ "]"
+                "[" ++ show (natVal (Proxy :: Proxy n)) ++ "]"
         size (GArray _ :: GArray n t) =
-                size (zero :: t) * Prelude.fromInteger (natVal (Proxy :: Proxy n))
+                size (zero :: t) * fromInteger (natVal (Proxy :: Proxy n))
 
 instance ShaderType GBool where
-        zero = GBool $ Literal "false"
+        zero = GBool $ Literal "bool" "false"
 
         toExpr (GBool e) = e
 
@@ -122,7 +174,7 @@ instance ShaderType GBool where
         size _ = 1
 
 instance ShaderType GInt where
-        zero = GInt $ Literal "0"
+        zero = GInt $ Literal "int" "0"
 
         toExpr (GInt e) = e
 
@@ -133,7 +185,7 @@ instance ShaderType GInt where
         size _ = 1
 
 instance ShaderType GFloat where
-        zero = GFloat $ Literal "0.0"
+        zero = GFloat $ Literal "float" "0.0"
 
         toExpr (GFloat e) = e
 
@@ -144,7 +196,7 @@ instance ShaderType GFloat where
         size _ = 1
 
 instance ShaderType GSampler2D where
-        zero = GSampler2D $ Literal "0"
+        zero = GSampler2D $ Literal "sampler2D" "0"
 
         toExpr (GSampler2D e) = e
 
@@ -172,11 +224,12 @@ instance ShaderType GSamplerCube where
 instance ShaderType GVec2 where
         zero = GVec2 zero zero
 
-        -- TODO: Remove Apply!
         toExpr (GVec2 (GFloat (X v)) (GFloat (Y v'))) | v == v' =
-                Apply "vec2" [v]
+                case exprType v of
+                     Just "vec2" -> v
+                     _ -> Apply "vec2" "vec2" [v]
 
-        toExpr (GVec2 (GFloat x) (GFloat y)) = Apply "vec2" [x, y]
+        toExpr (GVec2 (GFloat x) (GFloat y)) = Apply "vec2" "vec2" [x, y]
 
         fromExpr v = GVec2 (GFloat (X v)) (GFloat (Y v))
 
@@ -188,9 +241,12 @@ instance ShaderType GVec3 where
         zero = GVec3 zero zero zero
 
         toExpr (GVec3 (GFloat (X v)) (GFloat (Y v')) (GFloat (Z v'')))
-               | v == v' && v' == v'' = Apply "vec3" [v]
+               | v == v' && v' == v'' =
+                case exprType v of
+                     Just "vec3" -> v
+                     _ -> Apply "vec3" "vec3" [v]
         toExpr (GVec3 (GFloat x) (GFloat y) (GFloat z)) =
-                Apply "vec3" [x, y, z]
+                Apply "vec3" "vec3" [x, y, z]
 
         fromExpr v = GVec3 (GFloat (X v)) (GFloat (Y v)) (GFloat (Z v))
 
@@ -205,9 +261,12 @@ instance ShaderType GVec4 where
                       (GFloat (Y v1))
                       (GFloat (Z v2))
                       (GFloat (W v3)))
-               | v == v1 && v1 == v2 && v2 == v3 = Apply "vec4" [v]
+               | v == v1 && v1 == v2 && v2 == v3 =
+                       case exprType v of
+                            Just "vec4" -> v
+                            _ -> Apply "vec4" "vec4" [v]
         toExpr (GVec4 (GFloat x) (GFloat y) (GFloat z) (GFloat w)) =
-                Apply "vec4" [x, y, z, w]
+                Apply "vec4" "vec4" [x, y, z, w]
 
         fromExpr v = GVec4 (GFloat (X v)) (GFloat (Y v)) (GFloat (Z v)) (GFloat (W v))
 
@@ -218,8 +277,11 @@ instance ShaderType GVec4 where
 instance ShaderType GIVec2 where
         zero = GIVec2 zero zero
 
-        toExpr (GIVec2 (GInt (X v)) (GInt (Y v'))) | v == v' = Apply "ivec2" [v]
-        toExpr (GIVec2 (GInt x) (GInt y)) = Apply "ivec2" [x, y]
+        toExpr (GIVec2 (GInt (X v)) (GInt (Y v'))) | v == v' =
+                case exprType v of
+                     Just "ivec2" -> v
+                     _ -> Apply "ivec2" "ivec2" [v]
+        toExpr (GIVec2 (GInt x) (GInt y)) = Apply "ivec2" "ivec2" [x, y]
 
         fromExpr v = GIVec2 (GInt (X v)) (GInt (Y v))
 
@@ -231,8 +293,12 @@ instance ShaderType GIVec3 where
         zero = GIVec3 zero zero zero
 
         toExpr (GIVec3 (GInt (X v)) (GInt (Y v')) (GInt (Z v'')))
-               | v == v' && v' == v'' = Apply "ivec3" [v]
-        toExpr (GIVec3 (GInt x) (GInt y) (GInt z)) = Apply "ivec3" [x, y, z]
+               | v == v' && v' == v'' =
+                case exprType v of
+                     Just "ivec3" -> v
+                     _ -> Apply "ivec3" "ivec3" [v]
+        toExpr (GIVec3 (GInt x) (GInt y) (GInt z)) =
+                Apply "ivec3" "ivec3" [x, y, z]
 
         fromExpr v = GIVec3 (GInt (X v)) (GInt (Y v)) (GInt (Z v))
 
@@ -244,9 +310,12 @@ instance ShaderType GIVec4 where
         zero = GIVec4 zero zero zero zero
 
         toExpr (GIVec4 (GInt (X v)) (GInt (Y v1)) (GInt (Z v2)) (GInt (W v3)))
-               | v == v1 && v1 == v2 && v2 == v3 = Apply "ivec4" [v]
+               | v == v1 && v1 == v2 && v2 == v3 =
+                case exprType v of
+                     Just "ivec4" -> v
+                     _ -> Apply "ivec4" "ivec4" [v]
         toExpr (GIVec4 (GInt x) (GInt y) (GInt z) (GInt w)) =
-                Apply "ivec4" [x, y, z, w]
+                Apply "ivec4" "ivec4" [x, y, z, w]
 
         fromExpr v = GIVec4 (GInt (X v)) (GInt (Y v)) (GInt (Z v)) (GInt (W v))
 
@@ -258,9 +327,11 @@ instance ShaderType GBVec2 where
         zero = GBVec2 zero zero
 
         toExpr (GBVec2 (GBool (X v)) (GBool (Y v'))) | v == v' =
-                Apply "bvec2" [v]
+                case exprType v of
+                     Just "bvec2" -> v
+                     _ -> Apply "bvec2" "bvec2" [v]
 
-        toExpr (GBVec2 (GBool x) (GBool y)) = Apply "bvec2" [x, y]
+        toExpr (GBVec2 (GBool x) (GBool y)) = Apply "bvec2" "bvec2" [x, y]
 
         fromExpr v = GBVec2 (GBool (X v)) (GBool (Y v))
 
@@ -272,8 +343,12 @@ instance ShaderType GBVec3 where
         zero = GBVec3 zero zero zero
 
         toExpr (GBVec3 (GBool (X v)) (GBool (Y v')) (GBool (Z v'')))
-               | v == v' && v' == v'' = Apply "bvec3" [v]
-        toExpr (GBVec3 (GBool x) (GBool y) (GBool z)) = Apply "bvec3" [x, y, z]
+               | v == v' && v' == v'' =
+                case exprType v of
+                     Just "bvec3" -> v
+                     _ -> Apply "bvec3" "bvec3" [v]
+        toExpr (GBVec3 (GBool x) (GBool y) (GBool z)) =
+                Apply "bvec3" "bvec3" [x, y, z]
 
         fromExpr v = GBVec3 (GBool (X v)) (GBool (Y v)) (GBool (Z v))
 
@@ -288,9 +363,12 @@ instance ShaderType GBVec4 where
                        (GBool (Y v1))
                        (GBool (Z v2))
                        (GBool (W v3)))
-               | v == v1 && v1 == v2 && v2 == v3 = Apply "bvec4" [v]
+               | v == v1 && v1 == v2 && v2 == v3 =
+                case exprType v of
+                     Just "bvec4" -> v
+                     _ -> Apply "bvec4" "bvec4" [v]
         toExpr (GBVec4 (GBool x) (GBool y) (GBool z) (GBool w)) =
-                Apply "bvec4" [x, y, z, w]
+                Apply "bvec4" "bvec4" [x, y, z, w]
 
         fromExpr v = GBVec4 (GBool (X v)) (GBool (Y v))
                             (GBool (Z v)) (GBool (W v))
@@ -304,10 +382,13 @@ instance ShaderType GMat2 where
 
         toExpr (GMat2 (GVec2 (GFloat (X (X m))) (GFloat (X (Y m1))))
                       (GVec2 (GFloat (Y (X m2))) (GFloat (Y (Y m3)))))
-               | m == m1 && m1 == m2 && m2 == m3 = Apply "mat2" [m]
+               | m == m1 && m1 == m2 && m2 == m3 =
+                case exprType m of
+                     Just "mat2" -> m
+                     _ -> Apply "mat2" "mat2" [m]
         toExpr (GMat2 (GVec2 (GFloat xx) (GFloat xy))
                       (GVec2 (GFloat yx) (GFloat yy)))
-               = Apply "mat2" [xx, yx, xy, yy]
+               = Apply "mat2" "mat2" [xx, yx, xy, yy]
 
         fromExpr m = GMat2 (GVec2 (GFloat (X (X m))) (GFloat (Y (X m))))
                            (GVec2 (GFloat (Y (X m))) (GFloat (Y (Y m))))
@@ -330,11 +411,13 @@ instance ShaderType GMat3 where
                              (GFloat (Z (Z m8)))))
                | m == m1 && m1 == m2 && m2 == m3 && m3 == m4 &&
                  m4 == m5 && m5 == m6 && m6 == m7 && m7 == m8 =
-                         Apply "mat3" [m]
+                         case exprType m of
+                              Just "mat3" -> m
+                              _ -> Apply "mat3" "mat3" [m]
         toExpr (GMat3 (GVec3 (GFloat xx) (GFloat xy) (GFloat xz))
                       (GVec3 (GFloat yx) (GFloat yy) (GFloat yz))
                       (GVec3 (GFloat zx) (GFloat zy) (GFloat zz)))
-               = Apply "mat3" [xx, yx, zx, xy, yy, zy, xz, yz, zz]
+               = Apply "mat3" "mat3" [xx, yx, zx, xy, yy, zy, xz, yz, zz]
 
         fromExpr m = GMat3 (GVec3 (GFloat (X (X m)))
                                   (GFloat (X (Y m)))
@@ -372,15 +455,18 @@ instance ShaderType GMat4 where
                | m == m1 && m1 == m2 && m2 == m3 && m3 == m4 &&
                  m4 == m5 && m5 == m6 && m6 == m7 && m7 == m8 &&
                  m8 == m9 && m9 == m10 && m10 == m11 && m11 == m12 &&
-                 m12 == m13 && m13 == m14 && m14 == m15 = Apply "mat4" [m]
+                 m12 == m13 && m13 == m14 && m14 == m15 =
+                         case exprType m of
+                              Just "mat4" -> m
+                              _ -> Apply "mat4" "mat4" [m]
         toExpr (GMat4 (GVec4 (GFloat xx) (GFloat xy) (GFloat xz) (GFloat xw))
                       (GVec4 (GFloat yx) (GFloat yy) (GFloat yz) (GFloat yw))
                       (GVec4 (GFloat zx) (GFloat zy) (GFloat zz) (GFloat zw))
                       (GVec4 (GFloat wx) (GFloat wy) (GFloat wz) (GFloat ww)))
-               = Apply "mat4" [ xx, yx, zx, wx
-                              , xy, yy, zy, wy
-                              , xz, yz, zz, wz
-                              , xw, yw, zw, ww ]
+               = Apply "mat4" "mat4" [ xx, yx, zx, wx
+                                     , xy, yy, zy, wy
+                                     , xz, yz, zz, wz
+                                     , xw, yw, zw, ww ]
 
         fromExpr m = GMat4 (GVec4 (GFloat (X (X m)))
                                   (GFloat (X (Y m)))
@@ -406,23 +492,23 @@ instance ShaderType GMat4 where
 instance Hashable Expr where
         hashWithSalt s e = case e of
                                 Empty -> hash2 s 0 (0 :: Int)
-                                Read str -> hash2 s 1 str
-                                Op1 str exp -> hash2 s 2 (str, exp)
-                                Op2 str exp exp' -> hash2 3 s (str, exp, exp')
-                                Apply str exps -> hash2 4 s (str, exps)
+                                Read _ str -> hash2 s 1 str
+                                Op1 _ str exp -> hash2 s 2 (str, exp)
+                                Op2 _ str exp exp' -> hash2 3 s (str, exp, exp')
+                                Apply _ str exps -> hash2 4 s (str, exps)
                                 X exp -> hash2 5 s exp
                                 Y exp -> hash2 6 s exp
                                 Z exp -> hash2 7 s exp
                                 W exp -> hash2 8 s exp
-                                Literal str -> hash2 s 9 str
+                                Literal _ str -> hash2 s 9 str
                                 Action actHash -> hash2 s 10 actHash
                                 Dummy i -> hash2 s 11 i
-                                ContextVar i LoopIteration -> hash2 s 12 i
-                                ContextVar i LoopValue -> hash2 s 13 i
-                                ArrayIndex arr i -> hash2 s 14 (arr, i)
-                                Uniform i -> hash2 s 15 i
-                                Input i -> hash2 s 16 i
-                                Attribute i -> hash2 s 17 i
+                                ContextVar _ i LoopIteration -> hash2 s 12 i
+                                ContextVar _ i LoopValue -> hash2 s 13 i
+                                ArrayIndex _ arr i -> hash2 s 14 (arr, i)
+                                Uniform _ i -> hash2 s 15 i
+                                Input _ i -> hash2 s 16 i
+                                Attribute _ i -> hash2 s 17 i
                                 HashDummy h -> h
 
 instance HasTrie Expr where
@@ -438,9 +524,9 @@ instance Hashable Action where
                 let baseHash = hash (iters, tv, iv, eFun (Dummy 0) (Dummy 1))
                 in hash2 s 2 ( baseHash
                              , eFun (Dummy baseHash)
-                                    (Dummy $ baseHash Prelude.+ 1))
+                                    (Dummy $ baseHash + 1))
 
-instance Prelude.Eq Action where
+instance Eq Action where
         a == a' = hash a == hash a'
 
 hash2 :: Hashable a => Int -> Int -> a -> Int
