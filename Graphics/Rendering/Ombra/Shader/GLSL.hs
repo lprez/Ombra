@@ -54,7 +54,7 @@ compileShader :: ShaderInput i
 compileShader useAttributes header outNames uniformID (Shader shaderFun _) =
         let inputFun | useAttributes = Attribute
                      | otherwise = Input
-            (input, _) = buildMST (fromExpr . inputFun) 0
+            (input, _) = buildMST' (\t -> fromExpr . inputFun t) 0
             inputTypes = foldrMST (\x -> (typeName x :)) [] input
             ((ShaderState uniformID' uniMap _), (outs, outVaryings)) =
                     shaderFun (ShaderState uniformID [] [], input)
@@ -122,10 +122,33 @@ type ActionGraph = H.HashMap ActionID ActionInfo
 
 -- | Compile a list of 'Expr', sharing their actions.
 compile :: [Expr] -> (String, [String])
-compile exprs = let (strs, deps, _) = unzip3 $ map compileExpr exprs
+compile exprs = let exprs' = optimize exprs
+                    (strs, deps, _) = unzip3 $ map compileExpr exprs'
                     depGraph = contextAll deep . buildActionGraph $ H.unions deps
                     sorted = sortActions depGraph
                 in (sorted >>= uncurry generate, strs)
+
+optimize :: [Expr] -> [Expr]
+optimize exprs = let reps fullExprMap expr (optimizedExprs, exprMap) =
+                        let h = hash expr
+                            exprMap' = H.insertWith (+) h 1 exprMap
+                            sub = subExprs expr
+                            (optimizedSubExprs, exprMap'') =
+                                    foldr (reps fullExprMap)
+                                          ([], exprMap')
+                                          sub
+                            expr' = replaceSubExprs expr optimizedSubExprs
+                            storedExpr = case exprType expr' of
+                                              Just t -> Action $ Store t expr'
+                                              Nothing -> expr'
+                            optimizedExpr | length sub < 1 = expr'
+                                          | fullExprMap H.! h > 1 = storedExpr
+                                          | otherwise = expr'
+                            optimizedExprs' = optimizedExpr : optimizedExprs
+                        in (optimizedExprs', exprMap'')
+                     (optimizedExprs, fullExprMap) =
+                             foldr (reps fullExprMap) ([], H.empty) exprs
+                 in optimizedExprs
 
 generate :: ActionGenerator -> ActionGraph -> String
 generate gen graph = gen $ sortActions graph >>= uncurry generate
@@ -209,36 +232,40 @@ deep aID graph =
 -- and the context.
 compileExpr :: Expr -> (String, ActionMap, ActionSet)
 compileExpr Empty = ("", H.empty, H.empty)
-compileExpr (Read s) = (s, H.empty, H.empty)
+compileExpr (Read _ s) = (s, H.empty, H.empty)
 
-compileExpr (Op1 s e) = first3 (\x -> "(" ++ s ++ x ++ ")") $ compileExpr e
+compileExpr (Op1 _ s e) = first3 (\x -> "(" ++ s ++ x ++ ")") $ compileExpr e
 
-compileExpr (Op2 s ex ey) = let (x, ax, cx) = compileExpr ex
-                                (y, ay, cy) = compileExpr ey
-                            in ( "(" ++ x ++ s ++ y ++ ")"
-                               , H.union ax ay, H.union cx cy )
+compileExpr (Op2 _ s ex ey) = let (x, ax, cx) = compileExpr ex
+                                  (y, ay, cy) = compileExpr ey
+                              in ( "(" ++ x ++ s ++ y ++ ")"
+                                 , H.union ax ay, H.union cx cy )
 
-compileExpr (Apply s es) = let (vs, as, cs) = unzip3 $ map compileExpr es
-                           in ( concat $ [ s, "(" , tail (vs >>= (',' :)), ")" ]
-                              , H.unions as, H.unions cs)
+compileExpr (Apply _ s es) = let (vs, as, cs) = unzip3 $ map compileExpr es
+                                 comp = [ s, "(" , tail (vs >>= (',' :)), ")" ]
+                             in ( concat comp
+                                , H.unions as, H.unions cs)
 
 compileExpr (X e) = first3 (++ "[0]") $ compileExpr e
 compileExpr (Y e) = first3 (++ "[1]") $ compileExpr e
 compileExpr (Z e) = first3 (++ "[2]") $ compileExpr e
 compileExpr (W e) = first3 (++ "[3]") $ compileExpr e
-compileExpr (Literal s) = (s, H.empty, H.empty)
-compileExpr (Input i) = (varyingName i, H.empty, H.empty)
-compileExpr (Attribute i) = (attributeName i, H.empty, H.empty)
-compileExpr (Uniform i) = (uniformName i, H.empty, H.empty)
+compileExpr (Literal _ s) = (s, H.empty, H.empty)
+compileExpr (Input _ i) = (varyingName i, H.empty, H.empty)
+compileExpr (Attribute _ i) = (attributeName i, H.empty, H.empty)
+compileExpr (Uniform _ i) = (uniformName i, H.empty, H.empty)
 compileExpr (Action a) = let h = hash a
                          in (actionName h, H.singleton h a, H.empty)
 compileExpr (Dummy _) = error "compileExpr: Dummy"
 compileExpr (HashDummy _) = error "compileExpr: HashDummy"
-compileExpr (ArrayIndex eArr ei) = let (arr, aArr, cArr) = compileExpr eArr
-                                       (i, ai, ci) = compileExpr ei
-                                   in ( "(" ++ arr ++ "[" ++ i ++ "])"
-                                      , H.union aArr ai, H.union cArr ci )
-compileExpr (ContextVar i t) = (contextVarName t i, H.empty, H.singleton i ())
+compileExpr (ArrayIndex _ eArr ei) = let (arr, aArr, cArr) = compileExpr eArr
+                                         (i, ai, ci) = compileExpr ei
+                                     in ( "(" ++ arr ++ "[" ++ i ++ "])"
+                                        , H.union aArr ai, H.union cArr ci )
+compileExpr (ContextVar _ i t) = (contextVarName t i, H.empty, H.singleton i ())
+
+compileExprOptimized :: Expr -> (String, ActionMap, ActionSet)
+compileExprOptimized = compileExpr . head . optimize . (: [])
 
 first3 :: (a -> a') -> (a, b, c) -> (a', b, c)
 first3 f (a, b, c) = (f a, b, c)
@@ -253,9 +280,9 @@ compileAction aID (Store ty expr) =
            , deps )
 
 compileAction aID (If cExpr ty tExpr fExpr) =
-        let (cStr, cDeps, cCtxs) = compileExpr cExpr
-            (tStr, tDeps, tCtxs) = compileExpr tExpr
-            (fStr, fDeps, fCtxs) = compileExpr fExpr
+        let (cStr, cDeps, cCtxs) = compileExprOptimized cExpr
+            (tStr, tDeps, tCtxs) = compileExprOptimized tExpr
+            (fStr, fDeps, fCtxs) = compileExprOptimized fExpr
             deps = H.unions [cDeps, tDeps, fDeps]
             name = actionName aID
         in ( ActionInfo (\c -> concat [ ty, " ", name, ";if("
@@ -268,11 +295,11 @@ compileAction aID (If cExpr ty tExpr fExpr) =
 compileAction aID (For iters ty initVal body) =
         let iterName = contextVarName LoopIteration aID
             valueName = contextVarName LoopValue aID
-            (nExpr, sExpr) = body (ContextVar aID LoopIteration)
-                                  (ContextVar aID LoopValue)
-            (iStr, iDeps, iCtxs) = compileExpr initVal
-            (nStr, nDeps, nCtxs) = compileExpr nExpr
-            (sStr, sDeps, sCtxs) = compileExpr sExpr
+            (nExpr, sExpr) = body (ContextVar "float" aID LoopIteration)
+                                  (ContextVar ty aID LoopValue)
+            (iStr, iDeps, iCtxs) = compileExprOptimized initVal
+            (nStr, nDeps, nCtxs) = compileExprOptimized nExpr
+            (sStr, sDeps, sCtxs) = compileExprOptimized sExpr
             deps = H.unions [iDeps, nDeps, sDeps]
         in ( ActionInfo (\c -> concat [ ty, " ", valueName, "=", iStr, ";"
                                       , "for(float ", iterName, "=0.0;"

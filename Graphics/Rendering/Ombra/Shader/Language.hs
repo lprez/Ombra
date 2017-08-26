@@ -41,7 +41,7 @@ module Graphics.Rendering.Ombra.Shader.Language (
         -- * GPU functions
         (Shader.!),
         Shader.loop,
-        Shader.store,
+        -- Shader.store,
         sample,
         {-
         Shader.texture2DBias,

@@ -88,6 +88,13 @@ class ShaderInput a => Uniform a where
         foldrUniform (Proxy :: Proxy a) f s u =
                 gfoldrUniform (Proxy :: Proxy (Rep a)) f s $ from u
 
+buildMST' :: ShaderInput a
+          => (forall x. ShaderType x => String -> Int -> x)
+          -> Int
+          -> (a, Int)
+buildMST' f = buildMST (f (typeName (undefined :: x))
+                                :: forall x. ShaderType x => Int -> x)
+
 fromGVec4s :: FragmentShaderOutput o => [GVec4] -> o
 fromGVec4s = fst . fromGFloats . toGFloatsList
         where toGFloatsList [] = []
@@ -160,7 +167,7 @@ instance ArrowApply (Shader s) where
 
 instance (ShaderInput i, MultiShaderType o) => Hashable (Shader s i o) where
         hashWithSalt salt (Shader _ hf) =
-                let (input, _) = buildMST (fromExpr . Input) 0
+                let (input, _) = buildMST' (\t -> fromExpr .  Input t) 0
                     (_, output) = hf (0, input)
                 in hashWithSalt salt $ hashListMST output
 

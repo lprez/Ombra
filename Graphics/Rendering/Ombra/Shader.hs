@@ -104,7 +104,8 @@ memoHash hf = let mf = memo $ second hashMST . hf . second fromExprMST
 -- | Add a shader variable that can be set with a CPU value.
 uniform :: forall u s. Uniform u => Shader s (CPUUniform u) u
 uniform = Shader (\(ShaderState uid umap tmap, multiValue) ->
-                        let (uniExpr, uid') = buildMST (fromExpr . Uniform) uid
+                        let (uniExpr, uid') =
+                                buildMST' (\t -> fromExpr . Uniform t) uid
                             acc value@(UniformValue _ _) (uid, umap, tmap) =
                                     (uid - 1, (uid, value) : umap, tmap)
                             acc value@(UniformTexture tex) (uid, umap, tmap) =
@@ -116,7 +117,8 @@ uniform = Shader (\(ShaderState uid umap tmap, multiValue) ->
                         in (ShaderState uid' umap' tmap', uniExpr)
                  )
                  (\(uid, _) ->
-                       let (uniExpr, uid') = buildMST (fromExpr . Uniform) uid
+                       let (uniExpr, uid') =
+                               buildMST' (\t -> fromExpr . Uniform t) uid
                        in (uid', uniExpr)
                  )
 
@@ -221,6 +223,7 @@ dFdy = arr Shader.dFdy
 fwidth :: GenType a => FragmentShader a a
 fwidth = arr Shader.fwidth
 
+{-
 -- | The position of the vertex.
 position :: VertexShader a GVec4
 position = arr $ const Shader.position
@@ -228,6 +231,7 @@ position = arr $ const Shader.position
 -- | The data of the fragment.
 fragData :: FragmentShader a (GArray 16 GVec4)
 fragData = arr $ const Shader.fragData
+-}
 
 -- | The coordinates of the fragment.
 fragCoord :: FragmentShader a GVec4

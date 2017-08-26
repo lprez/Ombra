@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, MultiParamTypeClasses, FunctionalDependencies,
              KindSignatures, TypeOperators, TypeFamilies, GADTs,
-             FlexibleInstances, UndecidableInstances, 
+             FlexibleInstances, UndecidableInstances, ScopedTypeVariables,
              ConstraintKinds, FlexibleContexts #-}
 module Graphics.Rendering.Ombra.Shader.Language.Functions where
 
@@ -8,7 +8,7 @@ import Graphics.Rendering.Ombra.Shader.Language.Types
 
 import GHC.TypeLits
 import Text.Printf
-import Prelude (String, (.), ($), error, Int, Integer, Float)
+import Prelude (String, (.), ($), error, Int, Integer, Float, undefined)
 import qualified Prelude
 
 -- TODO: memoized versions of the functions
@@ -224,12 +224,12 @@ instance Num GFloat where
         fromInteger = fromRational . Prelude.fromInteger
 
 instance Num GInt where
-        fromInteger = GInt . Literal
+        fromInteger = GInt . Literal "int"
                            . (printf "%d" :: Integer -> String)
                            . Prelude.fromInteger
 
 fromRational :: Prelude.Rational -> GFloat
-fromRational = GFloat . Literal
+fromRational = GFloat . Literal "float"
                       . (printf "%f" :: Float -> String)
                       . Prelude.fromRational
 
@@ -334,8 +334,10 @@ arrayLength :: (ShaderType t, KnownNat n) => GArray n t -> GInt
 arrayLength = fun1 "length"
 
 -- | Access an array element at a given index.
-(!) :: (ShaderType t, KnownNat n) => GArray n t -> GInt -> t
-arr ! i = fromExpr $ ArrayIndex (toExpr arr) (toExpr i)
+(!) :: forall t n. (ShaderType t, KnownNat n) => GArray n t -> GInt -> t
+arr ! i = fromExpr $ ArrayIndex (typeName (undefined :: t))
+                                (toExpr arr)
+                                (toExpr i)
 
 distance :: GenType a => a -> a -> GFloat
 distance = fun2 "distance"
@@ -367,16 +369,14 @@ instance GMatrix GMat4
 matrixCompMult :: GMatrix a => a -> a -> a
 matrixCompMult = fun2 "matrixCompMult"
 
--- | Avoid evaluating the expression of the argument more than one time.
--- Conditionals and loops imply it.
 store :: ShaderType a => a -> a
 store x = fromExpr . Action $ Store (typeName x) (toExpr x)
 
 true :: GBool
-true = GBool $ Literal "true"
+true = GBool $ Literal "bool" "true"
 
 false :: GBool
-false = GBool $ Literal "false"
+false = GBool $ Literal "bool" "false"
 
 -- | Rebound if. You don't need to use this function, with -XRebindableSyntax.
 ifThenElse :: ShaderType a => GBool -> a -> a -> a
@@ -450,22 +450,24 @@ dFdy = fun1 "dFdy"
 fwidth :: GenType a => a -> a
 fwidth = fun1 "fwidth"
 
+{-
 -- | The position of the vertex (only works in the vertex shader).
 position :: GVec4
-position = fromExpr $ Read "gl_Position"
+position = fromExpr $ Read "vec4" "gl_Position"
 
 -- | The data of the fragment (only works in the fragment shader).
 fragData :: GArray 16 GVec4
-fragData = fromExpr $ Read "gl_FragData"
+fragData = fromExpr $ Read ? "gl_FragData"
+-}
 
 -- | The coordinates of the fragment (only works in the fragment shader).
 fragCoord :: GVec4
-fragCoord = fromExpr $ Read "gl_FragCoord"
+fragCoord = fromExpr $ Read "vec4" "gl_FragCoord"
 
 -- | If the fragment belongs to a front-facing primitive (only works in the
 -- fragment shader).
 fragFrontFacing :: GBool
-fragFrontFacing = fromExpr $ Read "gl_FrontFacing"
+fragFrontFacing = fromExpr $ Read "bool" "gl_FrontFacing"
 
 class ShaderType t => ToGInt t
 instance ToGInt GFloat
@@ -662,25 +664,50 @@ type family Components (t :: *) :: Nat where
         Components GMat4 = 16
         Components x = 0
 
-op1 :: (ShaderType a, ShaderType b) => String -> a -> b
-op1 name = fromExpr . Op1 name . toExpr
+op1 :: forall a b. (ShaderType a, ShaderType b) => String -> a -> b
+op1 name = fromExpr . Op1 (typeName (undefined :: b)) name . toExpr
 
-op2 :: (ShaderType a, ShaderType b, ShaderType c) => String -> a -> b -> c
-op2 name x y = fromExpr $ Op2 name (toExpr x) (toExpr y)
+op2 :: forall a b c. (ShaderType a, ShaderType b, ShaderType c)
+    => String
+    -> a
+    -> b
+    -> c
+op2 name x y = fromExpr $ Op2 (typeName (undefined :: c))
+                              name
+                              (toExpr x)
+                              (toExpr y)
 
-fun1 :: (ShaderType a, ShaderType b) => String -> a -> b
-fun1 name x = fromExpr $ Apply name [toExpr x]
+fun1 :: forall a b. (ShaderType a, ShaderType b) => String -> a -> b
+fun1 name x = fromExpr $ Apply (typeName (undefined :: b)) name [toExpr x]
 
-fun2 :: (ShaderType a, ShaderType b, ShaderType c) => String -> a -> b -> c
-fun2 name x y = fromExpr $ Apply name [toExpr x, toExpr y]
+fun2 :: forall a b c. (ShaderType a, ShaderType b, ShaderType c)
+     => String
+     -> a
+     -> b
+     -> c
+fun2 name x y = fromExpr $ Apply (typeName (undefined :: c))
+                                 name
+                                 [toExpr x, toExpr y]
 
-fun3 :: (ShaderType a, ShaderType b, ShaderType c, ShaderType d)
-     => String -> a -> b -> c -> d
-fun3 name x y z = fromExpr $ Apply name [toExpr x, toExpr y, toExpr z]
+fun3 :: forall a b c d. (ShaderType a, ShaderType b, ShaderType c, ShaderType d)
+     => String
+     -> a
+     -> b
+     -> c
+     -> d
+fun3 name x y z = fromExpr $ Apply (typeName (undefined :: d))
+                                   name
+                                   [toExpr x, toExpr y, toExpr z]
 
-funCompList :: (ToCompList cl n, ShaderType r) => String -> cl -> r
-funCompList name = fromExpr . Apply name . toExprList . toCompList
-        where toExprList :: CompList n -> [Expr]
+funCompList :: forall cl n r. (ToCompList cl n, ShaderType r)
+            => String
+            -> cl
+            -> r
+funCompList name = fromExpr .
+                   Apply (typeName (undefined :: r)) name .
+                   toExprList .
+                   toCompList
+        where toExprList :: forall n. CompList n -> [Expr]
               toExprList (CL x) = [toExpr x]
               toExprList (CLAppend c1 c2) =
                       toExprList c1 Prelude.++ toExprList c2
