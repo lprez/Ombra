@@ -187,34 +187,3 @@ mapVertices getValue (transVert :: [a] -> Vertex is -> Vertex is')
                                  row0
             geom' = Geometry tophash' 0 top' (Triangles thash triangles') lidx
         in rehashGeometry geom'
-
-{-
--- | Remove an attribute from a geometry.
-removeAttribute :: ( RemoveAttr i is
-                   , Attributes is
-                   , Attributes (Remove i is)
-                   , GLES
-                   )
-                => (a -> i)      -- ^ Attribute constructor (or any other
-                                 -- function with that type).
-                -> Geometry is
-                -> Geometry (Remove i is)
-removeAttribute g = mapVertices (const ()) (const $ removeAttr g)
-
-class RemoveAttr i is where
-        removeAttr :: (a -> i) -> Vertex is -> Vertex (Remove i is)
-
-instance {-# OVERLAPPING #-} (Remove i '[i', i] ~ '[i']) =>
-        RemoveAttr i '[i', i] where
-        removeAttr g (Attr g' x :~ _) = Attr g' x
-
-instance {-# OVERLAPPING #-} RemoveAttr i is' => RemoveAttr i (i ': is') where
-        removeAttr g (Attr _ _ :~ v) = removeAttr g v
-
-instance {-# OVERLAPPABLE #-} ( RemoveAttr i is'
-                              , Remove i (i' ': is') ~ (i' ': Remove i is')
-                              ) => RemoveAttr i (i' ': is') where
-        removeAttr g (Attr g' x) = Attr g' x
-        removeAttr g (Attr g' x :~ v) = Attr g' x :~ removeAttr g v
--}
-
