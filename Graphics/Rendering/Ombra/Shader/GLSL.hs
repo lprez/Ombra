@@ -18,7 +18,6 @@ import Graphics.Rendering.Ombra.Shader.Types
 import Text.Printf
 
 -- TODO: IntMap instead of HashMap
--- TODO: use DList/ShowS
 -- TODO: use fgl
 -- TODO: detect identical uniforms
 
@@ -77,16 +76,17 @@ compileShader useAttributes header outNames uniformID (Shader shaderFun _) =
 
             outVaryingNames = map varyingName [0 ..]
             (compiledActions, outStrs) = compile (outs ++ outVaryingExprs)
-            compiledOuts = concat $ zipWith (\n s -> concat [n, "=", s, ";"])
-                                            (outNames ++ outVaryingNames)
-                                            outStrs
+            compiledOuts = zipWith (\n s -> showString (n ++ "=") . s .
+                                            showString ";")
+                                   (outNames ++ outVaryingNames)
+                                   outStrs
         in ( concat [ header
                     , uniVars
                     , inputVars
                     , outVaryingVars
                     , "void main(){"
-                    , compiledActions
-                    , compiledOuts
+                    , compiledActions ""
+                    , foldr (.) id compiledOuts $ ""
                     , "}"
                     ]
             , ( uniformID'
@@ -108,12 +108,8 @@ data ActionInfo = ActionInfo {
         actionContext :: ActionContext
 }
 
-type ActionGenerator = String -> String
+type ActionGenerator = ShowS -> ShowS
 
--- | The context is where an action should be put. Only for-loops are considered
--- contexts, because there is no reason to put an action inside another block.
--- Of course, an action could have many contexts (e.g. for(..) { for (..) {
--- act; } }), but only one is actually needed to compile the action.
 data ActionContext = ShallowContext ActionSet       -- ^ The contexts of the expressions used in the action.
                    | DeepContext ActionSet          -- ^ All the contexts (including those of the dependencies).
                    deriving (Show)
@@ -121,12 +117,12 @@ data ActionContext = ShallowContext ActionSet       -- ^ The contexts of the exp
 type ActionGraph = H.HashMap ActionID ActionInfo
 
 -- | Compile a list of 'Expr', sharing their actions.
-compile :: [Expr] -> (String, [String])
+compile :: [Expr] -> (ShowS, [ShowS])
 compile exprs = let exprs' = optimize exprs
                     (strs, deps, _) = unzip3 $ map compileExpr exprs'
                     depGraph = contextAll deep . buildActionGraph $ H.unions deps
                     sorted = sortActions depGraph
-                in (sorted >>= uncurry generate, strs)
+                in (genList sorted, strs)
 
 optimize :: [Expr] -> [Expr]
 optimize exprs = let reps fullExprMap expr (optimizedExprs, exprMap) =
@@ -150,8 +146,11 @@ optimize exprs = let reps fullExprMap expr (optimizedExprs, exprMap) =
                              foldr (reps fullExprMap) ([], H.empty) exprs
                  in optimizedExprs
 
-generate :: ActionGenerator -> ActionGraph -> String
-generate gen graph = gen $ sortActions graph >>= uncurry generate
+generate :: ActionGenerator -> ActionGraph -> ShowS
+generate gen graph = gen . genList $ sortActions graph
+
+genList :: [(ActionGenerator, ActionGraph)] -> ShowS
+genList = foldr (.) id . map (uncurry generate)
 
 sortActions :: ActionGraph -> [(ActionGenerator, ActionGraph)]
 sortActions fullGraph = visitLoop (H.empty, [], fullGraph)
@@ -230,41 +229,52 @@ deep aID graph =
 
 -- | Compile an 'Expr'. Returns the compiled expression, the map of dependencies
 -- and the context.
-compileExpr :: Expr -> (String, ActionMap, ActionSet)
-compileExpr Empty = ("", H.empty, H.empty)
-compileExpr (Read _ s) = (s, H.empty, H.empty)
+compileExpr :: Expr -> (ShowS, ActionMap, ActionSet)
+compileExpr Empty = (showString "", H.empty, H.empty)
+compileExpr (Read _ s) = (showString s, H.empty, H.empty)
 
-compileExpr (Op1 _ s e) = first3 (\x -> "(" ++ s ++ x ++ ")") $ compileExpr e
+compileExpr (Op1 _ s e) = let left = showString ("(" ++ s)
+                              right = showString ")"
+                          in first3 (\x -> left . x . right) $ compileExpr e
 
 compileExpr (Op2 _ s ex ey) = let (x, ax, cx) = compileExpr ex
                                   (y, ay, cy) = compileExpr ey
-                              in ( "(" ++ x ++ s ++ y ++ ")"
-                                 , H.union ax ay, H.union cx cy )
+                                  str = showString "(" .
+                                        x . showString s . y .
+                                        showString ")"
+                              in (str, H.union ax ay, H.union cx cy)
 
-compileExpr (Apply _ s es) = let (vs, as, cs) = unzip3 $ map compileExpr es
-                                 comp = [ s, "(" , tail (vs >>= (',' :)), ")" ]
-                             in ( concat comp
-                                , H.unions as, H.unions cs)
+compileExpr (Apply _ s es) = let (v : vs, as, cs) = unzip3 $ map compileExpr es
+                                 addArg vs v = vs . showString "," . v
+                                 args = v . foldl addArg id vs
+                                 str = showString (s ++ "(") . args . showString ")"
+                             in (str, H.unions as, H.unions cs)
 
-compileExpr (X e) = first3 (++ "[0]") $ compileExpr e
-compileExpr (Y e) = first3 (++ "[1]") $ compileExpr e
-compileExpr (Z e) = first3 (++ "[2]") $ compileExpr e
-compileExpr (W e) = first3 (++ "[3]") $ compileExpr e
-compileExpr (Literal _ s) = (s, H.empty, H.empty)
-compileExpr (Input _ i) = (varyingName i, H.empty, H.empty)
-compileExpr (Attribute _ i) = (attributeName i, H.empty, H.empty)
-compileExpr (Uniform _ i) = (uniformName i, H.empty, H.empty)
+compileExpr (X e) = first3 (. showString "[0]") $ compileExpr e
+compileExpr (Y e) = first3 (. showString "[1]") $ compileExpr e
+compileExpr (Z e) = first3 (. showString "[2]") $ compileExpr e
+compileExpr (W e) = first3 (. showString "[3]") $ compileExpr e
+compileExpr (Literal _ s) = (showString s, H.empty, H.empty)
+compileExpr (Input _ i) = (showString $ varyingName i, H.empty, H.empty)
+compileExpr (Attribute _ i) = (showString $ attributeName i, H.empty, H.empty)
+compileExpr (Uniform _ i) = (showString $ uniformName i, H.empty, H.empty)
 compileExpr (Action a) = let h = hash a
-                         in (actionName h, H.singleton h a, H.empty)
+                             var = showString $ actionName h
+                         in (var, H.singleton h a, H.empty)
 compileExpr (Dummy _) = error "compileExpr: Dummy"
 compileExpr (HashDummy _) = error "compileExpr: HashDummy"
 compileExpr (ArrayIndex _ eArr ei) = let (arr, aArr, cArr) = compileExpr eArr
                                          (i, ai, ci) = compileExpr ei
-                                     in ( "(" ++ arr ++ "[" ++ i ++ "])"
-                                        , H.union aArr ai, H.union cArr ci )
-compileExpr (ContextVar _ i t) = (contextVarName t i, H.empty, H.singleton i ())
+                                         str = showString "(" . arr .
+                                               showString "[" . i .
+                                               showString "])"
+                                     in (str, H.union aArr ai, H.union cArr ci)
+compileExpr (ContextVar _ i t) = ( showString $ contextVarName t i
+                                 , H.empty
+                                 , H.singleton i ()
+                                 )
 
-compileExprOptimized :: Expr -> (String, ActionMap, ActionSet)
+compileExprOptimized :: Expr -> (ShowS, ActionMap, ActionSet)
 compileExprOptimized = compileExpr . head . optimize . (: [])
 
 first3 :: (a -> a') -> (a, b, c) -> (a', b, c)
@@ -273,8 +283,9 @@ first3 f (a, b, c) = (f a, b, c)
 compileAction :: ActionID -> Action -> (ActionInfo, ActionMap)
 compileAction aID (Store ty expr) =
         let (eStr, deps, ctxs) = compileExpr expr
-        in ( ActionInfo  (\c -> concat [ c, ty, " ", actionName aID
-                                       , "=", eStr, ";" ])
+        in ( ActionInfo  (\c -> c .
+                                showString (ty ++ " " ++ actionName aID ++ "=") .
+                                eStr . showString ";")
                          (H.map (const ()) deps)
                          (ShallowContext ctxs)
            , deps )
@@ -285,28 +296,32 @@ compileAction aID (If cExpr ty tExpr fExpr) =
             (fStr, fDeps, fCtxs) = compileExprOptimized fExpr
             deps = H.unions [cDeps, tDeps, fDeps]
             name = actionName aID
-        in ( ActionInfo (\c -> concat [ ty, " ", name, ";if("
-                                      , cStr, "){", c, name, "=", tStr
-                                      , ";}else{" , name, "=", fStr, ";}" ])
+            nameS = showString name
+        in ( ActionInfo (\c -> showString (ty ++ " " ++ name ++ ";if(") .
+                               cStr . showString "){" . c . nameS .
+                               showString "=" . tStr . showString ";}else{" .
+                               nameS . showString "=" . fStr . showString ";}")
                         (H.map (const ()) deps)
                         (ShallowContext $ H.unions [cCtxs, tCtxs, fCtxs])
            , deps )
 
 compileAction aID (For iters ty initVal body) =
-        let iterName = contextVarName LoopIteration aID
-            valueName = contextVarName LoopValue aID
+        let iterNameS = showString $ contextVarName LoopIteration aID
+            valueNameS = showString $ contextVarName LoopValue aID
             (nExpr, sExpr) = body (ContextVar "float" aID LoopIteration)
                                   (ContextVar ty aID LoopValue)
             (iStr, iDeps, iCtxs) = compileExprOptimized initVal
             (nStr, nDeps, nCtxs) = compileExprOptimized nExpr
             (sStr, sDeps, sCtxs) = compileExprOptimized sExpr
             deps = H.unions [iDeps, nDeps, sDeps]
-        in ( ActionInfo (\c -> concat [ ty, " ", valueName, "=", iStr, ";"
-                                      , "for(float ", iterName, "=0.0;"
-                                      , iterName, "<", show iters, ".0;"
-                                      , "++", iterName, "){", c
-                                      , "if(", sStr, "){break;}"
-                                      , valueName, "=", nStr, ";}" ])
+        in ( ActionInfo (\c -> showString (ty ++ " ") . valueNameS .
+                               showString "=" . iStr .
+                               showString ";for(float " . iterNameS .
+                               showString "=0.0;" . iterNameS . showString "<" .
+                               shows iters . showString ".0;++" . iterNameS .
+                               showString "}{" . c . showString "if(" . sStr .
+                               showString "){break;}" . valueNameS .
+                               showString "=" . nStr . showString ";}")
                         (H.map (const ()) deps)
                         (ShallowContext $ H.unions [iCtxs, nCtxs, sCtxs])
            , deps )
