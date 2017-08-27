@@ -62,6 +62,7 @@ import Graphics.Rendering.Ombra.Vector
 
 import Data.Hashable
 import Data.Proxy
+import Data.Word
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
@@ -126,6 +127,13 @@ instance GLES => MonadDrawBuffers Draw where
                                                (Nothing :: Maybe TextureImage)
                                                lt
                               ) (textures buf)
+
+instance GLES => MonadRead GVec4 Draw where
+        readColor = flip readPixels gl_RGBA
+        readColorFloat = flip readPixels gl_RGBA
+        readDepth = flip readPixels gl_DEPTH_COMPONENT
+        readDepthFloat = flip readPixels gl_DEPTH_COMPONENT
+        readStencil = flip readPixels gl_STENCIL_INDEX
 
 instance GLES => MonadScreen (Draw o) where
         currentViewport = viewportSize <$> Draw get
@@ -673,6 +681,70 @@ drawToTextures useDrawBuffers atts w h oldFb draw =
                    bindFramebuffer gl_FRAMEBUFFER oldFb
 
            return ret
+
+class ReadPixels r where
+        readPixels :: MonadGL m => (Int, Int, Int, Int) -> GLEnum -> m r
+
+instance GLES => ReadPixels [Color] where
+        readPixels (x, y, rw, rh) format =
+                        do arr <- liftIO . newUInt8Array $
+                                        fromIntegral rw * fromIntegral rh * 4
+                           gl $ readPixelsUInt8 (fromIntegral x)
+                                                (fromIntegral y)
+                                                (fromIntegral rw)
+                                                (fromIntegral rh)
+                                                format gl_UNSIGNED_BYTE arr
+                           liftIO $ fmap wordsToColors (decodeUInt8s arr)
+                where wordsToColors (r : g : b : a : xs) =
+                                Color r g b a : wordsToColors xs
+                      wordsToColors _ = []
+
+instance GLES => ReadPixels [Vec4] where
+        readPixels (x, y, rw, rh) format =
+                        do arr <- liftIO . newFloat32Array $
+                                        fromIntegral rw * fromIntegral rh * 4
+                           gl $ readPixelsFloat (fromIntegral x)
+                                                (fromIntegral y)
+                                                (fromIntegral rw)
+                                                (fromIntegral rh)
+                                                format gl_FLOAT arr
+                           liftIO $ fmap floatsToVecs (decodeFloat32s arr)
+                where floatsToVecs (r : g : b : a : xs) =
+                                Vec4 r g b a : floatsToVecs xs
+                      floatsToVecs _ = []
+
+instance GLES => ReadPixels [Word8] where
+        readPixels (x, y, rw, rh) format =
+                        do arr <- liftIO . newUInt8Array $
+                                        fromIntegral rw * fromIntegral rh
+                           gl $ readPixelsUInt8 (fromIntegral x)
+                                                (fromIntegral y)
+                                                (fromIntegral rw)
+                                                (fromIntegral rh)
+                                                format gl_UNSIGNED_BYTE arr
+                           liftIO $ decodeUInt8s arr
+
+instance GLES => ReadPixels [Word16] where
+        readPixels (x, y, rw, rh) format =
+                        do arr <- liftIO . newUInt16Array $
+                                        fromIntegral rw * fromIntegral rh
+                           gl $ readPixelsUInt16 (fromIntegral x)
+                                                 (fromIntegral y)
+                                                 (fromIntegral rw)
+                                                 (fromIntegral rh)
+                                                 format gl_UNSIGNED_SHORT arr
+                           liftIO $ decodeUInt16s arr
+
+instance GLES => ReadPixels [Float] where
+        readPixels (x, y, rw, rh) format =
+                        do arr <- liftIO . newFloat32Array $
+                                        fromIntegral rw * fromIntegral rh
+                           gl $ readPixelsFloat (fromIntegral x)
+                                                (fromIntegral y)
+                                                (fromIntegral rw)
+                                                (fromIntegral rh)
+                                                format gl_FLOAT arr
+                           liftIO $ decodeFloat32s arr
 
 castDraw :: Draw o a -> Draw o' a
 castDraw (Draw x) = Draw x
