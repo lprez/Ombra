@@ -17,38 +17,39 @@ newtype DepthBufferSampler t = DepthBufferSampler GSampler2D
 data OutDepthBuffer
 data OutStatus = OutEmpty | OutUsed
 
-data OutBuffer t (s :: OutStatus) o where
+data OutBufferInfo o where
         EmptyFloatGBuffer               :: FragmentShaderOutput o
                                         => Filter
                                         -> Filter
-                                        -> OutBuffer t OutEmpty o
+                                        -> OutBufferInfo o
 
         EmptyByteGBuffer                :: FragmentShaderOutput o
                                         => Filter
                                         -> Filter
-                                        -> OutBuffer t OutEmpty o
+                                        -> OutBufferInfo o
 
         EmptyDepthBuffer                :: Filter
                                         -> Filter
-                                        -> OutBuffer t OutEmpty OutDepthBuffer
+                                        -> OutBufferInfo OutDepthBuffer
 
         EmptyDepthStencilBuffer         :: Filter
                                         -> Filter
-                                        -> OutBuffer t OutEmpty OutDepthBuffer
+                                        -> OutBufferInfo OutDepthBuffer
 
+data OutBuffer t o where
         TextureFloatGBuffer             :: FragmentShaderOutput o
                                         => [LoadedTexture]
-                                        -> OutBuffer t OutUsed o
+                                        -> OutBuffer t o
 
         TextureByteGBuffer              :: FragmentShaderOutput o
                                         => [LoadedTexture]
-                                        -> OutBuffer t OutUsed o
+                                        -> OutBuffer t o
 
         TextureDepthBuffer              :: LoadedTexture
-                                        -> OutBuffer t OutUsed OutDepthBuffer
+                                        -> OutBuffer t OutDepthBuffer
 
         TextureDepthStencilBuffer       :: LoadedTexture
-                                        -> OutBuffer t OutUsed OutDepthBuffer
+                                        -> OutBuffer t OutDepthBuffer
 
 instance FragmentShaderOutput o => MultiShaderType (GBufferSampler t o) where
         type ExprMST (GBufferSampler t o) = [ExprMST GSampler2D]
@@ -63,7 +64,7 @@ instance FragmentShaderOutput o => ShaderInput (GBufferSampler t o) where
                       infiniteSamplers = map f [i ..]
 
 instance FragmentShaderOutput o => Uniform (GBufferSampler t o) where
-        type CPUUniform (GBufferSampler t o) = UsedGBuffer t o
+        type CPUUniform (GBufferSampler t o) = GBuffer t o
         foldrUniform _ f s buf =
                 foldr (\u s -> f (UniformTexture $ TextureLoaded u) s)
                       s (textures buf)
@@ -79,28 +80,26 @@ instance ShaderInput (DepthBufferSampler t) where
         buildMST f i = (DepthBufferSampler $ f i, i + 1)
 
 instance Uniform (DepthBufferSampler t) where
-        type CPUUniform (DepthBufferSampler t) = UsedDepthBuffer t
+        type CPUUniform (DepthBufferSampler t) = DepthBuffer t
         foldrUniform _ f s buf =
                 f (UniformTexture . TextureLoaded . head . textures $ buf) s
 
 -- | A container that can be used to store the output of some drawing operation.
 type GBuffer = OutBuffer
 -- | A container for depth/stencil values.
-type DepthBuffer t s = OutBuffer t s OutDepthBuffer
+type DepthBuffer t = OutBuffer t OutDepthBuffer
 
--- | A 'GBuffer' that was previously drawn to.
-type UsedGBuffer t o = GBuffer t OutUsed o
--- | A 'DepthBuffer' that was previously drawn to.
-type UsedDepthBuffer t = DepthBuffer t OutUsed
+type GBufferInfo = OutBufferInfo
+type DepthBufferInfo = OutBufferInfo OutDepthBuffer
 
-textures :: OutBuffer t OutUsed o -> [LoadedTexture]
+textures :: OutBuffer t o -> [LoadedTexture]
 textures (TextureFloatGBuffer ts) = ts
 textures (TextureByteGBuffer ts) = ts
 textures (TextureDepthBuffer t) = [t]
 textures (TextureDepthStencilBuffer t) = [t]
 
-castUsedBuffer :: OutBuffer t OutUsed o -> OutBuffer t' OutUsed o
-castUsedBuffer (TextureFloatGBuffer ts) = TextureFloatGBuffer ts
-castUsedBuffer (TextureByteGBuffer ts) = TextureByteGBuffer ts
-castUsedBuffer (TextureDepthBuffer t) = TextureDepthBuffer t
-castUsedBuffer (TextureDepthStencilBuffer t) = TextureDepthStencilBuffer t
+castBuffer :: OutBuffer t o -> OutBuffer t' o
+castBuffer (TextureFloatGBuffer ts) = TextureFloatGBuffer ts
+castBuffer (TextureByteGBuffer ts) = TextureByteGBuffer ts
+castBuffer (TextureDepthBuffer t) = TextureDepthBuffer t
+castBuffer (TextureDepthStencilBuffer t) = TextureDepthStencilBuffer t

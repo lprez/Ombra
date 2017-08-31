@@ -512,8 +512,8 @@ clearBuffers = mapM_ $ gl . GL.clear . buffer
 createOutBuffer :: forall m t t' o. (GLES, MonadTexture m)
                 => Int
                 -> Int
-                -> OutBuffer t OutEmpty o
-                -> m (OutBuffer t' OutUsed o)
+                -> OutBufferInfo o
+                -> m (OutBuffer t' o)
 createOutBuffer w h empty = 
         do let loader t = do bindTexture gl_TEXTURE_2D t
                              if pixelType == gl_FLOAT
@@ -581,34 +581,25 @@ createOutBuffer w h empty =
 permanentDrawBuffers :: GLES
                      => Int
                      -> Int
-                     -> GBuffer t s o
-                     -> DepthBuffer t1 s'
+                     -> Either (GBuffer t o) (GBufferInfo o)
+                     -> Either (DepthBuffer t1) DepthBufferInfo
                      -> Draw o a
                      -> Draw o' ( a
-                                , (Bool, UsedGBuffer t2 o)
-                                , (Bool, UsedDepthBuffer t3)
+                                , (Bool, GBuffer t2 o)
+                                , (Bool, DepthBuffer t3)
                                 )
 permanentDrawBuffers w h gBuffer depthBuffer draw =
         do (newColor, gBuffer') <-
                 case gBuffer of
-                     b@(EmptyFloatGBuffer _ _) ->
-                             (,) True <$> createOutBuffer w h b
-                     b@(EmptyByteGBuffer _ _) ->
-                             (,) True <$> createOutBuffer w h b
-                     TextureFloatGBuffer _ ->
-                             return (False, castUsedBuffer gBuffer)
-                     TextureByteGBuffer _ ->
-                             return (False, castUsedBuffer gBuffer)
+                     Right b -> (,) True <$> createOutBuffer w h b
+                     Left b -> return (False, castBuffer b)
            (newDepth, shouldClearStencil, depthBuffer') <-
                 case depthBuffer of
-                     b@(EmptyDepthBuffer _ _) ->
+                     Right b@(EmptyDepthBuffer _ _) ->
                              (,,) True False <$> createOutBuffer w h b
-                     b@(EmptyDepthStencilBuffer _ _) ->
+                     Right b@(EmptyDepthStencilBuffer _ _) ->
                              (,,) True True <$> createOutBuffer w h b
-                     TextureDepthBuffer _ ->
-                             return (False, False, castUsedBuffer depthBuffer)
-                     TextureDepthStencilBuffer _ ->
-                             return (False, False, castUsedBuffer depthBuffer)
+                     Left b -> return (False, False, castBuffer b)
            ret <- drawUsedBuffers w h gBuffer' depthBuffer' $
                    do when newColor clearColor
                       when newDepth clearDepth
@@ -619,8 +610,8 @@ permanentDrawBuffers w h gBuffer depthBuffer draw =
 drawUsedBuffers :: GLES
                 => Int
                 -> Int
-                -> UsedGBuffer t o
-                -> UsedDepthBuffer t1
+                -> GBuffer t o
+                -> DepthBuffer t1
                 -> Draw o a
                 -> Draw o' a
 drawUsedBuffers w h gBuffer depthBuffer draw =

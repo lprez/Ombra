@@ -4,16 +4,16 @@ module Graphics.Rendering.Ombra.OutBuffer (
         OutStatus(..),
         GBuffer,
         DepthBuffer,
-        UsedGBuffer,
-        UsedDepthBuffer,
+        GBufferInfo,
+        DepthBufferInfo,
         GBufferSampler,
         DepthBufferSampler,
         sampleGBuffer,
         sampleDepthBuffer,
-        emptyFloatGBuffer,
-        emptyByteGBuffer,
-        emptyDepthBuffer,
-        emptyDepthStencilBuffer,
+        floatGBuffer,
+        byteGBuffer,
+        depthBuffer,
+        depthStencilBuffer,
         -- * Conversion between buffers and textures
         toGSampler2D,
         fromGSampler2D
@@ -41,20 +41,20 @@ fromGSampler2D sampler = GBufferSampler [sampler]
 toGSampler2D :: GBufferSampler t GVec4 -> GSampler2D
 toGSampler2D (GBufferSampler (sampler : _)) = sampler
 
-emptyFloatGBuffer :: FragmentShaderOutput o
-                  => Filter
-                  -> Filter
-                  -> GBuffer t OutEmpty o
-emptyFloatGBuffer = EmptyFloatGBuffer
+floatGBuffer :: FragmentShaderOutput o
+             => Filter
+             -> Filter
+             -> GBufferInfo o
+floatGBuffer = EmptyFloatGBuffer
 
-emptyByteGBuffer :: FragmentShaderOutput o
-                 => Filter
-                 -> Filter
-                 -> GBuffer t OutEmpty o
-emptyByteGBuffer = EmptyByteGBuffer
+byteGBuffer :: FragmentShaderOutput o
+            => Filter
+            -> Filter
+            -> GBufferInfo o
+byteGBuffer = EmptyByteGBuffer
 
-emptyDepthBuffer :: Filter -> Filter -> DepthBuffer t OutEmpty
-emptyDepthBuffer = EmptyDepthBuffer
+depthBuffer :: Filter -> Filter -> DepthBufferInfo
+depthBuffer = EmptyDepthBuffer
 
-emptyDepthStencilBuffer :: Filter -> Filter -> DepthBuffer t OutEmpty
-emptyDepthStencilBuffer = EmptyDepthStencilBuffer
+depthStencilBuffer :: Filter -> Filter -> DepthBufferInfo
+depthStencilBuffer = EmptyDepthStencilBuffer
