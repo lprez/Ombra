@@ -179,6 +179,21 @@ type VertexShader = Shader VertexShaderStage
 -- | A shader that transforms fragments.
 type FragmentShader = Shader FragmentShaderStage
 
+data Fragment = Fragment {
+        -- | The coordinates of the fragment.
+        fragCoord :: GVec4,
+        -- | If the fragment belongs to a front-facing primitive.
+        fragFrontFacing :: GBool,
+        -- | Partial derivative of the argument with respect to the window X
+        -- coordinate.
+        dFdx :: forall a. GenType a => a -> a,
+        -- | Partial derivative of the argument with respect to the window Y
+        -- coordinate.
+        dFdy :: forall a. GenType a => a -> a,
+        -- | Sum of the absolute values of 'dFdx' and 'dFdy'.
+        fwidth :: forall a. GenType a => a -> a
+}
+
 instance MultiShaderType GBool where
         type ExprMST GBool = Expr
         mapMST f = f

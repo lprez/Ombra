@@ -27,15 +27,9 @@ module Graphics.Rendering.Ombra.Shader (
         (~*),
         sarr,
         -- * Fragment shader functionalities
-        -- ** Derivatives
-        dFdx,
-        dFdy,
-        fwidth,
-        -- ** Variables
-        -- position,
-        -- fragData,
-        fragCoord,
-        fragFrontFacing,
+        Fragment(..),
+        farr,
+        fragment,
         -- * Classes
         MultiShaderType(..),
         ShaderInput(..),
@@ -139,32 +133,19 @@ infixl 9 ~*
      -> Shader s i o
 shader ~* u = (const u ^>> uniform') &&& id >>> shader
 
--- | Partial derivative of the argument with respect to the window X coordinate.
-dFdx :: GenType a => FragmentShader a a
-dFdx = arr Shader.dFdx
+-- | This works like 'sarr' but provides a 'Fragment'.
+farr :: (MultiShaderType i, MultiShaderType o)
+     => (Fragment -> i -> o)
+     -> FragmentShader i o
+farr f = shader $ arr (f frag)
 
--- | Partial derivative of the argument with respect to the window Y coordinate.
-dFdy :: GenType a => FragmentShader a a
-dFdy = arr Shader.dFdy
+fragment :: FragmentShader a Fragment
+fragment = arr $ const frag
 
--- | Sum of the absolute values of 'dFdx' and 'dFdy'.
-fwidth :: GenType a => FragmentShader a a
-fwidth = arr Shader.fwidth
-
-{-
--- | The position of the vertex.
-position :: VertexShader a GVec4
-position = arr $ const Shader.position
-
--- | The data of the fragment.
-fragData :: FragmentShader a (GArray 16 GVec4)
-fragData = arr $ const Shader.fragData
--}
-
--- | The coordinates of the fragment.
-fragCoord :: FragmentShader a GVec4
-fragCoord = arr $ const Shader.fragCoord
-
--- | If the fragment belongs to a front-facing primitive.
-fragFrontFacing :: FragmentShader a GBool
-fragFrontFacing = arr $ const Shader.fragFrontFacing
+frag :: Fragment
+frag = Fragment { fragCoord = Shader.fragCoord
+                , fragFrontFacing = Shader.fragFrontFacing
+                , dFdx = Shader.dFdx
+                , dFdy = Shader.dFdy
+                , fwidth = Shader.fwidth
+                }
