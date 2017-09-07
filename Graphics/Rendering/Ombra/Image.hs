@@ -68,3 +68,4 @@ draw (Image geometries vs fs) =
                                      Left _ -> return ()
 
 draw (SeqImage i i') = draw i >> draw i'
+draw NoImage = return ()
