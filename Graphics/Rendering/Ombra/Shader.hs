@@ -22,10 +22,13 @@ module Graphics.Rendering.Ombra.Shader (
         -- * Optimized shaders
         UniformSetter,
         shader,
-        shader1,
+        sarr,
+        shaderParam,
+        pshader,
+        ushader,
+        pushader,
         uniform',
         (~*),
-        sarr,
         -- * Fragment shader functionalities
         Fragment(..),
         farr,
@@ -76,14 +79,44 @@ shader :: (MultiShaderType i, MultiShaderType o) => Shader s i o -> Shader s i o
 shader (Shader f hf) = Shader f (memoHash hf)
 -- BUG: shader modifies the hash of the shader
 
+-- | This variant of 'shader' can be used with shaders that have a mostly static
+-- parameter. It will create a different shader every time the parameter changes
+-- to a new value, therefore the parameter must be used to configure the shader
+-- rather than for sending things like a model matrix to the GPU, for which
+-- 'uniform's are more appropriate.
+shaderParam :: (HasTrie p, MultiShaderType i, MultiShaderType o)
+            => Shader s (p, i) o
+            -> Shader s (p, i) o
+shaderParam (Shader f hf) =
+        let hf' = memo (\p -> memoHash $ \(uid, i) -> hf (uid, (p, i)))
+        in Shader f (\(uid, (p, i)) -> hf' p (uid, i))
+
+-- | See 'shaderParam'.
+pshader :: (HasTrie p, MultiShaderType i, MultiShaderType o)
+        => (p -> Shader s i o)
+        -> (p -> Shader s i o)
+pshader shaderf = let shader' = shaderParam $ first shaderf ^>> app
+                  in \p -> const p &&& id ^>> shader'
+
 -- | 'shader' with an additional parameter that can be used to set the values of
 -- the uniforms.
-shader1 :: (MultiShaderType i, MultiShaderType o)
-        => (Shader s (UniformSetter x, i) o)
+ushader :: (MultiShaderType i, MultiShaderType o)
+        => (UniformSetter x -> Shader s i o)
         -> (UniformSetter x -> Shader s i o)
-shader1 (Shader f hf) = let err = "shader1: not an uniform value"
-                            hf' = memoHash $ hf . second ((,) (error err))
-                        in \x -> Shader (\(s, i) -> f (s, (x, i))) hf'
+ushader shaderf = let err = "ushader: not an uniform value"
+                      Shader _ hf = shaderf $ error err
+                      hf' = memoHash hf
+                  in \x -> let Shader f _ = shaderf x in Shader f hf'
+
+-- | Combination of 'pshader' and 'ushader'.
+pushader :: (HasTrie p, MultiShaderType i, MultiShaderType o)
+         => (p -> UniformSetter x -> Shader s i o)
+         -> (p -> UniformSetter x -> Shader s i o)
+pushader shaderf = let err = error "pushader: not an uniform value"
+                       hf' = memo $ \p -> let Shader _ hf = shaderf p err
+                                          in memoHash hf
+                   in \p x -> let Shader f _ = shaderf p x
+                              in Shader f $ hf' p
 
 -- | @'shader' . 'arr'@
 sarr :: (MultiShaderType i, MultiShaderType o) => (i -> o) -> Shader s i o
