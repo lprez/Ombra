@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 
 module Graphics.Rendering.Ombra.OutBuffer (
-        OutStatus(..),
         GBuffer,
         DepthBuffer,
         GBufferInfo,

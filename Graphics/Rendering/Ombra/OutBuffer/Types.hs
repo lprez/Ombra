@@ -15,7 +15,6 @@ data GBufferSampler t o = FragmentShaderOutput o => GBufferSampler [GSampler2D]
 newtype DepthBufferSampler t = DepthBufferSampler GSampler2D
 
 data OutDepthBuffer
-data OutStatus = OutEmpty | OutUsed
 
 data OutBufferInfo o where
         EmptyFloatGBuffer               :: FragmentShaderOutput o
