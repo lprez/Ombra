@@ -11,17 +11,12 @@ module Graphics.Rendering.Ombra.Draw (
         DrawState,
         Ctx,
         -- * Running the Draw monad
-        refDrawCtx,
-        runDrawCtx,
-        execDrawCtx,
-        evalDrawCtx,
-        drawState,
+        runDraw,
         -- * Draw actions
         MonadDraw(..),
         MonadDrawBuffers(drawBuffers, drawBuffers'),
         MonadRead(..),
         MonadScreen(resizeViewport),
-        drawInit,
         clearColor,
         clearDepth,
         clearStencil,
@@ -33,16 +28,12 @@ module Graphics.Rendering.Ombra.Draw (
         ResStatus(..),
         preloadGeometry,
         preloadTexture,
-        -- preloadProgram,
         removeGeometry,
         removeTexture,
-        -- removeProgram,
         checkGeometry,
         checkTexture,
-        -- checkProgram,
 ) where
 
-import Data.IORef
 import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Culling.Draw
 import Graphics.Rendering.Ombra.Culling.Types
@@ -53,32 +44,13 @@ import Graphics.Rendering.Ombra.OutBuffer
 import Graphics.Rendering.Ombra.Shader.Language.Types (GVec4)
 import Graphics.Rendering.Ombra.Screen
 
--- | Run a Draw action using an IORef to hold the state.
-refDrawCtx :: GLES
-           => Ctx
-           -> Draw GVec4 a
-           -> IORef DrawState
-           -> IO a
-refDrawCtx ctx d ref = do state <- readIORef ref
-                          (ret, state') <- runDrawCtx ctx d state
-                          writeIORef ref state'
-                          return ret
-
-runDrawCtx :: Ctx                           -- ^ Context (use the appropriate
-                                            -- backend functions)
-           -> Draw GVec4 a                  -- ^ Draw action
-           -> DrawState                     -- ^ State (create it with
-                                            -- 'drawState')
-           -> IO (a, DrawState)
-runDrawCtx ctx d = flip evalGL ctx . runDraw d
-
-execDrawCtx :: Ctx -> Draw GVec4 a -> DrawState -> IO DrawState
-execDrawCtx ctx d = flip evalGL ctx . execDraw d
-
-evalDrawCtx :: Ctx -> Draw GVec4 a -> DrawState -> IO a
-evalDrawCtx ctx d = flip evalGL ctx . evalDraw d
-
--- renderSubLayer :: 
+runDraw :: GLES
+        => Int          -- ^ Viewport width
+        -> Int          -- ^ Viewport height
+        -> Ctx
+        -> Draw GVec4 a
+        -> IO a
+runDraw w h ctx a = flip evalGL ctx . evalDraw (drawInit >> a) $ drawState w h
 
 -- $resources
 -- In Ombra, GPU resources are allocated when they're needed, and they're kept

@@ -10,6 +10,7 @@ module Graphics.Rendering.Ombra.Geometry.Draw (
         drawGeometry
 ) where
 
+import Control.Monad.Trans.Control
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
@@ -67,7 +68,7 @@ instance GLES => Resource (Elements is) LoadedBuffer GL where
                                     (AttrVertex z _)) = [x, y, z]
         unloadResource _ (LoadedBuffer buf) = deleteBuffer buf
 
-instance (GLES, MonadGeometry m, EmbedIO m, GeometryVertex g) =>
+instance (GLES, MonadGeometry m, MonadBaseControl IO m, GeometryVertex g) =>
         Resource (Geometry g) LoadedGeometry m where
         loadResource = loadGeometry
         unloadResource _ = gl . deleteGeometry

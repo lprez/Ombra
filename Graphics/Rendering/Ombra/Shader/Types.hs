@@ -165,6 +165,9 @@ instance ArrowApply (Shader s) where
         app = Shader (\(s, (Shader f _, i)) -> f (s, i))
                      (\(s, (Shader _ hf, i)) -> hf (s, i))
 
+instance ArrowChoice (Shader s) where
+        left = leftApp
+
 instance (ShaderInput i, MultiShaderType o) => Hashable (Shader s i o) where
         hashWithSalt salt (Shader _ hf) =
                 let (input, _) = buildMST' (\t -> fromExpr .  Input t) 0

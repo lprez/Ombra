@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs, DataKinds, FlexibleContexts, TypeSynonymInstances,
              FlexibleInstances, MultiParamTypeClasses, KindSignatures,
-             GeneralizedNewtypeDeriving, RankNTypes, TypeOperators,
-             ScopedTypeVariables #-}
+             GeneralizedNewtypeDeriving, RankNTypes, TypeOperators, CPP,
+             ScopedTypeVariables, UndecidableInstances, TypeFamilies #-}
 
 module Graphics.Rendering.Ombra.Draw.Monad (
         Draw,
@@ -25,8 +25,6 @@ module Graphics.Rendering.Ombra.Draw.Monad (
         textureSize,
         setProgram,
         resizeViewport,
-        runDraw,
-        execDraw,
         evalDraw,
         gl,
         drawGet
@@ -64,7 +62,9 @@ import Data.Hashable
 import Data.Proxy
 import Data.Word
 import Control.Monad
+import Control.Monad.Base
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Control
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
 
@@ -95,13 +95,23 @@ data Buffer = ColorBuffer
             | StencilBuffer
 
 -- | An implementation of 'MonadDraw' and 'MonadDrawBuffers'.
---
--- __The first action must be 'drawInit'__
 newtype Draw o a = Draw { unDraw :: StateT DrawState GL a }
-        deriving (Functor, Applicative, Monad, MonadIO)
+        deriving ( Functor
+                 , Applicative
+                 , Monad
+                 , MonadIO
+                 , MonadBase IO
+#if __GLASGOW_HASKELL__ >= 802
+                 , MonadBaseControl IO
+                 )
+#else
+                 )
 
-instance EmbedIO (Draw o) where
-        embedIO f (Draw a) = Draw get >>= Draw . lift . embedIO f . evalStateT a
+instance MonadBaseControl IO (Draw o) where
+        type StM (Draw o) a = ComposeSt (StateT DrawState) GL a
+        liftBaseWith f = Draw $ liftBaseWith $ \tf -> f (tf . unDraw)
+        restoreM = Draw . restoreM
+#endif
 
 instance (FragmentShaderOutput o, GLES) => MonadDraw o Draw where
         withColorMask m a = stateReset colorMask setColorMask m a
@@ -260,6 +270,7 @@ maxTexs :: (Integral a, GLES) => a
 maxTexs = fromIntegral gl_MAX_COMBINED_TEXTURE_IMAGE_UNITS
 -}
 
+{-
 -- | Run a 'Draw' action.
 runDraw :: Draw GVec4 a
         -> DrawState
@@ -271,6 +282,7 @@ execDraw :: Draw GVec4 a
          -> DrawState
          -> GL DrawState
 execDraw (Draw a) = execStateT a
+-}
 
 -- | Evaluate a 'Draw' action.
 evalDraw :: Draw GVec4 a

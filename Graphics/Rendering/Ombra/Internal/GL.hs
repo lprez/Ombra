@@ -1,4 +1,8 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, CPP, UndecidableInstances #-}
+
+#if __GLASGOW_HASKELL__ < 802
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilies #-}
+#endif
 
 -- |
 -- Module:      Graphics.Rendering.Ombra.Internal.GL
@@ -145,15 +149,31 @@ module Graphics.Rendering.Ombra.Internal.GL (
         viewport
 ) where
 
+import Control.Monad.Base
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Control
 import Control.Monad.Trans.Reader
 import Data.Int (Int32)
 
 import Graphics.Rendering.Ombra.Backend
-import Graphics.Rendering.Ombra.Internal.Resource (EmbedIO(..))
         
-newtype GL a = GL (ReaderT Ctx IO a)
-        deriving (Functor, Applicative, Monad, MonadIO)
+newtype GL a = GL { unGL :: ReaderT Ctx IO a }
+        deriving ( Functor
+                 , Applicative
+                 , Monad
+                 , MonadIO
+                 , MonadBase IO
+#if __GLASGOW_HASKELL__ >= 802
+                 , MonadBaseControl IO
+                 )
+#else
+                 )
+
+instance MonadBaseControl IO GL where
+        type StM GL a = ComposeSt (ReaderT Ctx) IO a
+        liftBaseWith f = GL $ liftBaseWith $ \tf -> f (tf . unGL)
+        restoreM = GL . restoreM
+#endif
 
 class MonadIO m => MonadGL m where
         gl :: GL a -> m a
@@ -163,9 +183,6 @@ instance MonadGL GL where
 
 -- | A Texture ready to be passed as an uniform.
 newtype Sampler2D = Sampler2D Word
-
-instance EmbedIO GL where
-        embedIO f a = GL ask >>= \c -> liftIO . f $ evalGL a c
 
 evalGL :: GL a -> Ctx -> IO a
 evalGL (GL m) = runReaderT m

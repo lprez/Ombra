@@ -5,7 +5,6 @@ module Graphics.Rendering.Ombra.Internal.Resource (
         ResMap,
         ResStatus(..),
         Resource(..),
-        EmbedIO(..),
         newResMap,
         addResource,
         getResource,
@@ -15,7 +14,8 @@ module Graphics.Rendering.Ombra.Internal.Resource (
         unloader
 ) where
 
-import Control.Monad.IO.Class
+import Control.Monad.Base
+import Control.Monad.Trans.Control
 import qualified Data.HashTable.IO as H
 import Data.Hashable
 import System.Mem.Weak
@@ -26,16 +26,13 @@ data ResStatus r = Loaded r
                  | Unloaded
                  | Error String
 
-class (Eq i, Applicative m, EmbedIO m, Hashable i) =>
+class (Eq i, Applicative m, MonadBaseControl IO m, Hashable i) =>
         Resource i r m where
         loadResource :: i -> m (Either String r)
         unloadResource :: Maybe i -> r -> m ()
 
-class MonadIO m => EmbedIO m where
-        embedIO :: (IO a -> IO b) -> m a -> m b
-
-newResMap :: MonadIO m => m (ResMap r)
-newResMap = ResMap <$> liftIO H.new
+newResMap :: MonadBase IO m => m (ResMap r)
+newResMap = ResMap <$> liftBase H.new
 
 addResource :: Resource i r m => i -> ResMap r -> m ()
 addResource i m = () <$ getResource i m
@@ -51,7 +48,7 @@ checkResource' :: Resource i r m
                -> Int
                -> ResMap r
                -> m (ResStatus r)
-checkResource' _ i (ResMap map) = do m <- liftIO $ H.lookup map i
+checkResource' _ i (ResMap map) = do m <- liftBase $ H.lookup map i
                                      return $ case m of
                                                    Just (Right r) -> Loaded r
                                                    Just (Left e) -> Error e
@@ -68,17 +65,18 @@ getResource' mk (i :: i) rmap@(ResMap map) =
                    Unloaded ->
                         do r <- loadResource i
 
-                           liftIO $ case r of
-                                         Left s -> H.insert map ihash $ Left s
-                                         Right r -> H.insert map ihash $ Right r
+                           liftBase $
+                                   case r of
+                                        Left s -> H.insert map ihash $ Left s
+                                        Right r -> H.insert map ihash $ Right r
 
                            case mk of
-                                Just k -> embedIO (addFinalizer k) $
+                                Just k -> liftBaseDiscard (addFinalizer k) $
                                         removeResource' (Nothing :: Maybe i)
                                                         ihash rmap
                                 Nothing -> return ()
 
-                           meRes <- liftIO . H.lookup map $ ihash
+                           meRes <- liftBase . H.lookup map $ ihash
                            return $ case meRes of
                                          Just eRes -> eRes
                                          Nothing -> Left "Resource finalized"
@@ -97,10 +95,10 @@ removeResource' mi i rmap@(ResMap map) =
            case status of
                 Loaded r -> unloadResource mi r
                 _ -> return ()
-           liftIO $ H.delete map i
+           liftBase $ H.delete map i
 
-unloader :: (Resource i r m, EmbedIO m) => k -> Maybe i -> r -> m ()
-unloader k i r = embedIO (addFinalizer k) $ unloadResource i r
+unloader :: (Resource i r m, MonadBaseControl IO m) => k -> Maybe i -> r -> m ()
+unloader k i r = liftBaseDiscard (addFinalizer k) $ unloadResource i r
 
 instance Functor ResStatus where
         fmap f (Loaded r) = Loaded (f r)

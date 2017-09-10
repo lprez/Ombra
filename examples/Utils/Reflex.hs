@@ -98,20 +98,20 @@ playReflex w h requireBuffers initialization layerf = runSpiderHost $
                          , inputKeyDown = selectKey fromKey KeyDown inputSelector
                          , inputResize = resizeEvent
                          }
-           currentLayer <- runHostFrame . flip runReaderT i $ layerf tickEvent
+           bFrame <- runHostFrame . flip runReaderT i $ layerf tickEvent
            
-           play w h requireBuffers initialization
-                (frame currentLayer timeRef tickTriggerRef)
-                (handleInput inputTriggerRef)
-                (handleResize resizeTriggerRef)
+           liftIO $ play w h requireBuffers initialization
+                        (frame bFrame timeRef tickTriggerRef)
+                        (handleInput inputTriggerRef)
+                        (handleResize resizeTriggerRef)
 
-        where frame currentLayer timeRef tickTriggerRef time1 _ =
+        where frame bFrame timeRef tickTriggerRef time1 _ =
                 do time0 <- liftIO . atomicModifyIORef timeRef $
                                                        \time0 -> (time1, time0)
                    let diff = if time0 == 0 then 0 else time1 - time0
                    liftIO . withTrigger tickTriggerRef $
                         \trigger -> fireEvents [ trigger :=> Identity diff ]
-                   runHostFrame $ sample currentLayer
+                   join . liftIO . runSpiderHost . runHostFrame $ sample bFrame
 
               handleInput inputTriggerRef ev = withTrigger inputTriggerRef $
                               \trigger -> fireEvents [ trigger :=> Identity ev ]

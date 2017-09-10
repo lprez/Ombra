@@ -49,35 +49,30 @@ foreign import javascript unsafe "$1.addEventListener($2, $3)"
 foreign import javascript unsafe "$1.clientX" clientX :: JSVal -> IO Int
 foreign import javascript unsafe "$1.clientY" clientY :: JSVal -> IO Int
 
-play :: MonadIO m
-     => Int
+play :: Int
      -> Int
      -> Bool
      -> Draw GVec4 ()
-     -> (Float -> (Int, Int) -> m (Draw GVec4 ()))
+     -> (Float -> (Int, Int) -> Draw GVec4 ())
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
-     -> m ()
+     -> IO ()
 play width height requireExts initialization frame inpCallback _ =
-        do canvas <- liftIO $ query "canvas"
-           ctx <- liftIO $ makeContext canvas
-           width <- liftIO $ getWidth canvas
-           height <- liftIO $ getHeight canvas
-           inpCtl <- liftIO $ mkInputControl canvas inpCallback
+        do canvas <- query "canvas"
+           ctx <- makeContext canvas
+           width <- getWidth canvas
+           height <- getHeight canvas
+           inpCtl <- mkInputControl canvas inpCallback
 
-           mextError <- liftIO $ checkExtensions requireExts ctx
+           mextError <- checkExtensions requireExts ctx
            case mextError of
-                Just extError -> liftIO $ alert (fromString extError) >>
-                                          exitFailure
+                Just extError -> alert (fromString extError) >> exitFailure
                 Nothing -> return ()
-           stateRef <- liftIO . newIORef $ drawState width height
 
-           let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
-           liftDraw $ drawInit >> initialization
-           loop $ \t -> do draw <- frame (realToFrac t) (width, height)
-                           liftDraw $ clearColor >> clearDepth >> draw
-
-           return ()
+           runDraw width height ctx $
+                do initialization
+                   loop $ \t -> do clearColor >> clearDepth
+                                   frame (realToFrac t) (width, height)
         where loop a = do t <- liftIO waitFrame
                           a $ t / 1000
                           loop a
@@ -91,41 +86,41 @@ import Graphics.Rendering.Ombra.Backend.OpenGL
 import Graphics.UI.GLFW as G
 import System.Mem (performMinorGC)
 
-play :: MonadIO m
-     => Int
+play :: Int
      -> Int
      -> Bool
      -> Draw GVec4 ()
-     -> (Float -> (Int, Int) -> m (Draw GVec4 ()))
+     -> (Float -> (Int, Int) -> Draw GVec4 ())
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
-     -> m ()
+     -> IO ()
 play width height requireExts initialization frame inpCallback sizeCallback =
-        do w <- liftIO $ initWindow
-           stateRef <- liftIO . newIORef $ drawState width height
-           ctx <- liftIO $ makeContext
-           t0 <- liftIO $ getCurrentTime
-           inpCtl <- liftIO $ mkInputControl w inpCallback
+        do w <- initWindow
+           ctx <- makeContext
+           t0 <- getCurrentTime
+           inpCtl <- mkInputControl w inpCallback
+           sizeRef <- newIORef Nothing
 
-           mextError <- liftIO $ checkExtensions requireExts ctx
+           mextError <- checkExtensions requireExts ctx
            case mextError of
-                Just extError -> liftIO $ putStrLn extError >> exitFailure
+                Just extError -> putStrLn extError >> exitFailure
                 Nothing -> return ()
 
-           let liftDraw = liftIO . flip (refDrawCtx ctx) stateRef
-           liftDraw $ drawInit >> initialization
+           setWindowSizeCallback w . Just $ \_ width' height' ->
+                   do writeIORef sizeRef $ Just (width', height')
+                      sizeCallback (width', height')
 
-           liftIO . setWindowSizeCallback w . Just $ \_ width' height' ->
-                   flip (refDrawCtx ctx) stateRef $
-                           do resizeViewport width' height'
-                              liftIO $ sizeCallback (width', height')
+           runDraw width height ctx $ (initialization >>) . loop t0 $ \t ->
+                do clearColor >> clearDepth
+                   resized <- liftIO . atomicModifyIORef sizeRef $ (,) Nothing
+                   case resized of
+                        Just (width, height) -> do resizeViewport width height
+                                                   frame t (width, height)
+                        Nothing -> do (width, height) <- liftIO $ getWindowSize w
+                                      frame t (width, height)
 
-           loop t0 $ \t -> do (width', height') <- liftIO $ getWindowSize w
-                              draw <- frame t (width', height')
-                              liftDraw $ clearColor >> clearDepth >> draw
-                              liftIO $ do performMinorGC
-                                          swapBuffers w
-           return ()
+                   (width', height') <- liftIO $ getWindowSize w
+                   liftIO $ performMinorGC >> swapBuffers w
         where loop t0 a = do t <- liftIO $ getCurrentTime
                              a . realToFrac $ diffUTCTime t t0
                              tf <- liftIO $ getCurrentTime
@@ -172,7 +167,7 @@ animation :: (Float -> Draw GVec4 ()) -> IO ()
 animation f = play 512 512
                    False
                    (return ())
-                   (\t _ -> return $ f t)
+                   (\t _ -> f t)
                    (const (return ()))
                    (const (return ()))
 
