@@ -18,21 +18,17 @@ data OutDepthBuffer
 
 data OutBufferInfo o where
         EmptyFloatGBuffer               :: FragmentShaderOutput o
-                                        => Filter
-                                        -> Filter
+                                        => TextureParameters
                                         -> OutBufferInfo o
 
         EmptyByteGBuffer                :: FragmentShaderOutput o
-                                        => Filter
-                                        -> Filter
+                                        => TextureParameters
                                         -> OutBufferInfo o
 
-        EmptyDepthBuffer                :: Filter
-                                        -> Filter
+        EmptyDepthBuffer                :: TextureParameters
                                         -> OutBufferInfo OutDepthBuffer
 
-        EmptyDepthStencilBuffer         :: Filter
-                                        -> Filter
+        EmptyDepthStencilBuffer         :: TextureParameters
                                         -> OutBufferInfo OutDepthBuffer
 
 data OutBuffer t o where

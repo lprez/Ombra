@@ -31,8 +31,7 @@ sampleGBuffer (GBufferSampler samplers) st =
 -- | Sample a value from a 'DepthBufferSampler'.
 sampleDepthBuffer :: DepthBufferSampler t -> GVec2 -> GFloat
 sampleDepthBuffer (DepthBufferSampler sampler) st =
-        let GVec4 x _ _ _ = sample sampler st
-        in x
+        let GVec4 x _ _ _ = sample sampler st in x
 
 fromTextureSampler :: TextureSampler -> GBufferSampler t GVec4
 fromTextureSampler sampler = GBufferSampler [sampler]
@@ -40,20 +39,14 @@ fromTextureSampler sampler = GBufferSampler [sampler]
 toTextureSampler :: GBufferSampler t GVec4 -> TextureSampler
 toTextureSampler (GBufferSampler (sampler : _)) = sampler
 
-floatGBuffer :: FragmentShaderOutput o
-             => Filter
-             -> Filter
-             -> GBufferInfo o
+floatGBuffer :: FragmentShaderOutput o => TextureParameters -> GBufferInfo o
 floatGBuffer = EmptyFloatGBuffer
 
-byteGBuffer :: FragmentShaderOutput o
-            => Filter
-            -> Filter
-            -> GBufferInfo o
+byteGBuffer :: FragmentShaderOutput o => TextureParameters -> GBufferInfo o
 byteGBuffer = EmptyByteGBuffer
 
-depthBuffer :: Filter -> Filter -> DepthBufferInfo
+depthBuffer :: TextureParameters -> DepthBufferInfo
 depthBuffer = EmptyDepthBuffer
 
-depthStencilBuffer :: Filter -> Filter -> DepthBufferInfo
+depthStencilBuffer :: TextureParameters -> DepthBufferInfo
 depthStencilBuffer = EmptyDepthStencilBuffer

@@ -87,6 +87,8 @@ makeContext element = do ctx <- JS.getCtx element
                          JS.getExtension ctx "WEBGL_depth_texture"
                          JS.getExtension ctx "WEBGL_color_buffer_float"
                          floatTexExt <- JS.getExtension ctx "OES_texture_float"
+                         -- TODO: add hasTextureFloatLinear
+                         JS.getExtension ctx "OES_texture_float_linear"
                          vaoExt <- JS.getExtension ctx "OES_vertex_array_object"
                          drawBufsExt <- JS.getExtension ctx "WEBGL_draw_buffers"
                          derivativesExt <- JS.getExtension ctx

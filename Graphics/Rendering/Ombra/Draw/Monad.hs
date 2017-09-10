@@ -188,13 +188,13 @@ instance GLES => MonadTexture (Draw o) where
         getActiveTexturesCount = activeTextures <$> Draw get
         setActiveTexturesCount n = Draw . modify  $ \s ->
                                         s { activeTextures = n }
-        newTexture w h fm fM i initialize =
+        newTexture w h params i initialize =
                 do cache <- textureCache <$> Draw get
                    let (c1, c2) = flip break cache $
                                         \(LoadedTexture cw ch i' t) ->
                                                 w' == cw && h' == ch && i == i'
                    case c2 of
-                        [] -> gl $ do t <- emptyTexture fm fM
+                        [] -> gl $ do t <- emptyTexture params
                                       initialize t
                                       return $ LoadedTexture w' h' i t
                         (lt : c2') -> do Draw . modify $ \s ->
@@ -539,54 +539,48 @@ createOutBuffer w h empty =
                                                          0 format pixelType
 
            textures <- replicateM (fromIntegral texNum)
-                                  (newTexture w h (min, Nothing) mag
-                                              cacheIdentifier loader)
+                                  (newTexture w h params cacheIdentifier loader)
            return $ case empty of
-                         EmptyFloatGBuffer _ _ -> TextureFloatGBuffer textures
-                         EmptyByteGBuffer _ _ -> TextureByteGBuffer textures
-                         EmptyDepthBuffer _ _ ->
+                         EmptyFloatGBuffer _ -> TextureFloatGBuffer textures
+                         EmptyByteGBuffer _ -> TextureByteGBuffer textures
+                         EmptyDepthBuffer _ ->
                                  TextureDepthBuffer $ head textures
-                         EmptyDepthStencilBuffer _ _ ->
+                         EmptyDepthStencilBuffer _ ->
                                  TextureDepthStencilBuffer $ head textures
         where (w', h') = (fromIntegral w, fromIntegral h)
               cacheIdentifier = hash ( fromIntegral internalFormat :: Int
                                      , fromIntegral format :: Int
                                      , fromIntegral pixelType :: Int
-                                     , mag == Linear
-                                     , min == Linear
+                                     , params
                                      )
-              (internalFormat, format, pixelType, min, mag, texNum) =
+              (internalFormat, format, pixelType, params, texNum) =
                       case empty of
-                           EmptyByteGBuffer min mag ->
+                           EmptyByteGBuffer params ->
                                    ( fromIntegral gl_RGBA
                                    , gl_RGBA
                                    , gl_UNSIGNED_BYTE
-                                   , min
-                                   , mag
+                                   , params
                                    , textureCount (Proxy :: Proxy o)
                                    )
-                           EmptyFloatGBuffer min mag ->
+                           EmptyFloatGBuffer params ->
                                    ( fromIntegral gl_RGBA32F
                                    , gl_RGBA
                                    , gl_FLOAT
-                                   , min
-                                   , mag
+                                   , params
                                    , textureCount (Proxy :: Proxy o)
                                    )
-                           EmptyDepthBuffer min mag ->
+                           EmptyDepthBuffer params ->
                                    ( fromIntegral gl_DEPTH_COMPONENT
                                    , gl_DEPTH_COMPONENT
                                    , gl_UNSIGNED_SHORT
-                                   , min
-                                   , mag
+                                   , params
                                    , 1
                                    )
-                           EmptyDepthStencilBuffer min mag ->
+                           EmptyDepthStencilBuffer params ->
                                    ( fromIntegral gl_DEPTH_STENCIL
                                    , gl_DEPTH_STENCIL
                                    , gl_UNSIGNED_INT_24_8
-                                   , min
-                                   , mag
+                                   , params
                                    , 1
                                    )
 
@@ -607,9 +601,9 @@ permanentDrawBuffers w h gBuffer depthBuffer draw =
                      Left b -> return (False, castBuffer b)
            (newDepth, shouldClearStencil, depthBuffer') <-
                 case depthBuffer of
-                     Right b@(EmptyDepthBuffer _ _) ->
+                     Right b@(EmptyDepthBuffer _) ->
                              (,,) True False <$> createOutBuffer w h b
-                     Right b@(EmptyDepthStencilBuffer _ _) ->
+                     Right b@(EmptyDepthStencilBuffer _) ->
                              (,,) True True <$> createOutBuffer w h b
                      Left b -> return (False, False, castBuffer b)
            ret <- drawUsedBuffers w h gBuffer' depthBuffer' $

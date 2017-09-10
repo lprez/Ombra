@@ -12,9 +12,13 @@ module Graphics.Rendering.Ombra.Texture (
         mkTextureFloat,
         mkTextureRaw,
         colorTex,
-        -- * Filters
+        -- * Parameters
+        TextureParameters,
         Filter(..),
-        setFilter
+        WrappingFunction(..),
+        parameters,
+        potParameters,
+        potLinear
 ) where
 
 import Data.Hashable
@@ -25,69 +29,83 @@ import Graphics.Rendering.Ombra.Texture.Draw
 import Graphics.Rendering.Ombra.Texture.Types
 import Graphics.Rendering.Ombra.Vector
 
+-- | Create a 'TextureParameters'.
+parameters :: Filter                    -- ^ Minification filter
+           -> Filter                    -- ^ Magnification filter
+           -> TextureParameters
+parameters min mag = potParameters (min, Nothing) mag
+                                   False
+                                   ClampToEdge ClampToEdge
+
+-- | This function provides more features than 'parameters', but, on WebGL, the
+-- resulting 'TextureParameters' will not work with textures whose width or
+-- height is not a power of two.
+potParameters :: (Filter, Maybe Filter) -- ^ Minification filter.
+              -> Filter                 -- ^ Magnification filter.
+              -> Bool                   -- ^ Generate mipmaps automatically.
+              -> WrappingFunction       -- ^ Horizontal wrapping function.
+              -> WrappingFunction       -- ^ Vertical wrapping function.
+              -> TextureParameters
+potParameters = TextureParameters
+
+-- | 'potParameters' with linear filters and repeat.
+potLinear :: Bool               -- ^ Generate mipmaps
+          -> TextureParameters
+potLinear g = potParameters (Linear, Just Nearest) Linear g Repeat Repeat
+
 -- | Creates a 'Texture' from a list of pixels.
 mkTexture :: GLES
-          => Int        -- ^ Width. Must be a power of two.
-          -> Int        -- ^ Height. Must be a power of two.
-          -> Bool       -- ^ Generate mipmaps automatically.
+          => Int        -- ^ Width.
+          -> Int        -- ^ Height.
+          -> TextureParameters
           -> [[Color]]  -- ^ List of pixels, one for each level of detail.
                         -- The first element is the base image level, the second
                         -- image is half the size of the base, and so on.
                         -- Use just one level of detail if you don't want
                         -- mipmaps, or you used True in the previous argument.
           -> Texture
-mkTexture w h g pss = TextureImage . TexturePixels g pss minfilter Linear
-                                                   (fromIntegral w)
-                                                   (fromIntegral h)
-                        -- TODO: hash based on the mipmaps too
-                           $ hash (w, h, length pss, g, take (w * h) (head pss))
-        where minfilter | g = (Linear, Just Nearest)
-                        | (_:_:_) <- pss = (Linear, Just Nearest)
-                        | otherwise = (Linear, Nothing)
+mkTexture w h params pss =
+        TextureImage $ TexturePixels pss
+                                     params
+                                     (fromIntegral w)
+                                     (fromIntegral h)
+                                     (hash ( w, h, params
+                                           -- XXX
+                                           , length pss
+                                           , take (w * h) (head pss)
+                                           )
+                                     )
 
 mkTextureRaw :: GLES
              => Int             -- ^ Width.
              -> Int             -- ^ Height.
-             -> Bool            -- ^ Generate mipmaps.
+             -> TextureParameters
              -> [UInt8Array]    -- ^ Array of pixel components, one for each
                                 -- level of detail.
-             -> Int             -- ^ Texture hash
+             -> Int             -- ^ Hash of the arrays
              -> Texture
-mkTextureRaw w h g arr pxhash = TextureImage $ TextureRaw g arr minfilter Linear
-                                                          (fromIntegral w)
-                                                          (fromIntegral h)
-                                                          $ hash (w, h, pxhash)
-        where minfilter | g = (Linear, Just Nearest)
-                        | (_:_:_) <- arr = (Linear, Just Nearest)
-                        | otherwise = (Linear, Nothing)
+mkTextureRaw w h params arr pxhash =
+        TextureImage $ TextureRaw arr
+                                  params
+                                  (fromIntegral w)
+                                  (fromIntegral h)
+                                  (hash (w, h, params, pxhash))
 
 -- | Creates a float 'Texture' from a list of vectors.
 mkTextureFloat :: GLES
                => Int      -- ^ Width.
                -> Int      -- ^ Height.
+               -> TextureParameters
                -> [Vec4]   -- ^ List of vectors.
                -> Texture
-mkTextureFloat w h vs = TextureImage . TextureFloat ps (Linear, Nothing) Linear
-                                                       (fromIntegral w)
-                                                       (fromIntegral h)
-                                $ hash (w, h, take (w * h * 4) ps)
+mkTextureFloat w h params vs =
+        TextureImage $ TextureFloat ps
+                                    params
+                                    (fromIntegral w)
+                                    (fromIntegral h)
+                                    (hash (w, h, params, take (w * h * 4) ps))
         where ps = vs >>= \(Vec4 x y z w) -> [x, y, z, w]
-
--- | Change the Texture minifying and magnifying functions. This doesn't work
--- on textures created from GBuffers.
-setFilter :: (Filter, Maybe Filter)     -- ^ Minification filter and mipmap
-                                        -- filter.
-          -> Filter                     -- ^ Magnification filter.
-          -> Texture
-          -> Texture
-setFilter min mag (TextureImage (TexturePixels g c _ _ w h s)) =
-        TextureImage (TexturePixels g c min mag w h s)
-setFilter min mag (TextureImage (TextureRaw g c _ _ w h s)) =
-        TextureImage (TextureRaw g c min mag w h s)
-setFilter min mag (TextureImage (TextureFloat c _ _ w h s)) =
-        TextureImage (TextureFloat c min mag w h s)
-setFilter _ _ t = t
 
 -- | Generate a 1x1 texture.
 colorTex :: GLES => Color -> Texture
-colorTex c = mkTexture 1 1 False [[c]]
+colorTex c = mkTexture 1 1 (potLinear False) [[c]]

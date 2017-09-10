@@ -5,8 +5,7 @@
 #endif
 
 module Utils.TextureLoader (
-        loadTexture,
-        loadTextureNoMipmaps,
+        loadTexture
 ) where
 
 import Graphics.Rendering.Ombra
@@ -42,8 +41,8 @@ foreign import javascript interruptible
           };                                                            "
         loadImage :: JSString -> IO JSVal
 
-loadTexture' :: FilePath -> Bool -> IO Texture
-loadTexture' path mips = do img <- loadImage $ fromString path
+loadTexture :: TextureParameters -> FilePath -> IO Texture
+loadTexture param path = do img <- loadImage $ fromString path
                             w <- imgWidth img
                             h <- imgHeight img
                             arr <- imgData img
@@ -57,7 +56,7 @@ loadTexture' path mips = do img <- loadImage $ fromString path
                                               0x36d1615b7400a4
                                               [ 0 .. l - 1 ]
 
-                            return . mkTextureRaw w h mips [arr] $
+                            return . mkTextureRaw w h param [arr] $
                                                   hash (w, h, pxhash)
 
 #else
@@ -68,8 +67,8 @@ import Foreign.ForeignPtr
 import Graphics.Rendering.Ombra.Backend.OpenGL
 import qualified Data.Vector.Storable as V
 
-loadTexture' :: FilePath -> Bool -> IO Texture
-loadTexture' path mips =
+loadTexture :: TextureParameters -> FilePath -> IO Texture
+loadTexture params path =
         do eimg <- readImage path
            case eimg of
                 Left err -> error err
@@ -80,7 +79,7 @@ loadTexture' path mips =
                                         in do ih <- withForeignPtr fp $ \p ->
                                                         hashPtrWithSalt p l $
                                                                 hash (w, h, l)
-                                              return $ mkTextureRaw w h mips
+                                              return $ mkTextureRaw w h params
                                                                     [(l', fp)]
                                                                     ih
                              {-
@@ -97,9 +96,3 @@ loadTexture' path mips =
                              -}
 
 #endif
-
-loadTexture :: FilePath -> IO Texture
-loadTexture = flip loadTexture' True
-
-loadTextureNoMipmaps :: FilePath -> IO Texture
-loadTextureNoMipmaps = flip loadTexture' False

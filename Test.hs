@@ -18,7 +18,7 @@ instance GeometryVertex GVertex2D where
         type Vertex GVertex2D = Vertex2D
 
 tex :: Texture
-tex = mkTexture 64 64 True [cols]
+tex = mkTexture 64 64 (potLinear True) [cols]
         where cols = [ visible (mod x 8 * 32) (mod y 8 * 32) 0
                      | x <- [0 .. 63], y <- [0 .. 63]
                      ]

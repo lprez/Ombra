@@ -26,8 +26,7 @@ class (MonadGL m, GLES) => MonadTexture m where
         setActiveTexturesCount :: Int -> m ()
         newTexture :: Int
                    -> Int
-                   -> (Filter, Maybe Filter)
-                   -> Filter
+                   -> TextureParameters
                    -> Int
                    -> (GL.Texture -> GL ())
                    -> m LoadedTexture
@@ -70,13 +69,13 @@ textureSize tex = do etex <- getTexture tex
                                   return (fromIntegral w, fromIntegral h)
 
 loadTextureImage :: GLES => TextureImage -> GL LoadedTexture
-loadTextureImage (TexturePixels g pss min mag w h hash) =
+loadTextureImage (TexturePixels pss params w h hash) =
         do arr <- mapM (\ps -> liftIO . encodeUInt8s .
                                take (fromIntegral $ w * h * 4) $
                                ps >>= \(Color r g b a) -> [r, g, b, a]) pss
-           loadTextureImage $ TextureRaw g arr min mag w h hash
-loadTextureImage (TextureRaw g arrs min mag w h _) =
-        do t <- emptyTexture min mag
+           loadTextureImage $ TextureRaw arr params w h hash
+loadTextureImage (TextureRaw arrs params w h _) =
+        do t <- emptyTexture params
            mapM_ (\(arr, l) -> texImage2DUInt gl_TEXTURE_2D l
                                               (fromIntegral gl_RGBA)
                                               w h 0
@@ -85,33 +84,36 @@ loadTextureImage (TextureRaw g arrs min mag w h _) =
                                               arr
                  )
                  (zip arrs [0 ..])
-           when g $ generateMipmap gl_TEXTURE_2D
+           when (generateMipmaps params) $ generateMipmap gl_TEXTURE_2D
            return $ LoadedTexture (fromIntegral w)
                                   (fromIntegral h)
                                   0
                                   t
-loadTextureImage (TextureFloat ps min mag w h hash) =
+loadTextureImage (TextureFloat ps params w h hash) =
         do arr <- liftIO . encodeFloats . take (fromIntegral $ w * h * 4) $ ps
-           t <- emptyTexture min mag
+           t <- emptyTexture params
            texImage2DFloat gl_TEXTURE_2D 0
                            (fromIntegral gl_RGBA32F)
                            w h 0
                            gl_RGBA
                            gl_FLOAT
                            arr
+           -- TODO: generateMipmap?
            return $ LoadedTexture (fromIntegral w)
                                   (fromIntegral h)
                                   0
                                   t
 
-emptyTexture :: GLES => (Filter, Maybe Filter) -> Filter -> GL GL.Texture
-emptyTexture minf magf = do t <- createTexture
-                            bindTexture gl_TEXTURE_2D t
-                            param gl_TEXTURE_MIN_FILTER $ mf minf
-                            param gl_TEXTURE_MAG_FILTER $ f magf
-                            param gl_TEXTURE_WRAP_S gl_REPEAT
-                            param gl_TEXTURE_WRAP_T gl_REPEAT
-                            return t
+emptyTexture :: GLES => TextureParameters -> GL GL.Texture
+emptyTexture params = do t <- createTexture
+                         bindTexture gl_TEXTURE_2D t
+                         param gl_TEXTURE_MIN_FILTER . mf $
+                                 minificationFilter params
+                         param gl_TEXTURE_MAG_FILTER . f $
+                                 magnificationFilter params
+                         param gl_TEXTURE_WRAP_S . wrap $ wrapS params
+                         param gl_TEXTURE_WRAP_T . wrap $ wrapT params
+                         return t
         where f Linear = gl_LINEAR
               f Nearest = gl_NEAREST
               mf (Linear, Nothing) = gl_LINEAR
@@ -120,6 +122,9 @@ emptyTexture minf magf = do t <- createTexture
               mf (Nearest, Nothing) = gl_NEAREST
               mf (Nearest, Just Nearest) = gl_NEAREST_MIPMAP_NEAREST
               mf (Nearest, Just Linear) = gl_NEAREST_MIPMAP_LINEAR
+              wrap Repeat = gl_REPEAT
+              wrap MirroredRepeat = gl_MIRRORED_REPEAT
+              wrap ClampToEdge = gl_CLAMP_TO_EDGE
 
               param :: GLES => GLEnum -> GLEnum -> GL ()
               param p v = texParameteri gl_TEXTURE_2D p $ fromIntegral v
