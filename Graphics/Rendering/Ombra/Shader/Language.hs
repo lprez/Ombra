@@ -21,7 +21,7 @@ module Graphics.Rendering.Ombra.Shader.Language (
         Shader.GBool,
         Shader.GFloat,
         Shader.GInt,
-        Shader.GSampler2D,
+        TextureSampler,
         -- Shader.GSamplerCube,
         Shader.GVec2(..),
         Shader.GVec3(..),
@@ -421,6 +421,8 @@ instance Matrix Shader.GMat4 where
                                      (Shader.GVec4 c g k o)
                                      (Shader.GVec4 d h l p)
 
+type TextureSampler = Shader.GSampler2D
+
 -- | Sample a texel from a texture.
-sample :: Shader.GSampler2D -> Shader.GVec2 -> Shader.GVec4
+sample :: TextureSampler -> Shader.GVec2 -> Shader.GVec4
 sample = Shader.texture2D

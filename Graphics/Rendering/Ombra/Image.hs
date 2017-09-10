@@ -65,7 +65,7 @@ draw (Image geometries vs fs) =
                                                 gl $ setUniform l proxy value
                                              UniformTexture tex ->
                                                 let proxy = Proxy
-                                                        :: Proxy GSampler2D
+                                                        :: Proxy TextureSampler
                                                     Just value = lookup tex texs
                                                 in gl $ setUniform l proxy value
                                      Left _ -> return ()

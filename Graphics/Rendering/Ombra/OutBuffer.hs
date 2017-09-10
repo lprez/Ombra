@@ -14,8 +14,8 @@ module Graphics.Rendering.Ombra.OutBuffer (
         depthBuffer,
         depthStencilBuffer,
         -- * Conversion between buffers and textures
-        toGSampler2D,
-        fromGSampler2D
+        toTextureSampler,
+        fromTextureSampler
 ) where
 
 import Graphics.Rendering.Ombra.OutBuffer.Types
@@ -34,11 +34,11 @@ sampleDepthBuffer (DepthBufferSampler sampler) st =
         let GVec4 x _ _ _ = sample sampler st
         in x
 
-fromGSampler2D :: GSampler2D -> GBufferSampler t GVec4
-fromGSampler2D sampler = GBufferSampler [sampler]
+fromTextureSampler :: TextureSampler -> GBufferSampler t GVec4
+fromTextureSampler sampler = GBufferSampler [sampler]
 
-toGSampler2D :: GBufferSampler t GVec4 -> GSampler2D
-toGSampler2D (GBufferSampler (sampler : _)) = sampler
+toTextureSampler :: GBufferSampler t GVec4 -> TextureSampler
+toTextureSampler (GBufferSampler (sampler : _)) = sampler
 
 floatGBuffer :: FragmentShaderOutput o
              => Filter
