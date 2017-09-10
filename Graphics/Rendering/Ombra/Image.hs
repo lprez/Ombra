@@ -1,7 +1,7 @@
 module Graphics.Rendering.Ombra.Image (
         Image,
         image,
-        image1,
+        uimage,
         draw
 ) where
 
@@ -27,14 +27,17 @@ image :: (ShaderInput i, GeometryVertex i, ShaderInput v)
       -> FragmentShader v o
       -> Geometry i
       -> Image o
-image vs fs g = image1 (const vs) (const fs) (Identity (g, (), ()))
+image vs fs g = uimage (const vs) (const fs) (Identity (g, (), ()))
 
-image1 :: (ShaderInput i, GeometryVertex i, ShaderInput v, Foldable t)
+-- | Create an 'Image' using the same shader with different uniforms for each
+-- geometry. The resulting image can be rendered more efficiently than an
+-- equivalent sequence of images created with 'image'.
+uimage :: (ShaderInput i, GeometryVertex i, ShaderInput v, Foldable t)
        => (UniformSetter vu -> VertexShader i (GVec4, v))
        -> (UniformSetter fu -> FragmentShader v o)
        -> t (Geometry i, vu, fu)
        -> Image o
-image1 vs fs g = Image g vs fs
+uimage vs fs g = Image g vs fs
 
 -- | Draw an 'Image'.
 draw :: (MonadDraw o m, FragmentShaderOutput o) => Image o -> m o ()
