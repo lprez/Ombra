@@ -77,6 +77,7 @@ class Attributes (AttributeTypes a) => GeometryVertex a where
 
 data Triangle a = Triangle a a a
 
+-- TODO: use AttrTable rows instead
 data VertexAttributes (is :: [*]) where
         Attr :: (Eq (CPUBase i), H.Hashable (CPUBase i), BaseAttribute i)
              => CPUBase i
@@ -91,8 +92,7 @@ data Elements is = Triangles Int [Triangle (AttrVertex is)]
 
 -- | A set of triangles.
 data Geometry g where
-        Geometry :: GeometryVertex g
-                 => { topHash :: Int            -- TODO: ?
+        Geometry :: { topHash :: Int            -- TODO: ?
                     , geometryHash :: Int       -- TODO: ?
                     , top :: AttrCol (AttributeTypes g)
                     , elements :: Elements (AttributeTypes g)
@@ -122,13 +122,12 @@ type family Previous (p :: AttrPosition) :: AttrPosition where
 data AttrTable (b :: AttrPosition) (is :: [*]) where
         AttrNil :: AttrTable b '[]
         AttrEnd :: AttrTable End is
-        AttrTop :: (NotTop p, BaseAttribute i)
+        AttrTop :: NotTop p
                 => Int
                 -> AttrTable Top is
                 -> AttrTable p (i ': is)
                 -> AttrTable Top (i ': is)
-        AttrCell :: (H.Hashable (CPUBase i), BaseAttribute i)
-                 => CPUBase i
+        AttrCell :: CPUBase i
                  -> AttrTable (Previous p) is
                  -> AttrTable p (i ': is)
                  -> AttrTable (Previous p) (i ': is)
@@ -142,7 +141,7 @@ class Empty is ~ 'False => Attributes is where
              -> AttrTable p is
              -> AttrTable (Previous p) is
         addTop :: VertexAttributes is -> AttrCol is -> AttrCol is
-        foldTop :: (forall i is. b -> AttrCol (i ': is) -> b)
+        foldTop :: (forall i is. BaseAttribute i => b -> AttrCol (i ': is) -> b)
                 -> b
                 -> AttrCol is
                 -> b
@@ -150,7 +149,8 @@ class Empty is ~ 'False => Attributes is where
                               => AttrTable p is
                               -> VertexAttributes is
 
-instance (BaseAttribute i, Eq (CPUBase i)) => Attributes '[i] where
+instance (BaseAttribute i, Eq (CPUBase i), H.Hashable (CPUBase i)) =>
+        Attributes '[i] where
         emptyAttrCol = AttrTop (H.hash (0 :: Int)) AttrNil AttrEnd
         cell (Attr x) down = AttrCell x AttrNil down
         addTop v@(Attr x) (AttrTop thash next down) =
@@ -160,8 +160,11 @@ instance (BaseAttribute i, Eq (CPUBase i)) => Attributes '[i] where
         foldTop f acc top = f acc top
         rowToVertexAttributes (AttrCell x _ _) = Attr x
 
-instance (BaseAttribute i1, Eq (CPUBase i1), Attributes (i2 ': is)) =>
-        Attributes (i1 ': (i2 ': is)) where
+instance ( BaseAttribute i1
+         , Eq (CPUBase i1)
+         , Attributes (i2 ': is)
+         , H.Hashable (CPUBase i1)
+         ) => Attributes (i1 ': (i2 ': is)) where
         emptyAttrCol = AttrTop (H.hash (0 :: Int)) emptyAttrCol AttrEnd
         cell (Attr x :~ v) down1@(AttrCell _ down2 _) =
                 AttrCell x (cell v down2) down1

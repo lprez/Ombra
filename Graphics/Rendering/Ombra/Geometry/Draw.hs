@@ -42,7 +42,8 @@ newtype LoadedBuffer = LoadedBuffer Buffer
 
 data LoadedAttribute = LoadedAttribute GLUInt [(Buffer, GLUInt -> GL ())]
 
-instance GLES => Resource (AttrCol (i ': is)) LoadedAttribute GL where
+instance (GLES, BaseAttribute i) =>
+        Resource (AttrCol (i ': is)) LoadedAttribute GL where
         loadResource (AttrTop _ _ down :: AttrCol (i ': is)) =
                 fmap (Right . uncurry LoadedAttribute) .
                 flip execStateT (0, []) $
