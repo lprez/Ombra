@@ -19,6 +19,7 @@ module Graphics.Rendering.Ombra.Shader (
         -- * Uniforms
         uniform,
         (~~),
+        foldUniforms,
         -- * Optimized shaders
         UniformSetter,
         shader,
@@ -29,10 +30,14 @@ module Graphics.Rendering.Ombra.Shader (
         pushader,
         uniform',
         (~*),
+        foldUniforms',
         -- * Fragment shader functionalities
         Fragment(..),
         farr,
         fragment,
+        -- * Loops
+        forLoop,
+        foldGArray,
         -- * Classes
         MultiShaderType(..),
         ShaderInput(..),
@@ -49,6 +54,7 @@ import Data.MemoTrie
 import Data.Proxy
 import GHC.Generics
 import GHC.TypeLits
+import Graphics.Rendering.Ombra.Backend (GLES)
 import Graphics.Rendering.Ombra.Internal.GL (Sampler2D)
 import Graphics.Rendering.Ombra.Shader.Language
 import qualified Graphics.Rendering.Ombra.Shader.Language.Functions as Shader
@@ -81,9 +87,10 @@ shader (Shader f hf) = Shader f (memoHash hf)
 
 -- | This variant of 'shader' can be used with shaders that have a mostly static
 -- parameter. It will create a different shader every time the parameter changes
--- to a new value, therefore the parameter must be used to configure the shader
--- rather than for sending things like a model matrix to the GPU, for which
--- 'uniform's are more appropriate.
+-- to a new value, therefore parameters should not be used for things like
+-- model matrices (for which uniforms are more appropriate). Unlike uniforms,
+-- parameters can be used anywhere, in particular they can be used to change the
+-- shader structure.
 shaderParam :: (HasTrie p, MultiShaderType i, MultiShaderType o)
             => Shader s (p, i) o
             -> Shader s (p, i) o
@@ -182,3 +189,50 @@ frag = Fragment { fragCoord = Shader.fragCoord
                 , dFdy = Shader.dFdy
                 , fwidth = Shader.fwidth
                 }
+
+-- | This function implements raw GLSL loops. The same effect can be achieved
+-- using Haskell list functions, but that may result in a large compiled GLSL
+-- source, which in turn might slow down compilation or cause an out of memory
+-- error.
+forLoop :: ShaderInput a 
+        => Int -- ^ Maximum number of iterations (should be as low as possible)
+        -> a -- ^ Initial value
+        -> (GInt -> a -> (a, GBool)) -- ^ Iteration -> Old value -> (Next, Stop)
+        -> a
+forLoop iters iacc f = buildFromExprList $
+        Shader.unsafeLoop (fromExpr . Literal "int" $ show iters)
+                          (foldrMST (\x -> ((typeName x, toExpr x) :)) [] iacc)
+                          (\i es -> let acc = buildFromExprList es
+                                        (acc', stop) = f i acc
+                                        es' = foldrMST (\x -> (toExpr x :))
+                                                       [] acc'
+                                    in (es', stop))
+        -- XXX
+        where buildFromExprList es = fst $ buildMST (\i -> fromExpr $ es !! i) 0
+
+foldGArray :: forall t n a. (ShaderType t, KnownNat n, ShaderInput a)
+           => (a -> t -> a)
+           -> a
+           -> GArray n t
+           -> a
+foldGArray f iacc arr = forLoop (fromIntegral $ natVal (Proxy :: Proxy n))
+                                iacc
+                                (\i acc -> (f acc $ arr ! i, false))
+
+foldUniforms :: forall a u s. (ShaderInput a, ArrayUniform u, GLES)
+             => Shader s (((a -> u -> a), a), [CPUBase u]) a
+foldUniforms = (\((f, i), us) -> case someNatVal . fromIntegral $ length us of
+                                      Just (SomeNat p) -> (foldArray p f i, us)
+               ) ^>> app
+        where foldArray :: forall n. KnownNat n
+                        => Proxy n
+                        -> (a -> u -> a)
+                        -> a
+                        -> Shader s [CPUBase u] a
+              foldArray p f i = baseUniformGArray p (Proxy :: Proxy u) $
+                                        uniform >>^ \(arr :: GArray n u) ->
+                                                        foldGArray f i arr
+
+foldUniforms' :: (ShaderInput a, ArrayUniform u, GLES)
+              => Shader s (((a -> u -> a), a), UniformSetter [CPUBase u]) a
+foldUniforms' = second unUniformSetter ^>> foldUniforms

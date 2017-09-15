@@ -12,7 +12,7 @@ import Data.Hashable
 data Expr = Empty | Read String String | Op1 String String Expr
           | Op2 String String Expr Expr | Apply String String [Expr]
           | X Expr | Y Expr | Z Expr | W Expr
-          | Literal String String | Action Action | Dummy Int
+          | Literal String String | Action Action Int | Dummy Int
           | ArrayIndex String Expr Expr | ContextVar String Int ContextVarType
           | HashDummy Int | Uniform String Int | Input String Int
           | Attribute String Int
@@ -50,7 +50,7 @@ exprType (Y e) = vecElemType e
 exprType (Z e) = vecElemType e
 exprType (W e) = vecElemType e
 exprType (Literal t _) = Just t
-exprType (Action a) = Just $ actionType a
+exprType (Action a n) = Just $ actionType a n
 exprType (ArrayIndex t _ _) = Just t
 exprType (ContextVar t _ _) = Just t
 exprType (Uniform t _) = Just t
@@ -65,16 +65,16 @@ vecElemType e = case exprType e of
                      Just ('b': 'v' : 'e' : 'c' : _) -> Just "bool"
                      _ -> Nothing
 
-actionType :: Action -> String
-actionType (Store t _) = t
-actionType (If _ t _ _) = t
-actionType (For _ t _ _) = t
+actionType :: Action -> Int -> String
+actionType (Store t _) _ = t
+actionType (If _ t _ _) _ = t
+actionType (For _ is _) n = fst $ is !! n
 
 -- | Expressions that are transformed into statements.
 data Action = Store String Expr | If Expr String Expr Expr
-            | For Int String Expr (Expr -> Expr -> (Expr, Expr))
+            | For Expr [(String, Expr)] (Expr -> [Expr] -> ([Expr], Expr))
 
-data ContextVarType = LoopIteration | LoopValue deriving Eq
+data ContextVarType = LoopIteration | LoopValue Int deriving Eq
 
 -- | A GPU boolean.
 newtype GBool = GBool Expr 
@@ -156,7 +156,7 @@ instance (ShaderType t, KnownNat n) => ShaderType (GArray n t) where
         zero = error "zero: Unsupported constant arrays."
         toExpr (GArray e) = e
         fromExpr = GArray
-        typeName (GArray _ :: GArray n t) =
+        typeName (_ :: GArray n t) =
                 typeName (zero :: t) ++
                 "[" ++ show (natVal (Proxy :: Proxy n)) ++ "]"
         size (GArray _ :: GArray n t) =
@@ -501,10 +501,10 @@ instance Hashable Expr where
                                 Z exp -> hash2 7 s exp
                                 W exp -> hash2 8 s exp
                                 Literal _ str -> hash2 s 9 str
-                                Action actHash -> hash2 s 10 actHash
+                                Action actHash i -> hash2 s 10 (actHash, i)
                                 Dummy i -> hash2 s 11 i
                                 ContextVar _ i LoopIteration -> hash2 s 12 i
-                                ContextVar _ i LoopValue -> hash2 s 13 i
+                                ContextVar _ i (LoopValue n) -> hash2 s 13 (i, n)
                                 ArrayIndex _ arr i -> hash2 s 14 (arr, i)
                                 Uniform _ i -> hash2 s 15 i
                                 Input _ i -> hash2 s 16 i
@@ -520,11 +520,11 @@ instance HasTrie Expr where
 instance Hashable Action where
         hashWithSalt s (Store t e) = hash2 s 0 (t, e)
         hashWithSalt s (If eb tt et ef) = hash2 s 1 (eb, tt, et, ef)
-        hashWithSalt s (For iters tv iv eFun) =
-                let baseHash = hash (iters, tv, iv, eFun (Dummy 0) (Dummy 1))
+        hashWithSalt s (For iters ivs eFun) =
+                let dummies n = zipWith (const Dummy) ivs [n ..]
+                    baseHash = hash (iters, ivs, eFun (Dummy 0) (dummies 1))
                 in hash2 s 2 ( baseHash
-                             , eFun (Dummy baseHash)
-                                    (Dummy $ baseHash + 1))
+                             , eFun (Dummy baseHash) (dummies $ baseHash + 1))
 
 instance Eq Action where
         a == a' = hash a == hash a'

@@ -370,7 +370,7 @@ matrixCompMult :: GMatrix a => a -> a -> a
 matrixCompMult = fun2 "matrixCompMult"
 
 store :: ShaderType a => a -> a
-store x = fromExpr . Action $ Store (typeName x) (toExpr x)
+store x = fromExpr $ Action (Store (typeName x) (toExpr x)) 0
 
 true :: GBool
 true = GBool $ Literal "bool" "true"
@@ -380,24 +380,18 @@ false = GBool $ Literal "bool" "false"
 
 -- | Rebound if. You don't need to use this function, with -XRebindableSyntax.
 ifThenElse :: ShaderType a => GBool -> a -> a -> a
-ifThenElse b t f = fromExpr . Action $ If (toExpr b) (typeName t)
-                                          (toExpr t) (toExpr f)
+ifThenElse b t f = fromExpr $ Action (If (toExpr b) (typeName t)
+                                         (toExpr t) (toExpr f)) 0
 
--- | This function implements raw GLSL loops. The same effect can be achieved
--- using Haskell list functions, but that may result in a large compiled GLSL
--- source, which in turn causes an out of memory error.
-loop :: ShaderType a 
-     => Int -- ^ Maximum number of iterations (should be as low as possible)
-     -> a -- ^ Initial value
-     -> (GFloat -> a -> (a, GBool)) -- ^ Iteration -> Old value -> (Next, Stop)
-     -> a
-loop iters iv f =
-        fromExpr . Action $
-                For iters
-                    (typeName iv)
-                    (toExpr iv)
-                    (\ie ve -> let (next, stop) = f (fromExpr ie) (fromExpr ve)
-                               in (toExpr next, toExpr stop))
+unsafeLoop :: GInt
+           -> [(String, Expr)]
+           -> (GInt -> [Expr] -> ([Expr], GBool))
+           -> [Expr]
+unsafeLoop iters ivs f =
+        let for = For (toExpr iters) ivs
+                      (\ie ve -> let (next, stop) = f (fromExpr ie) ve
+                                 in (next, toExpr stop))
+        in Prelude.zipWith (\_ i -> Action for i) ivs [0 ..]
 
 -- | Texture lookup function.
 texture2D :: GSampler2D -> GVec2 -> GVec4

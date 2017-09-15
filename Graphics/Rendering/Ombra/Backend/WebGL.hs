@@ -99,17 +99,8 @@ makeContext element = do ctx <- JS.getCtx element
                          setProp "derivatives" derivativesExt $ Object ctx
                          return (counter, ctx)
 
-toJSArray :: ToJSVal a => (v -> Maybe (a, v)) -> v -> IO JSArray.JSArray
-toJSArray next iv = JSArray.fromList <$> mapM toJSVal list
-        where list = unfoldr next iv
-        {- 
-        JSArray.create >>= iterPush iv
-        where iterPush v arr = case next v of
-                                        Just (x, v') -> do xRef <- toJSVal x
-                                                           JSArray.push xRef arr
-                                                           iterPush v' arr
-                                        Nothing -> return arr
-        -}
+toJSArray :: ToJSVal a => [a] -> IO JSArray.JSArray
+toJSArray list = JSArray.fromList <$> mapM toJSVal list
 
 instance GLES where
         type Ctx = (IORef Int, JS.Ctx)
@@ -168,53 +159,31 @@ instance GLES where
                                      a2 b2 c2 d2
                                      a3 b3 c3 d3
                                      a4 b4 c4 d4
-        encodeFloats v = JSArray.fromList <$> mapM toJSVal v
-                         >>= JS.float32ArrayFrom
-        encodeInts v = JSArray.fromList <$> mapM toJSVal v
-                       >>= JS.int32ArrayFrom
+        encodeFloats v = toJSArray v >>= JS.float32ArrayFrom
+        encodeInts v = toJSArray v >>= JS.int32ArrayFrom
 
         -- TODO: faster implementation
-        encodeVec2s v = toJSArray next (False, v) >>= JS.float32ArrayFrom
-                where next (False, xs@(Vec2 x _ : _)) = Just (x, (True, xs))
-                      next (True, Vec2 _ y : xs) = Just (y, (False, xs))
-                      next (_, []) = Nothing
+        encodeVec2s v = toJSArray fv >>= JS.float32ArrayFrom
+                where fv = concatMap (\(Vec2 x y) -> [x, y]) v
 
-        encodeVec3s v = toJSArray next (0, v) >>= JS.float32ArrayFrom
-                where next (0, xs@(Vec3 x _ _ : _)) = Just (x, (1, xs))
-                      next (1, xs@(Vec3 _ y _ : _)) = Just (y, (2, xs))
-                      next (2, Vec3 _ _ z : xs) = Just (z, (0, xs))
-                      next (_, []) = Nothing
+        encodeVec3s v = toJSArray fv >>= JS.float32ArrayFrom
+                where fv = concatMap (\(Vec3 x y z) -> [x, y, z]) v
 
-        encodeVec4s v = toJSArray next (0, v) >>= JS.float32ArrayFrom
-                where next (0, xs@(Vec4 x _ _ _ : _)) = Just (x, (1, xs))
-                      next (1, xs@(Vec4 _ y _ _ : _)) = Just (y, (2, xs))
-                      next (2, xs@(Vec4 _ _ z _ : _)) = Just (z, (3, xs))
-                      next (3, Vec4 _ _ _ w : xs) = Just (w, (0, xs))
-                      next (_, []) = Nothing
+        encodeVec4s v = toJSArray fv >>= JS.float32ArrayFrom
+                where fv = concatMap (\(Vec4 x y z w) -> [x, y, z, w]) v
 
-        encodeIVec2s v = toJSArray next (False, v) >>= JS.int32ArrayFrom
-                where next (False, xs@(IVec2 x _ : _)) = Just (x, (True, xs))
-                      next (True, IVec2 _ y : xs) = Just (y, (False, xs))
-                      next (_, []) = Nothing
+        encodeIVec2s v = toJSArray iv >>= JS.int32ArrayFrom
+                where iv = concatMap (\(IVec2 x y) -> [x, y]) v
 
-        encodeIVec3s v = toJSArray next (0, v) >>= JS.int32ArrayFrom
-                where next (0, xs@(IVec3 x _ _ : _)) = Just (x, (1, xs))
-                      next (1, xs@(IVec3 _ y _ : _)) = Just (y, (2, xs))
-                      next (2, IVec3 _ _ z : xs) = Just (z, (0, xs))
-                      next (_, []) = Nothing
+        encodeIVec3s v = toJSArray iv >>= JS.int32ArrayFrom
+                where iv = concatMap (\(IVec3 x y z) -> [x, y, z]) v
 
-        encodeIVec4s v = toJSArray next (0, v) >>= JS.int32ArrayFrom
-                where next (0, xs@(IVec4 x _ _ _ : _)) = Just (x, (1, xs))
-                      next (1, xs@(IVec4 _ y _ _ : _)) = Just (y, (2, xs))
-                      next (2, xs@(IVec4 _ _ z _ : _)) = Just (z, (3, xs))
-                      next (3, IVec4 _ _ _ w : xs) = Just (w, (0, xs))
-                      next (_, []) = Nothing
+        encodeIVec4s v = toJSArray iv >>= JS.int32ArrayFrom
+                where iv = concatMap (\(IVec4 x y z w) -> [x, y, z, w]) v
 
-        encodeUInt16s v = JSArray.fromList <$> mapM toJSVal v
-                          >>= JS.uint16ArrayFrom
+        encodeUInt16s v = toJSArray v >>= JS.uint16ArrayFrom
 
-        encodeUInt8s v = JSArray.fromList <$> mapM toJSVal v
-                         >>= JS.uint8ArrayFrom
+        encodeUInt8s v = toJSArray v >>= JS.uint8ArrayFrom
 
 {-
         encodeColors v = toJSArray next (0, v) >>= JS.uint8ArrayFrom

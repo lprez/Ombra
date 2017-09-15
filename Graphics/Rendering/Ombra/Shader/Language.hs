@@ -40,7 +40,6 @@ module Graphics.Rendering.Ombra.Shader.Language (
         Shader.GArray,
         -- * GPU functions
         (Shader.!),
-        Shader.loop,
         -- Shader.store,
         sample,
         {-

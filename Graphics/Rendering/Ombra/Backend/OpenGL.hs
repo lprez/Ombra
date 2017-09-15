@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies, MultiParamTypeClasses, ScopedTypeVariables #-}
 
 -- |
 -- Module:      Graphics.Rendering.Ombra.Backend.OpenGL
@@ -44,9 +44,12 @@ getString f _ x = do cstr <- mallocArray len
                      return str
         where len = 4096
 
-uniform :: (a -> GLsizei -> Ptr b -> IO ())
+uniform :: forall a b ctx. Storable b
+        => GLsizei
+        -> (a -> GLsizei -> Ptr b -> IO ())
         -> ctx -> a -> (GLsizei, ForeignPtr b) -> IO ()
-uniform f _ a (len, fp) = withForeignPtr fp $ f a (quot len 4)
+uniform mul f _ a (len, fp) = withForeignPtr fp $ f a (quot len sz)
+        where sz = mul * fromIntegral (sizeOf (undefined :: b))
 
 uniformMatrix :: (a -> GLsizei -> GLboolean -> Ptr b -> IO ()) -> GLsizei
               -> ctx -> a -> GLboolean -> (GLsizei, ForeignPtr b) -> IO ()
@@ -66,12 +69,12 @@ arrayToList :: Storable a => (GLsizei, ForeignPtr ()) -> IO [a]
 arrayToList (sz, fptr) = withForeignPtr (castForeignPtr fptr) $ \ptr ->
                                 peekArray (fromIntegral sz) ptr
 
-mkArray :: Storable a => [a] -> IO (GLsizei, ForeignPtr b)
+mkArray :: forall a b. Storable a => [a] -> IO (GLsizei, ForeignPtr b)
 mkArray xs = do arr <- mallocForeignPtrArray len
                 withForeignPtr arr $ flip pokeArray xs
                 return (fromIntegral size, castForeignPtr arr)
         where len = length xs
-              size = len * sizeOf (head xs)
+              size = len * sizeOf (undefined :: a)
 
 instance GLES where
         type Ctx = [String]
@@ -272,21 +275,21 @@ instance GLES where
         glTexSubImage2D _ a b c d e f g h (_, fp) = withForeignPtr fp $
                 GL.glTexSubImage2D a b c d e f g h . castPtr
         glUniform1f = const GL.glUniform1f
-        glUniform1fv = uniform GL.glUniform1fv
+        glUniform1fv = uniform 1 GL.glUniform1fv
         glUniform1i = const GL.glUniform1i
-        glUniform1iv = uniform GL.glUniform1iv
+        glUniform1iv = uniform 1 GL.glUniform1iv
         glUniform2f = const GL.glUniform2f
-        glUniform2fv = uniform GL.glUniform2fv
+        glUniform2fv = uniform 2 GL.glUniform2fv
         glUniform2i = const GL.glUniform2i
-        glUniform2iv = uniform GL.glUniform2iv
+        glUniform2iv = uniform 2 GL.glUniform2iv
         glUniform3f = const GL.glUniform3f
-        glUniform3fv = uniform GL.glUniform3fv
+        glUniform3fv = uniform 3 GL.glUniform3fv
         glUniform3i = const GL.glUniform3i
-        glUniform3iv = uniform GL.glUniform3iv
+        glUniform3iv = uniform 3 GL.glUniform3iv
         glUniform4f = const GL.glUniform4f
-        glUniform4fv = uniform GL.glUniform4fv
+        glUniform4fv = uniform 4 GL.glUniform4fv
         glUniform4i = const GL.glUniform4i
-        glUniform4iv = uniform GL.glUniform4iv
+        glUniform4iv = uniform 4 GL.glUniform4iv
         glUniformMatrix2fv = uniformMatrix GL.glUniformMatrix2fv 4
         glUniformMatrix3fv = uniformMatrix GL.glUniformMatrix3fv 9
         glUniformMatrix4fv = uniformMatrix GL.glUniformMatrix4fv 16

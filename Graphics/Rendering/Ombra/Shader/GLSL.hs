@@ -59,15 +59,17 @@ compileShader useAttributes header outNames uniformID (Shader shaderFun _) =
                     shaderFun (ShaderState uniformID [] [], input)
             (outVaryingTypes, outVaryingExprs) = unzip outVaryings
 
-            showVar qual ty nm = concat [qual, " ", ty, " ", nm, ";"]
+            showVar qual ty nm = concat [qual, " ", ty', " ", nm', ";"]
+                where (ty', arr) = break (== '[') ty
+                      nm' = nm ++ arr
             showVars qual name vars = concatMap (\(ty, n) -> showVar qual ty
                                                                      (name n))
                                                 (zip vars [0 ..])
             uniType (UniformValue (_ :: Proxy g) _) = typeName (undefined :: g)
             uniType (UniformTexture _) = typeName (undefined :: GSampler2D)
             uniVars = concatMap (\(uid, val) -> showVar "uniform"
-                                                         (uniType val)
-                                                         (uniformName uid))
+                                                        (uniType val)
+                                                        (uniformName uid))
                                 uniMap
             inputVars | useAttributes = showVars "attribute" attributeName
                                                  inputTypes
@@ -118,16 +120,19 @@ type ActionGraph = H.HashMap ActionID ActionInfo
 
 -- | Compile a list of 'Expr', sharing their actions.
 compile :: [Expr] -> (ShowS, [ShowS])
-compile exprs = let exprs' = optimize exprs
+compile exprs = let exprs' = optimize 1 exprs
                     (strs, deps, _) = unzip3 $ map compileExpr exprs'
                     depGraph = contextAll deep . buildActionGraph $ H.unions deps
                     sorted = sortActions depGraph
                 in (genList sorted, strs)
 
-optimize :: [Expr] -> [Expr]
-optimize exprs = let reps fullExprMap expr (optimizedExprs, exprMap) =
+optimize :: Int         -- ^ 1 = store only the repeated expressions,
+                        --   2 = store everything
+         -> [Expr]
+         -> [Expr]
+optimize n exprs = let reps fullExprMap expr (optimizedExprs, exprMap) =
                         let h = hash expr
-                            exprMap' = H.insertWith (+) h 1 exprMap
+                            exprMap' = H.insertWith (+) h n exprMap
                             sub = subExprs expr
                             (optimizedSubExprs, exprMap'') =
                                     foldr (reps fullExprMap)
@@ -135,16 +140,16 @@ optimize exprs = let reps fullExprMap expr (optimizedExprs, exprMap) =
                                           sub
                             expr' = replaceSubExprs expr optimizedSubExprs
                             storedExpr = case exprType expr' of
-                                              Just t -> Action $ Store t expr'
+                                              Just t -> Action (Store t expr') 0
                                               Nothing -> expr'
                             optimizedExpr | length sub < 1 = expr'
                                           | fullExprMap H.! h > 1 = storedExpr
                                           | otherwise = expr'
                             optimizedExprs' = optimizedExpr : optimizedExprs
                         in (optimizedExprs', exprMap'')
-                     (optimizedExprs, fullExprMap) =
-                             foldr (reps fullExprMap) ([], H.empty) exprs
-                 in optimizedExprs
+                       (optimizedExprs, fullExprMap) =
+                               foldr (reps fullExprMap) ([], H.empty) exprs
+                   in optimizedExprs
 
 generate :: ActionGenerator -> ActionGraph -> ShowS
 generate gen graph = gen . genList $ sortActions graph
@@ -258,9 +263,9 @@ compileExpr (Literal _ s) = (showString s, H.empty, H.empty)
 compileExpr (Input _ i) = (showString $ varyingName i, H.empty, H.empty)
 compileExpr (Attribute _ i) = (showString $ attributeName i, H.empty, H.empty)
 compileExpr (Uniform _ i) = (showString $ uniformName i, H.empty, H.empty)
-compileExpr (Action a) = let h = hash a
-                             var = showString $ actionName h
-                         in (var, H.singleton h a, H.empty)
+compileExpr (Action a n) = let h = hash a
+                               var = showString $ actionName h n
+                           in (var, H.singleton h a, H.empty)
 compileExpr (Dummy _) = error "compileExpr: Dummy"
 compileExpr (HashDummy _) = error "compileExpr: HashDummy"
 compileExpr (ArrayIndex _ eArr ei) = let (arr, aArr, cArr) = compileExpr eArr
@@ -274,8 +279,8 @@ compileExpr (ContextVar _ i t) = ( showString $ contextVarName t i
                                  , H.singleton i ()
                                  )
 
-compileExprOptimized :: Expr -> (ShowS, ActionMap, ActionSet)
-compileExprOptimized = compileExpr . head . optimize . (: [])
+compileExprOptimized :: Int -> Expr -> (ShowS, ActionMap, ActionSet)
+compileExprOptimized n = compileExpr . head . optimize n . (: [])
 
 first3 :: (a -> a') -> (a, b, c) -> (a', b, c)
 first3 f (a, b, c) = (f a, b, c)
@@ -284,18 +289,18 @@ compileAction :: ActionID -> Action -> (ActionInfo, ActionMap)
 compileAction aID (Store ty expr) =
         let (eStr, deps, ctxs) = compileExpr expr
         in ( ActionInfo  (\c -> c .
-                                showString (ty ++ " " ++ actionName aID ++ "=") .
+                                showString (ty ++ " " ++ actionName aID 0 ++ "=") .
                                 eStr . showString ";")
                          (H.map (const ()) deps)
                          (ShallowContext ctxs)
            , deps )
 
 compileAction aID (If cExpr ty tExpr fExpr) =
-        let (cStr, cDeps, cCtxs) = compileExprOptimized cExpr
-            (tStr, tDeps, tCtxs) = compileExprOptimized tExpr
-            (fStr, fDeps, fCtxs) = compileExprOptimized fExpr
+        let (cStr, cDeps, cCtxs) = compileExprOptimized 1 cExpr
+            (tStr, tDeps, tCtxs) = compileExprOptimized 1 tExpr
+            (fStr, fDeps, fCtxs) = compileExprOptimized 1 fExpr
             deps = H.unions [cDeps, tDeps, fDeps]
-            name = actionName aID
+            name = actionName aID 0
             nameS = showString name
         in ( ActionInfo (\c -> showString (ty ++ " " ++ name ++ ";if(") .
                                cStr . showString "){" . c . nameS .
@@ -305,33 +310,56 @@ compileAction aID (If cExpr ty tExpr fExpr) =
                         (ShallowContext $ H.unions [cCtxs, tCtxs, fCtxs])
            , deps )
 
-compileAction aID (For iters ty initVal body) =
+compileAction aID (For iters initValuesTypes body) =
         let iterNameS = showString $ contextVarName LoopIteration aID
-            valueNameS = showString $ contextVarName LoopValue aID
-            (nExpr, sExpr) = body (ContextVar "float" aID LoopIteration)
-                                  (ContextVar ty aID LoopValue)
-            (iStr, iDeps, iCtxs) = compileExprOptimized initVal
-            (nStr, nDeps, nCtxs) = compileExprOptimized nExpr
-            (sStr, sDeps, sCtxs) = compileExprOptimized sExpr
-            deps = H.unions [iDeps, nDeps, sDeps]
-        in ( ActionInfo (\c -> showString (ty ++ " ") . valueNameS .
-                               showString "=" . iStr .
-                               showString ";for(float " . iterNameS .
-                               showString "=0.0;" . iterNameS . showString "<" .
-                               shows iters . showString ".0;++" . iterNameS .
-                               showString "}{" . c . showString "if(" . sStr .
-                               showString "){break;}" . valueNameS .
-                               showString "=" . nStr . showString ";}")
+            valueNameSs = map (\i -> showString $ contextVarName (LoopValue i)
+                                                                 aID)
+                              [0 ..]
+            (iterStr, _, _) = compileExpr iters
+            Just iterType = exprType iters
+            iterTypeS = showString iterType
+            (initTypes, initValues) = unzip initValuesTypes
+            (nExprs, sExpr) = body (ContextVar iterType aID LoopIteration)
+                                   (zipWith (\ty i -> ContextVar ty aID
+                                                                 (LoopValue i))
+                                            initTypes [0 ..])
+            (iStrs, iDepss, iCtxss) = unzip3 $ map (compileExprOptimized 1)
+                                                   initValues
+            (nStrs, nDepss, nCtxss) = unzip3 $ map (compileExprOptimized 2)
+                                                   nExprs
+            (sStr, sDeps, sCtxs) = compileExprOptimized 2 sExpr
+            deps = H.unions $ sDeps : (iDepss ++ nDepss)
+            initialization = foldr (\(iStr, ty, valueNameS) str ->
+                                        showString (ty ++ " ") . valueNameS .
+                                        showString "=" . iStr .
+                                        showString ";" . str
+                                   )
+                                   (showString "")
+                                   (zip3 iStrs initTypes valueNameSs)
+            update = foldr (\(valueNameS, nStr) str ->
+                               valueNameS .  showString "=" .
+                               nStr . showString ";" . str
+                           )
+                           (showString "")
+                           (zip valueNameSs nStrs)
+        in ( ActionInfo (\c -> initialization .
+                               showString "for(" . iterTypeS . showString " " .
+                               iterNameS .  showString "=0;" . iterNameS .
+                               showString "<" . iterStr .
+                               showString ";++" . iterNameS .
+                               showString "){" . c .  showString "if(" . sStr .
+                               showString "){break;}" . update .
+                               showString "}")
                         (H.map (const ()) deps)
-                        (ShallowContext $ H.unions [iCtxs, nCtxs, sCtxs])
+                        (ShallowContext . H.unions $ sCtxs : (iCtxss ++ nCtxss))
            , deps )
 
-actionName :: ActionID -> String
-actionName = ('a' :) . hashName
+actionName :: ActionID -> Int -> String
+actionName aID i = concat ["a", hashName aID ++ "_" ++ show i]
 
 contextVarName :: ContextVarType -> ActionID -> String
 contextVarName LoopIteration = ('l' :) . hashName
-contextVarName LoopValue = actionName
+contextVarName (LoopValue i) = flip actionName i
 
 hashName :: ActionID -> String
 hashName = printf "%x"
