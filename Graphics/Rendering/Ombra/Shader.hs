@@ -232,7 +232,3 @@ foldUniforms = (\((f, i), us) -> case someNatVal . fromIntegral $ length us of
               foldArray p f i = baseUniformGArray p (Proxy :: Proxy u) $
                                         uniform >>^ \(arr :: GArray n u) ->
                                                         foldGArray f i arr
-
-foldUniforms' :: (ShaderInput a, ArrayUniform u, GLES)
-              => Shader s (((a -> u -> a), a), UniformSetter [CPUBase u]) a
-foldUniforms' = second unUniformSetter ^>> foldUniforms
