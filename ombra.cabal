@@ -1,5 +1,5 @@
 name:                ombra
-version:             0.9.0.0
+version:             1.0.0.0
 synopsis:            Render engine.
 description:         
 homepage:            https://github.com/ziocroc/Ombra
@@ -92,13 +92,11 @@ library
                        NullaryTypeClasses,
                        PolyKinds,
                        ScopedTypeVariables,
-                       FunctionalDependencies,
-                       DeriveDataTypeable,
-                       RebindableSyntax
+                       FunctionalDependencies
 
   build-depends:       base <4.11,
                        Boolean <0.3,
-                       vector-space <0.11,
+                       vector-space <0.12,
                        hashable <1.3,
                        unordered-containers <0.3,
                        transformers <0.6,
