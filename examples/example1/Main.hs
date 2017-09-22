@@ -31,11 +31,11 @@ render time = do draw $ scene viewMat
                         .*. transMat4 (Vec3 0 0.5 (- 1.8))
               mirrorMat = reflectionMat4 (Vec4 0 1 0 (- 0.5))
               mirrorViewMat = mirrorMat .*. viewMat
-              lightPos = Vec4 (cos time) (sin (time / 5)) 0 1
+              lightPos = Vec4 (cos time) (1.7 - sin (time / 5) / 3) 0 1
               light = Light { lightPosition = extract $ viewMat .* lightPos
                             , lightAmbient = Vec3 0.4 0.4 0.4
                             , lightDiffuse = Vec3 0.7 0.7 0.7
-                            , lightAttenuation = Vec3 0 0.15 0.13
+                            , lightAttenuation = Vec3 0 0.12 0.1
                             }
               scene viewMat = mconcat [ walls viewMat light
                                       , rotatingCube viewMat light time 0
@@ -98,8 +98,9 @@ mkFragmentShader :: FragmentShader GVertex3D GVec4
                  -> FragmentShader ((GLight, GSpecular), GVertex3D) GVec4
 mkFragmentShader fs = shader $     second reverseNormal
                                >>> applyLight &&& (snd ^>> fs)
-                               >>^ \(GVec3 lr lg lb, GVec4 r g b a) ->
-                                       GVec4 (lr * r) (lg * g) (lb * b) a
+                               >>^ (\(GVec3 lr lg lb, GVec4 r g b a) ->
+                                       GVec4 (lr * r) (lg * g) (lb * b) a)
+                               >>^ clamp (GVec4 0 0 0 0) (GVec4 1 1 1 1)
         where applyLight =     (\((gLight, gSpec), (GVertex3D pos norm _)) ->
                                         (gLight, ((pos, norm), (1, gSpec))))
                            ^>> light
