@@ -30,7 +30,6 @@ module Graphics.Rendering.Ombra.Shader (
         pushader,
         uniform',
         (~*),
-        foldUniforms',
         -- * Fragment shader functionalities
         Fragment(..),
         farr,

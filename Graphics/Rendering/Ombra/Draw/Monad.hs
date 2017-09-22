@@ -69,26 +69,26 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
 
 -- | The state of the 'Draw' monad.
-data DrawState = DrawState {
-        currentFrameBuffer :: FrameBuffer,
-        currentProgram :: Maybe ProgramIndex,
-        loadedProgram :: Maybe LoadedProgram,
-        programs :: ResMap LoadedProgram,
-        uniforms :: ResMap UniformLocation,
-        elemBuffers :: ResMap LoadedBuffer,
-        attributes :: ResMap LoadedAttribute,
-        geometries :: ResMap LoadedGeometry,
-        textureImages :: ResMap LoadedTexture,
-        activeTextures :: Int,
-        textureCache :: [LoadedTexture],
-        viewportSize :: (Int, Int),
-        blendMode :: Maybe Blend.Mode,
-        stencilMode :: Maybe Stencil.Mode,
-        cullFace :: Maybe CullFace,
-        depthTest :: Bool,
-        depthMask :: Bool,
-        colorMask :: (Bool, Bool, Bool, Bool)
-}
+data DrawState = DrawState
+        { currentFrameBuffer :: FrameBuffer
+        , currentProgram :: Maybe ProgramIndex
+        , loadedProgram :: Maybe LoadedProgram
+        , programs :: ResMap LoadedProgram
+        , uniforms :: ResMap UniformLocation
+        , elemBuffers :: ResMap LoadedBuffer
+        , attributes :: ResMap LoadedAttribute
+        , geometries :: ResMap LoadedGeometry
+        , textureImages :: ResMap LoadedTexture
+        , activeTextures :: Int
+        , textureCache :: [LoadedTexture]
+        , viewportSize :: (Int, Int)
+        , blendMode :: Maybe Blend.Mode
+        , stencilMode :: Maybe Stencil.Mode
+        , cullFace :: Maybe CullFace
+        , depthTest :: Bool
+        , depthMask :: Bool
+        , colorMask :: (Bool, Bool, Bool, Bool)
+        }
 
 data Buffer = ColorBuffer
             | DepthBuffer

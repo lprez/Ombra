@@ -649,12 +649,13 @@ instance (GFragmentShaderOutput a, GFragmentShaderOutput b) =>
 hashListMST :: MultiShaderType a => a -> [Int]
 hashListMST = foldrMST (\x l -> hash (toExpr x) : l) []
 
-uniformList :: Shader s i o
+uniformList :: ShaderInput i
+            => Shader s i o
             -> UniformID
             -> (UniformID, [(UniformID, UniformValue)], [Texture])
 uniformList (Shader f _) uid =
-        let err = "uniformList: the input must not be evaluated"
+        let (input, _) = buildMST (fromExpr . Dummy) 0
             ((ShaderState uid' umap tmap), _) = f ( ShaderState uid [] []
-                                                  , error err
+                                                  , input
                                                   )
         in (uid', umap, tmap)
