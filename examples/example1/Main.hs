@@ -46,70 +46,60 @@ render time = do draw $ scene viewMat
               nearestParams = parameters Nearest Nearest
 
 rotatingCube :: Mat4 -> Light -> Float -> Float -> Image GVec4
-rotatingCube view light time off = image (vertexShader (pure time) ~~ view)
-                                         (fragmentShader ~~ (light, specular))
-                                         cube
-        where transformMat time = let angle = time + off
-                                      scale = scaleMat4 (Vec3 0.2 0.2 0.2)
-                                      rot = rotYMat4 (time * 3)
-                                      trans = transMat4 $ Vec3 (sin angle)
-                                                               0.5
-                                                               (cos angle)
-                                  in trans .*. scale .*. rot
-              vertexShader = ushader (\time -> mkVertexShader $
-                                        transform ~* fmap transformMat time)
-              fragmentShader = mkFragmentShader . arr $ \_ -> GVec4 0.8 0.2 0 1
+rotatingCube view light time off =
+        image (transform ~~ (view .*. transformMat) >>> first perspective)
+              (const color &&& id ^>> applyLight ~~ (light, specular))
+              cube
+        where transformMat = let angle = time + off
+                                 scale = scaleMat4 (Vec3 0.2 0.2 0.2)
+                                 rot = rotYMat4 (time * 3)
+                                 trans = transMat4 $ Vec3 (sin angle)
+                                                          0.5
+                                                          (cos angle)
+                             in trans .*. scale .*. rot
+              color = GVec4 0.8 0.2 0 1
               specular = Specular 4 1
 
 walls :: Mat4 -> Light -> Image GVec4
-walls viewMat light = image (vertexShader ~~ viewMat)
-                            (fragmentShader ~~ (light, Specular 20 1))
+walls viewMat light = image (    transform ~~ (viewMat .*. transformMat)
+                             >>> first perspective)
+                            (    applyTexture ~~ tex &&& arr id
+                             >>> applyLight ~~ (light, Specular 20 1))
                             cube
         where transformMat = scaleMat4 $ Vec3 2 2 2
-              vertexShader = mkVertexShader $ transform ~~ transformMat
-              fragmentShader = mkFragmentShader $ applyTexture ~~ tex
 
 water :: GBuffer t GVec4 -> Mat4 -> Light -> Float -> Image GVec4
 water buffer viewMat light time =
-        image (vertexShader ~~ viewMat)
-              (fragmentShader (pure (time * 2, buffer)) ~~ (light, specular))
+        image (transform ~~ (viewMat .*. transformMat) >>> first perspective)
+              (    applyWater ~~ (time * 2, buffer) &&& arr id
+               >>> applyLight ~~ (light, specular))
               cube
         where transformMat =     transMat4 (Vec3 0 (-2) 0)
                              .*. scaleMat4 (Vec3 2.01 1 2.01)
-              vertexShader = mkVertexShader $ transform ~~ transformMat
-              fragmentShader = ushader $ mkFragmentShader . (applyWater ~*)
               specular = Specular 1 0.5
 
-mkVertexShader :: VertexShader GVec4 GVec4
-               -> VertexShader (GMat4, GVertex3D) (GVec4, GVertex3D)
-mkVertexShader vs = shader $
-            second (\(GVertex3D pos norm uv) -> ((pos ^| 1, norm ^| 0), uv))
-        ^>> second (first $ vs *** vs)
-        >>> (\(viewMat, ((pos, norm), uv)) ->
-                ( viewMat .* pos
-                , GVertex3D (extract $ viewMat .* pos)
-                            (extract $ viewMat .* norm)
-                            uv
-                ))
-        ^>> first (transform ~~ perspMat)
-        where perspMat = perspectiveMat4 0.1 10000 90 1
+transform :: VertexShader (GMat4, GVertex3D) (GVec4, GVertex3D)
+transform = sarr $ \(viewMat, GVertex3D pos norm uv) ->
+                        let pos' = viewMat .* (pos ^| 1)
+                            norm' = extract $ viewMat .* (norm ^| 0)
+                        in (pos', GVertex3D (extract pos') norm' uv)
 
-mkFragmentShader :: FragmentShader GVertex3D GVec4
-                 -> FragmentShader ((GLight, GSpecular), GVertex3D) GVec4
-mkFragmentShader fs = shader $     second reverseNormal
-                               >>> applyLight &&& (snd ^>> fs)
-                               >>^ (\(GVec3 lr lg lb, GVec4 r g b a) ->
-                                       GVec4 (lr * r) (lg * g) (lb * b) a)
-                               >>^ clamp (GVec4 0 0 0 0) (GVec4 1 1 1 1)
-        where applyLight =     (\((gLight, gSpec), (GVertex3D pos norm _)) ->
-                                        (gLight, ((pos, norm), (1, gSpec))))
-                           ^>> light
-
+perspective :: VertexShader GVec4 GVec4
+perspective = sarr (uncurry (.*)) ~~ perspectiveMat4 0.1 10000 90 1
 
 reverseNormal :: FragmentShader GVertex3D GVertex3D
 reverseNormal = farr $ \fragment (GVertex3D pos norm uv) ->
                         let factor = ifB (fragFrontFacing fragment) 1 (-1)
                         in GVertex3D pos (factor *^ norm) uv
+
+applyLight :: FragmentShader ((GLight, GSpecular), (GVec4, GVertex3D)) GVec4
+applyLight = shader $     second (second reverseNormal)
+                      >>> (lightInp >>> light) &&& arr (fst . snd)
+                      >>^ (\(GVec3 lr lg lb, GVec4 r g b a) ->
+                              clamp (GVec4 0 0 0 0) (GVec4 1 1 1 1) $
+                                GVec4 (lr * r) (lg * g) (lb * b) a)
+        where lightInp = arr $ \((gLight, gSpec), (_, GVertex3D pos norm _)) ->
+                                        (gLight, ((pos, norm), (1, gSpec)))
 
 applyTexture :: FragmentShader (TextureSampler, GVertex3D) GVec4
 applyTexture = sarr $ \(sampler, GVertex3D _ _ (GVec2 s t)) ->
@@ -121,9 +111,6 @@ applyWater = sarr $ \((time, sampler), GVertex3D _ _ (GVec2 s t)) ->
                             st' = GVec2 (s + n) (t + n)
                             GVec4 r g b _ = 0.5 *^ sampleGBuffer sampler st'
                         in GVec4 (r + 0.10) (g + 0.15) (b + 0.15) (0.6 + n * 7)
-
-transform :: VertexShader (GMat4, GVec4) GVec4
-transform = sarr $ \(matrix, vec) -> matrix .* vec
 
 tex :: Texture
 tex = mkTexture 128 128 (potLinear True) [cols]
