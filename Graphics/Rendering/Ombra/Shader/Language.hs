@@ -424,6 +424,7 @@ type TextureSampler = Shader.GSampler2D
 sample :: TextureSampler -> Shader.GVec2 -> Shader.GVec4
 sample = sampleTexture
 
--- | Sample a texel from a texture.
+-- | Sample a texel from a texture. Sampling in the vertex shader is not
+-- supported on some hardware.
 sampleTexture :: TextureSampler -> Shader.GVec2 -> Shader.GVec4
 sampleTexture = Shader.texture2D
