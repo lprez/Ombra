@@ -669,12 +669,12 @@ drawToTextures useDrawBuffers atts w h oldFb draw =
            when useDrawBuffers $
                    liftIO (encodeInts buffersToDraw) >>= gl . GL.drawBuffers
 
-           (sw, sh) <- currentViewport
-           resizeViewport (fromIntegral w) (fromIntegral h)
+           (sp, ss) <- currentViewport
+           resizeViewport (0, 0) (fromIntegral w, fromIntegral h)
 
            ret <- draw fb
 
-           resizeViewport sw sh
+           resizeViewport sp ss
            gl $ do deleteFramebuffer fb
                    bindFramebuffer gl_FRAMEBUFFER oldFb
 
