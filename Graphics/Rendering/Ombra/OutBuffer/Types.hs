@@ -49,7 +49,6 @@ data OutBuffer t o where
 instance FragmentShaderOutput o => MultiShaderType (GBufferSampler t o) where
         type ExprMST (GBufferSampler t o) = [ExprMST GSampler2D]
         mapMST f (GBufferSampler x) = GBufferSampler $ map f x
-        foldrMST f s (GBufferSampler x) = foldr f s x
         toExprMST (GBufferSampler x) = map toExprMST x
         fromExprMST = GBufferSampler . map fromExprMST
 
@@ -57,6 +56,7 @@ instance FragmentShaderOutput o => ShaderInput (GBufferSampler t o) where
         buildMST f i = (GBufferSampler $ take n infiniteSamplers, i + n)
                 where n = textureCount (Proxy :: Proxy o)
                       infiniteSamplers = map f [i ..]
+        foldrMST f s (GBufferSampler x) = foldr f s x
 
 instance FragmentShaderOutput o => Uniform (GBufferSampler t o) where
         type CPUUniform (GBufferSampler t o) = GBuffer t o
@@ -67,12 +67,12 @@ instance FragmentShaderOutput o => Uniform (GBufferSampler t o) where
 instance MultiShaderType (DepthBufferSampler t) where
         type ExprMST (DepthBufferSampler t) = ExprMST GSampler2D
         mapMST f (DepthBufferSampler x) = DepthBufferSampler $ f x
-        foldrMST f s (DepthBufferSampler x) = foldrMST f s x
         toExprMST (DepthBufferSampler x) = toExprMST x
         fromExprMST = DepthBufferSampler . fromExprMST
 
 instance ShaderInput (DepthBufferSampler t) where
         buildMST f i = (DepthBufferSampler $ f i, i + 1)
+        foldrMST f s (DepthBufferSampler x) = foldrMST f s x
 
 instance Uniform (DepthBufferSampler t) where
         type CPUUniform (DepthBufferSampler t) = DepthBuffer t

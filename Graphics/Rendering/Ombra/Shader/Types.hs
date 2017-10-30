@@ -32,15 +32,6 @@ class HasTrie (ExprMST a) => MultiShaderType a where
                        -> a
         mapMST f = to . gmapMST f . from
 
-
-        foldrMST :: (forall x. ShaderType x => x -> b -> b) -> b -> a -> b
-        default foldrMST :: (Generic a, GMultiShaderType (Rep a))
-                         => (forall x. ShaderType x => x -> b -> b)
-                         -> b
-                         -> a
-                         -> b
-        foldrMST f s = gfoldrMST f s . from
-
         toExprMST :: a -> ExprMST a
         default toExprMST :: ( Generic a
                              , GMultiShaderType (Rep a)
@@ -67,6 +58,14 @@ class MultiShaderType a => ShaderInput a where
                          -> Int
                          -> (a, Int)
         buildMST f = first to . gbuildMST f
+
+        foldrMST :: (forall x. ShaderType x => x -> b -> b) -> b -> a -> b
+        default foldrMST :: (Generic a, GShaderInput (Rep a))
+                         => (forall x. ShaderType x => x -> b -> b)
+                         -> b
+                         -> a
+                         -> b
+        foldrMST f s = gfoldrMST f s . from
 
 -- | Types that contain uniform values.
 class ShaderInput a => Uniform a where
@@ -115,7 +114,7 @@ toGVec4s = toGVec4sList . flip toGFloats []
                       GVec4 x y z w : toGVec4sList xs
 
 -- | Types that contain 'GFloat's.
-class (MultiShaderType o, KnownNat (NFloats o)) => FragmentShaderOutput o where
+class (ShaderInput o, KnownNat (NFloats o)) => FragmentShaderOutput o where
         type NFloats o :: Nat
         type NFloats o = GNFloats (Rep o)
 
@@ -168,11 +167,12 @@ instance ArrowApply (Shader s) where
 instance ArrowChoice (Shader s) where
         left = leftApp
 
-instance (ShaderInput i, MultiShaderType o) => Hashable (Shader s i o) where
+instance (ShaderInput i, ShaderInput o) => Hashable (Shader s i o) where
         hashWithSalt salt (Shader _ hf) =
-                let (input, _) = buildMST' (\t -> fromExpr .  Input t) 0
+                let (input, _) = buildMST' (\t -> fromExpr . Input t) 0
                     (_, output) = hf (0, input)
-                in hashWithSalt salt $ hashListMST output
+                    outHash = foldrMST (\x l -> hash (toExpr x) : l) [] output
+                in hashWithSalt salt outHash
 
 data ShaderStage = VertexShaderStage | FragmentShaderStage
 
@@ -200,12 +200,12 @@ data Fragment = Fragment {
 instance MultiShaderType GBool where
         type ExprMST GBool = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GBool where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GBool where
         type CPUUniform GBool = CPUBase GBool
@@ -214,12 +214,12 @@ instance GLES => Uniform GBool where
 instance MultiShaderType GFloat where
         type ExprMST GFloat = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GFloat where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GFloat where
         type CPUUniform GFloat = CPUBase GFloat
@@ -233,12 +233,12 @@ instance FragmentShaderOutput GFloat where
 instance MultiShaderType GInt where
         type ExprMST GInt = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GInt where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GInt where
         type CPUUniform GInt = CPUBase GInt
@@ -247,12 +247,12 @@ instance GLES => Uniform GInt where
 instance MultiShaderType GSampler2D where
         type ExprMST GSampler2D = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GSampler2D where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GSampler2D where
         type CPUUniform GSampler2D = Texture
@@ -261,12 +261,12 @@ instance GLES => Uniform GSampler2D where
 instance MultiShaderType GVec2 where
         type ExprMST GVec2 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GVec2 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GVec2 where
         type CPUUniform GVec2 = CPUBase GVec2
@@ -280,12 +280,12 @@ instance FragmentShaderOutput GVec2 where
 instance MultiShaderType GVec3 where
         type ExprMST GVec3 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GVec3 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GVec3 where
         type CPUUniform GVec3 = CPUBase GVec3
@@ -299,12 +299,12 @@ instance FragmentShaderOutput GVec3 where
 instance MultiShaderType GVec4 where
         type ExprMST GVec4 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GVec4 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GVec4 where
         type CPUUniform GVec4 = CPUBase GVec4
@@ -318,12 +318,12 @@ instance FragmentShaderOutput GVec4 where
 instance MultiShaderType GIVec2 where
         type ExprMST GIVec2 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GIVec2 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GIVec2 where
         type CPUUniform GIVec2 = CPUBase GIVec2
@@ -332,12 +332,12 @@ instance GLES => Uniform GIVec2 where
 instance MultiShaderType GIVec3 where
         type ExprMST GIVec3 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GIVec3 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GIVec3 where
         type CPUUniform GIVec3 = CPUBase GIVec3
@@ -346,12 +346,12 @@ instance GLES => Uniform GIVec3 where
 instance MultiShaderType GIVec4 where
         type ExprMST GIVec4 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GIVec4 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GIVec4 where
         type CPUUniform GIVec4 = CPUBase GIVec4
@@ -360,12 +360,12 @@ instance GLES => Uniform GIVec4 where
 instance MultiShaderType GBVec2 where
         type ExprMST GBVec2 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GBVec2 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GBVec2 where
         type CPUUniform GBVec2 = CPUBase GBVec2
@@ -374,12 +374,12 @@ instance GLES => Uniform GBVec2 where
 instance MultiShaderType GBVec3 where
         type ExprMST GBVec3 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GBVec3 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GBVec3 where
         type CPUUniform GBVec3 = CPUBase GBVec3
@@ -388,12 +388,12 @@ instance GLES => Uniform GBVec3 where
 instance MultiShaderType GBVec4 where
         type ExprMST GBVec4 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GBVec4 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GBVec4 where
         type CPUUniform GBVec4 = CPUBase GBVec4
@@ -402,12 +402,12 @@ instance GLES => Uniform GBVec4 where
 instance MultiShaderType GMat2 where
         type ExprMST GMat2 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GMat2 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GMat2 where
         type CPUUniform GMat2 = CPUBase GMat2
@@ -416,12 +416,12 @@ instance GLES => Uniform GMat2 where
 instance MultiShaderType GMat3 where
         type ExprMST GMat3 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GMat3 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GMat3 where
         type CPUUniform GMat3 = CPUBase GMat3
@@ -430,12 +430,12 @@ instance GLES => Uniform GMat3 where
 instance MultiShaderType GMat4 where
         type ExprMST GMat4 = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance ShaderInput GMat4 where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance GLES => Uniform GMat4 where
         type CPUUniform GMat4 = CPUBase GMat4
@@ -444,12 +444,12 @@ instance GLES => Uniform GMat4 where
 instance (KnownNat n, ShaderType t) => MultiShaderType (GArray n t) where
         type ExprMST (GArray n t) = Expr
         mapMST f = f
-        foldrMST f = flip f
         toExprMST = toExpr
         fromExprMST = fromExpr
 
 instance (KnownNat n, ShaderType t) => ShaderInput (GArray n t) where
         buildMST f i = (f i, i + 1)
+        foldrMST f = flip f
 
 instance (KnownNat n, ShaderType t, BaseUniform (GArray n t), GLES) =>
         Uniform (GArray n t) where
@@ -459,12 +459,12 @@ instance (KnownNat n, ShaderType t, BaseUniform (GArray n t), GLES) =>
 instance MultiShaderType () where
         type ExprMST () = ()
         mapMST _ = id
-        foldrMST _ x _ = x
         toExprMST = id
         fromExprMST = id
 
 instance ShaderInput () where
         buildMST _ i = ((), i)
+        foldrMST _ x _ = x
 
 instance Uniform () where
         type CPUUniform () = ()
@@ -478,7 +478,6 @@ instance FragmentShaderOutput () where
 instance (MultiShaderType a, MultiShaderType b) => MultiShaderType (a, b) where
         type ExprMST (a, b) = (ExprMST a, ExprMST b)
         mapMST f (x, y) = (mapMST f x, mapMST f y)
-        foldrMST f s (x, y) = foldrMST f (foldrMST f s y) x
         toExprMST (x, y) = (toExprMST x, toExprMST y)
         fromExprMST (x, y) = (fromExprMST x, fromExprMST y)
 
@@ -486,7 +485,6 @@ instance (MultiShaderType a, MultiShaderType b, MultiShaderType c) =>
         MultiShaderType (a, b, c) where
         type ExprMST (a, b, c) = (ExprMST a, ExprMST b, ExprMST c)
         mapMST f (x, y, z) = (mapMST f x, mapMST f y, mapMST f z)
-        foldrMST f s (x, y, z) = foldrMST f (foldrMST f (foldrMST f s z) y) x
         toExprMST (x, y, z) = (toExprMST x, toExprMST y, toExprMST z)
         fromExprMST (x, y, z) = (fromExprMST x, fromExprMST y, fromExprMST z)
 
@@ -494,6 +492,7 @@ instance (ShaderInput a, ShaderInput b) => ShaderInput (a, b) where
         buildMST f i = let (a, i') = buildMST f i
                            (b, i'') = buildMST f i'
                        in ((a, b), i'')
+        foldrMST f s (x, y) = foldrMST f (foldrMST f s y) x
 
 instance ( ShaderInput a, ShaderInput b, ShaderInput c
          ) => ShaderInput (a, b, c) where
@@ -501,6 +500,7 @@ instance ( ShaderInput a, ShaderInput b, ShaderInput c
                            (b, i2) = buildMST f i1
                            (c, i3) = buildMST f i2
                        in ((a, b, c), i3)
+        foldrMST f s (x, y, z) = foldrMST f (foldrMST f (foldrMST f s z) y) x
 
 instance (Uniform a, Uniform b) => Uniform (a, b) where
         type CPUUniform (a, b) = (CPUUniform a, CPUUniform b)
@@ -544,16 +544,29 @@ instance ( FragmentShaderOutput a
 instance MultiShaderType a => MultiShaderType [a] where
         type ExprMST [a] = [ExprMST a]
         mapMST f = map $ mapMST f
-        foldrMST f = foldr . flip $ foldrMST f
         toExprMST = map toExprMST
         fromExprMST = map fromExprMST
 
 instance (ShaderInput a, MultiShaderType b) => MultiShaderType (a -> b) where
         type ExprMST (a -> b) = ExprMST b
         mapMST f g = \x -> mapMST f $ g x
-        foldrMST f s = foldrMST f s . dummyFun
         toExprMST = toExprMST . dummyFun
         fromExprMST x = const $ fromExprMST x
+
+instance (ShaderInput a, MultiShaderType b) =>
+        MultiShaderType (Shader s a b) where
+        type ExprMST (Shader s a b) = (ExprMST b, UniformID)
+        mapMST f s = s >>^ mapMST f
+        toExprMST (Shader _ hf) = let err = "This shader can't be used as MST"
+                                      (uid, _) = hf (0, error err)
+                                      out = snd . dummyFun $ hf . (,) 0
+                                  in (toExprMST out, uid)
+        fromExprMST (out, dif) = let hf (uid, _) = (uid + dif, fromExprMST out)
+                                     f (ShaderState uid u t, _) =
+                                          ( ShaderState (uid + dif) u t
+                                          , fromExprMST out
+                                          )
+                                 in Shader f hf
 
 dummyFun :: ShaderInput a => (a -> b) -> b
 dummyFun g = g . fst $ buildMST (fromExpr . Dummy) 0
@@ -561,21 +574,18 @@ dummyFun g = g . fst $ buildMST (fromExpr . Dummy) 0
 class GMultiShaderType (g :: * -> *) where
         type GExprMST g :: *
         gmapMST :: (forall x. ShaderType x => x -> x) -> g p -> g p
-        gfoldrMST :: (forall x. ShaderType x => x -> b -> b) -> b -> g p -> b
         gtoExprMST :: g p -> GExprMST g
         gfromExprMST :: GExprMST g -> g p
 
 instance GMultiShaderType a => GMultiShaderType (M1 i d a) where
         type GExprMST (M1 i d a) = GExprMST a
         gmapMST f (M1 x) = M1 $ gmapMST f x
-        gfoldrMST f s (M1 x) = gfoldrMST f s x
         gtoExprMST (M1 x) = gtoExprMST x
         gfromExprMST x = M1 $ gfromExprMST x
 
 instance MultiShaderType c => GMultiShaderType (K1 i c) where
         type GExprMST (K1 i c) = ExprMST c
         gmapMST f (K1 x) = K1 $ mapMST f x
-        gfoldrMST f s (K1 x) = foldrMST f s x
         gtoExprMST (K1 x) = toExprMST x
         gfromExprMST x = K1 $ fromExprMST x
 
@@ -583,23 +593,26 @@ instance (GMultiShaderType a, GMultiShaderType b) =>
         GMultiShaderType (a :*: b) where
         type GExprMST (a :*: b) = (GExprMST a, GExprMST b)
         gmapMST f (a :*: b) = gmapMST f a :*: gmapMST f b
-        gfoldrMST f s (a :*: b) = gfoldrMST f (gfoldrMST f s b) a
         gtoExprMST (a :*: b) = (gtoExprMST a, gtoExprMST b)
         gfromExprMST (a, b) = gfromExprMST a :*: gfromExprMST b
 
 class GShaderInput g where
         gbuildMST :: (forall x. ShaderType x => Int -> x) -> Int -> (g p, Int)
+        gfoldrMST :: (forall x. ShaderType x => x -> b -> b) -> b -> g p -> b
 
 instance GShaderInput a => GShaderInput (M1 i d a) where
         gbuildMST f = first M1 . gbuildMST f
+        gfoldrMST f s (M1 x) = gfoldrMST f s x
 
 instance ShaderInput c => GShaderInput (K1 i c) where
         gbuildMST f = first K1 . buildMST f
+        gfoldrMST f s (K1 x) = foldrMST f s x
 
 instance (GShaderInput a, GShaderInput b) => GShaderInput (a :*: b) where
         gbuildMST f i = let (a, i') = gbuildMST f i
                             (b, i'') = gbuildMST f i'
                         in (a :*: b, i'')
+        gfoldrMST f s (a :*: b) = gfoldrMST f (gfoldrMST f s b) a
 
 class GUniform (a :: * -> *) (c :: * -> *) where
         gfoldrUniform :: Proxy a
@@ -645,9 +658,6 @@ instance (GFragmentShaderOutput a, GFragmentShaderOutput b) =>
                               (y, xs'') = gfromGFloats xs'
                           in (x :*: y, xs'')
         gtoGFloats (x :*: y) = gtoGFloats x . gtoGFloats y
-
-hashListMST :: MultiShaderType a => a -> [Int]
-hashListMST = foldrMST (\x l -> hash (toExpr x) : l) []
 
 uniformList :: ShaderInput i
             => Shader s i o
