@@ -18,7 +18,7 @@ module Graphics.Rendering.Ombra.Shader (
         FragmentShader,
         -- * Uniforms
         uniform,
-        (~~),
+        (~<),
         foldUniforms,
         -- * Optimized shaders
         UniformSetter,
@@ -29,7 +29,7 @@ module Graphics.Rendering.Ombra.Shader (
         ushader,
         pushader,
         uniform',
-        (~*),
+        (~<*),
         -- * Fragment shader functionalities
         Fragment(..),
         farr,
@@ -160,17 +160,17 @@ uniform' :: Uniform u => Shader s (UniformSetter (CPUUniform u)) u
 uniform' = unUniformSetter ^>> uniform
 
 -- | Add a uniform and directly set it with the second operand.
-infixl 9 ~~
-(~~) :: Uniform u => Shader s (u, i) o -> CPUUniform u -> Shader s i o
-shader ~~ u = (const u ^>> uniform) &&& id >>> shader
+infixl 9 ~<
+(~<) :: Uniform u => Shader s (u, i) o -> CPUUniform u -> Shader s i o
+shader ~< u = (const u ^>> uniform) &&& id >>> shader
 
 -- | Add a uniform and directly set it with a 'UniformSetter'.
-infixl 9 ~*
-(~*) :: Uniform u
+infixl 9 ~<*
+(~<*) :: Uniform u
      => Shader s (u, i) o
      -> UniformSetter (CPUUniform u)
      -> Shader s i o
-shader ~* u = (const u ^>> uniform') &&& id >>> shader
+shader ~<* u = (const u ^>> uniform') &&& id >>> shader
 
 -- | This works like 'sarr' but provides a 'Fragment'.
 farr :: (MultiShaderType i, MultiShaderType o)
