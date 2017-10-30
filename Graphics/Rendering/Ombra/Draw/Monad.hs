@@ -81,7 +81,7 @@ data DrawState = DrawState
         , textureImages :: ResMap LoadedTexture
         , activeTextures :: Int
         , textureCache :: [LoadedTexture]
-        , viewportSize :: (Int, Int)
+        , viewportSize :: ((Int, Int), (Int, Int))
         , blendMode :: Maybe Blend.Mode
         , stencilMode :: Maybe Stencil.Mode
         , cullFace :: Maybe CullFace
@@ -147,9 +147,9 @@ instance GLES => MonadRead GVec4 Draw where
 
 instance GLES => MonadScreen (Draw o) where
         currentViewport = viewportSize <$> Draw get
-        resizeViewport w h = do setViewport w h
+        resizeViewport p w = do setViewport p w
                                 Draw . modify $ \s ->
-                                        s { viewportSize = (w, h) }
+                                        s { viewportSize = (p, w) }
 
 instance GLES => MonadProgram (Draw o) where
         withProgram p act =
@@ -226,7 +226,7 @@ drawState w h = DrawState { currentFrameBuffer = noFramebuffer
                           , loadedProgram = Nothing
                           , textureCache = []
                           , activeTextures = 0
-                          , viewportSize = (w, h)
+                          , viewportSize = ((0, 0), (w, h))
                           , blendMode = Nothing
                           , depthTest = True
                           , depthMask = True
@@ -251,11 +251,12 @@ drawInit = do programs <- liftIO newResMap
               uniforms <- liftIO newResMap
               textureImages <- liftIO newResMap
 
-              (w, h) <- viewportSize <$> Draw get
+              ((x, y), (w, h)) <- viewportSize <$> Draw get
               gl $ do GL.clearColor 0.0 0.0 0.0 1.0
                       enable gl_DEPTH_TEST
                       depthFunc gl_LESS
-                      viewport 0 0 (fromIntegral w) (fromIntegral h)
+                      viewport (fromIntegral x) (fromIntegral y)
+                               (fromIntegral w) (fromIntegral h)
 
               Draw . modify $ \s -> s { programs = programs
                                       , elemBuffers = elemBuffers

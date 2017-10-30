@@ -6,9 +6,12 @@ module Graphics.Rendering.Ombra.Screen (
 import Graphics.Rendering.Ombra.Internal.GL
 
 class (GLES, Monad m) => MonadScreen m where
-        currentViewport :: m (Int, Int)
+        currentViewport :: m ((Int, Int), (Int, Int))
         -- | Resize the drawing space.
-        resizeViewport :: Int -> Int -> m ()
+        resizeViewport :: (Int, Int)    -- ^ (x, y)
+                       -> (Int, Int)    -- ^ (width, height)
+                       -> m ()
 
-setViewport :: (GLES, MonadGL m) => Int -> Int -> m ()
-setViewport w h = gl $ viewport 0 0 (fromIntegral w) (fromIntegral h)
+setViewport :: (GLES, MonadGL m) => (Int, Int) -> (Int, Int) -> m ()
+setViewport (x, y) (w, h) = gl $ viewport (fromIntegral x) (fromIntegral y)
+                                          (fromIntegral w) (fromIntegral h)
