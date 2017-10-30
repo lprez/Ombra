@@ -40,7 +40,7 @@ module Graphics.Rendering.Ombra.Shader.Language (
         Shader.GArray,
         -- * GPU functions
         (Shader.!),
-        -- Shader.store,
+        sampleTexture,
         sample,
         {-
         Shader.texture2DBias,
@@ -422,6 +422,10 @@ instance Matrix Shader.GMat4 where
 
 type TextureSampler = Shader.GSampler2D
 
--- | Sample a texel from a texture.
+-- | Alias for 'sampleTexture'.
 sample :: TextureSampler -> Shader.GVec2 -> Shader.GVec4
-sample = Shader.texture2D
+sample = sampleTexture
+
+-- | Sample a texel from a texture.
+sampleTexture :: TextureSampler -> Shader.GVec2 -> Shader.GVec4
+sampleTexture = Shader.texture2D
