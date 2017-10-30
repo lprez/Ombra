@@ -52,7 +52,7 @@ class MonadDrawBuffers m where
                     -> m o' b
 
         -- | Use this instead of 'drawBuffers' if you need to reuse the newly
-        -- created buffers layer. They will be deleted from the GPU when the
+        -- created buffers later. They will be deleted from the GPU when the
         -- 'GBuffer'/'DepthBuffer' is garbage collected.
         drawBuffers' :: Int
                      -> Int
