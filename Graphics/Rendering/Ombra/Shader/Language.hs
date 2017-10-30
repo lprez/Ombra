@@ -14,8 +14,6 @@ This module exports the shader EDSL.
 
 module Graphics.Rendering.Ombra.Shader.Language (
         module Data.Boolean,
-        module Data.VectorSpace,
-        module Data.Cross,
         -- * Types
         -- ** GPU types
         Shader.GBool,
