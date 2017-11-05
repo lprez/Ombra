@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, RankNTypes #-}
+{-# LANGUAGE MultiParamTypeClasses, RankNTypes, DefaultSignatures #-}
 
 module Graphics.Rendering.Ombra.Draw.Class (
         MonadDraw(..),
@@ -11,6 +11,8 @@ import Data.Word
 import Graphics.Rendering.Ombra.Color
 import Graphics.Rendering.Ombra.OutBuffer.Types
 import Graphics.Rendering.Ombra.Geometry.Draw
+import Graphics.Rendering.Ombra.Geometry.Types
+import Graphics.Rendering.Ombra.Internal.GL (MonadGL)
 import Graphics.Rendering.Ombra.Texture.Draw
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Screen
@@ -22,6 +24,11 @@ class ( MonadGeometry (m o)
       , MonadTexture (m o)
       , MonadScreen (m o)
       ) => MonadDraw o m where
+        drawGeometry :: GeometryVertex g => Geometry g -> m o ()
+        default drawGeometry :: (MonadGL (m o), GeometryVertex g)
+                             => Geometry g
+                             -> m o ()
+        drawGeometry = defaultDrawGeometry
         withColorMask :: (Bool, Bool, Bool, Bool) -> m o a -> m o a
         withDepthTest :: Bool -> m o a -> m o a
         withDepthMask :: Bool -> m o a -> m o a

@@ -13,7 +13,7 @@ module Graphics.Rendering.Ombra.Draw (
         -- * Running the Draw monad
         runDraw,
         -- * Draw actions
-        MonadDraw(..),
+        MonadDraw(withColorMask, withDepthTest, withDepthMask),
         MonadDrawBuffers(..),
         MonadRead(..),
         MonadScreen(resizeViewport),

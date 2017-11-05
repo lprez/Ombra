@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, ExistentialQuantification, ConstraintKinds,
              KindSignatures, DataKinds, GADTs, RankNTypes, FlexibleInstances,
              ScopedTypeVariables, TypeOperators, ImpredicativeTypes,
-             TypeSynonymInstances, FlexibleContexts #-}
+             TypeSynonymInstances, FlexibleContexts, DefaultSignatures #-}
 
 module Graphics.Rendering.Ombra.Shader.Program (
         MonadProgram(..),
@@ -69,9 +69,19 @@ program vs fs = let (vss, (uid, attrs)) = compileVertexShader vs
 programIndex :: Program gs is -> ProgramIndex
 programIndex (Program _ _ h) = ProgramIndex h
 
-class (GLES, MonadGL m) => MonadProgram m where
-        withProgram :: Program i o -> (LoadedProgram -> m ()) -> m ()
+class (GLES, Monad m) => MonadProgram m where
+        setProgram :: Program i o -> m ()
         getUniform :: UniformID -> m (Either String UniformLocation)
+        setUniform :: BaseUniform g => UniformID -> proxy g -> CPUBase g -> m ()
+        default setUniform :: (MonadGL m, BaseUniform g)
+                           => UniformID
+                           -> proxy g
+                           -> CPUBase g
+                           -> m ()
+        setUniform uid g val = getUniform uid >>= \eu ->
+                case eu of
+                     Right (UniformLocation l) -> gl $ setBaseUniform l g val
+                     Left _ -> return ()
 
 {-
 setUniformValue :: (MonadProgram m, ShaderVar g, BaseUniform g)
@@ -85,9 +95,6 @@ setUniformValue p g c = withUniforms p g c $ \n ug uc ->
                      Right (UniformLocation l) -> gl $ setUniform l ug uc
                      Left _ -> return ()
 -}
-
-setProgram :: MonadProgram m => Program i o -> m ()
-setProgram p = withProgram p $ \(LoadedProgram glp _ _) -> gl $ useProgram glp
 
 loadProgram :: GLES => Program g i -> GL (Either String LoadedProgram)
 loadProgram (Program (vss, attrs) fss h) =

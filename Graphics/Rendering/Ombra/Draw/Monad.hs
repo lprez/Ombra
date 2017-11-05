@@ -175,21 +175,9 @@ instance GLES => MonadScreen (Draw o) where
         resizeViewport p w = do setViewport p w
                                 Draw . modify $ \s ->
                                         s { viewportSize = (p, w) }
-
 instance GLES => MonadProgram (Draw o) where
-        withProgram p act =
-                do current <- currentProgram <$> Draw get
-                   when (current /= Just (programIndex p)) $
-                           getProgram p >>= \elp ->
-                                case elp of
-                                     Right lp -> do Draw . modify $ \s ->
-                                                     s { currentProgram = Just $
-                                                             programIndex p
-                                                       , loadedProgram = Just lp
-                                                       , activeTextures = 0
-                                                       }
-                                                    act lp
-                                     Left _ -> return ()
+        setProgram p = withProgram p $ \(LoadedProgram glp _ _) ->
+                                                gl $ useProgram glp
         getUniform id = do mprg <- loadedProgram <$> Draw get
                            case mprg of
                                 Just prg -> do map <- uniforms <$> Draw get
@@ -210,9 +198,10 @@ instance GLES => Stencil.MonadStencil (Draw o) where
 instance GLES => MonadTexture (Draw o) where
         getTexture (TextureLoaded l) = return $ Right l
         getTexture (TextureImage t) = getTextureImage t
-        getActiveTexturesCount = activeTextures <$> Draw get
-        setActiveTexturesCount n = Draw . modify  $ \s ->
-                                        s { activeTextures = n }
+        withActiveTextures =
+                defaultWithActiveTextures (activeTextures <$> Draw get)
+                                          (\n -> Draw . modify  $ \s ->
+                                                s { activeTextures = n })
         newTexture w h params i initialize =
                 gl $ do t <- emptyTexture params
                         initialize t
@@ -393,6 +382,21 @@ getTextureImage = getDrawResource gl textureImages
 
 getProgram :: GLES => Program gs is -> Draw o (Either String LoadedProgram)
 getProgram = getDrawResource' gl programs Nothing
+
+withProgram :: GLES => Program i o -> (LoadedProgram -> Draw x ()) -> Draw x ()
+withProgram p act =
+        do current <- currentProgram <$> Draw get
+           when (current /= Just (programIndex p)) $
+                   getProgram p >>= \elp ->
+                        case elp of
+                             Right lp -> do Draw . modify $ \s ->
+                                             s { currentProgram = Just $
+                                                     programIndex p
+                                               , loadedProgram = Just lp
+                                               , activeTextures = 0
+                                               }
+                                            act lp
+                             Left _ -> return ()
 
 setBlendMode :: GLES => Maybe Blend.Mode -> Draw o ()
 setBlendMode Nothing = do m <- blendMode <$> Draw get

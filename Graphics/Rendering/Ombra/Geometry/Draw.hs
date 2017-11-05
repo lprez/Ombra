@@ -7,7 +7,7 @@ module Graphics.Rendering.Ombra.Geometry.Draw (
         LoadedBuffer,
         LoadedAttribute,
         LoadedGeometry(..),
-        drawGeometry
+        defaultDrawGeometry
 ) where
 
 import Control.Monad.Trans.Control
@@ -22,7 +22,7 @@ import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Language.Types (ShaderType(size))
 
-class (GLES, MonadGL m) => MonadGeometry m where
+class (GLES, Monad m) => MonadGeometry m where
         getAttribute :: BaseAttribute i
                      => AttrCol (i ': is)
                      -> m (Either String LoadedAttribute)
@@ -30,7 +30,6 @@ class (GLES, MonadGL m) => MonadGeometry m where
         getGeometry :: GeometryVertex g
                     => Geometry g
                     -> m (Either String LoadedGeometry)
-
 
 data LoadedGeometry = LoadedGeometry {
         -- elementType :: GLEnum,
@@ -51,7 +50,7 @@ instance (GLES, BaseAttribute i) =>
                            arr <- lift $ encodeAttribute (Proxy :: Proxy i) vs
                            buf <- lift $ loadBuffer gl_ARRAY_BUFFER arr
                            let sz = fromIntegral . size $ (undefined :: i)
-                               set = setAttribute (Proxy :: Proxy i) . (+ i)
+                               set = setBaseAttribute (Proxy :: Proxy i) . (+ i)
                            put (i + sz, (buf, set) : as)
                 where vs = downList down []
         unloadResource _ (LoadedAttribute _ as) =
@@ -69,7 +68,7 @@ instance GLES => Resource (Elements is) LoadedBuffer GL where
                                     (AttrVertex z _)) = [x, y, z]
         unloadResource _ (LoadedBuffer buf) = deleteBuffer buf
 
-instance (GLES, MonadGeometry m, MonadBaseControl IO m, GeometryVertex g) =>
+instance (MonadGeometry m, MonadGL m, MonadBaseControl IO m, GeometryVertex g) =>
         Resource (Geometry g) LoadedGeometry m where
         loadResource = loadGeometry
         unloadResource _ = gl . deleteGeometry
@@ -78,7 +77,7 @@ downList :: NotTop p => AttrTable p (i ': is) -> [CPUBase i] -> [CPUBase i]
 downList AttrEnd xs = xs
 downList (AttrCell x _ down) xs = downList down $ x : xs
 
-loadGeometry :: (GLES, MonadGeometry m, GeometryVertex g)
+loadGeometry :: (MonadGeometry m, MonadGL m, GeometryVertex g)
              => Geometry g
              -> m (Either String LoadedGeometry)
 loadGeometry geometry@(Geometry _ _ _ _ _) = runExceptT $
@@ -96,7 +95,7 @@ loadGeometry geometry@(Geometry _ _ _ _ _) = runExceptT $
            return $ LoadedGeometry (elementCount $ elements geometry) vao
         where elementCount (Triangles _ ts) = 3 * length ts
 
-setAttrTop :: (GLES, MonadGeometry m, Attributes is)
+setAttrTop :: (GLES, MonadGeometry m, MonadGL m, Attributes is)
            => GLUInt
            -> AttrCol is
            -> m (Either String ())
@@ -124,8 +123,10 @@ loadBuffer ty bufData =
            bindBuffer ty noBuffer
            return buffer
 
-drawGeometry :: (MonadGeometry m, GeometryVertex g) => Geometry g -> m ()
-drawGeometry g = getGeometry g >>= \eg ->
+defaultDrawGeometry :: (MonadGeometry m, MonadGL m, GeometryVertex g)
+                    => Geometry g
+                    -> m ()
+defaultDrawGeometry g = getGeometry g >>= \eg ->
         case eg of
              Left _ -> return ()
              Right (LoadedGeometry ec vao) ->

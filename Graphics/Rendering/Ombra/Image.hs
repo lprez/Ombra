@@ -51,24 +51,18 @@ draw (Image geometries vs fs) =
                     unis = unisv ++ unisf
                     texs = texsv ++ texsf
                 in withActiveTextures texs (const $ return ()) $ \samplers ->
-                        withUniforms unis
-                                     (zip texs samplers)
-                                     (drawGeometry geometry)
+                        do setUniforms unis $ zip texs samplers
+                           drawGeometry geometry
                      
-        where withUniforms unis texs a = (>> a) .
+        where setUniforms unis texs =
                 for_ unis $ \(uid, uniformValue) ->
-                        getUniform uid >>= \eu ->
-                                case eu of
-                                     Right (UniformLocation l) ->
-                                        case uniformValue of
-                                             UniformValue proxy value ->
-                                                gl $ setUniform l proxy value
-                                             UniformTexture tex ->
-                                                let proxy = Proxy
-                                                        :: Proxy TextureSampler
-                                                    Just value = lookup tex texs
-                                                in gl $ setUniform l proxy value
-                                     Left _ -> return ()
+                        case uniformValue of
+                             UniformValue proxy value ->
+                                setUniform uid proxy value
+                             UniformTexture tex ->
+                                let proxy = Proxy :: Proxy TextureSampler
+                                    Just value = lookup tex texs
+                                in setUniform uid proxy value
 
 draw (SeqImage i i') = draw i >> draw i'
 draw NoImage = return ()

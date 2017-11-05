@@ -5,7 +5,7 @@ module Graphics.Rendering.Ombra.Texture.Draw (
         Texture(..),
         TextureImage,
         LoadedTexture(..),
-        withActiveTextures,
+        defaultWithActiveTextures,
         textureSize,
         emptyTexture
 ) where
@@ -20,10 +20,12 @@ import Graphics.Rendering.Ombra.Internal.GL hiding (Texture)
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Texture.Types
 
-class (MonadGL m, GLES) => MonadTexture m where
+class (Monad m, GLES) => MonadTexture m where
         getTexture :: Texture -> m (Either String LoadedTexture)
-        getActiveTexturesCount :: m Int
-        setActiveTexturesCount :: Int -> m ()
+        withActiveTextures :: [Texture]
+                           -> (String -> m a)
+                           -> ([Sampler2D] -> m a)
+                           -> m a
         newTexture :: Int
                    -> Int
                    -> TextureParameters
@@ -36,16 +38,18 @@ instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i
         unloadResource _ (LoadedTexture _ _ _ t) = deleteTexture t
 
-withActiveTextures :: MonadTexture m
-                   => [Texture]
-                   -> (String -> m a)
-                   -> ([Sampler2D] -> m a)
-                   -> m a
-withActiveTextures textures fail f =
+defaultWithActiveTextures :: (MonadTexture m, MonadGL m)
+                          => m Int
+                          -> (Int -> m ())
+                          -> [Texture]
+                          -> (String -> m a)
+                          -> ([Sampler2D] -> m a)
+                          -> m a
+defaultWithActiveTextures getActiveCount setActiveCount textures fail f =
         do let n = length textures
            eloadedTextures <- runExceptT $ mapM (ExceptT . getTexture) textures
-           atn <- getActiveTexturesCount
-           setActiveTexturesCount $ atn + n
+           atn <- getActiveCount
+           setActiveCount $ atn + n
            let units = [atn .. atn + n - 1]
            ret <- case eloadedTextures of
                        Left err -> fail err
@@ -57,7 +61,7 @@ withActiveTextures textures fail f =
                                  )
                                  (zip units loadedTextures)
                            f $ map (Sampler2D . fromIntegral) units
-           setActiveTexturesCount $ atn
+           setActiveCount $ atn
            return ret
 
 -- | Get the dimensions of a 'Texture'.
