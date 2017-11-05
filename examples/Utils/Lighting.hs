@@ -33,25 +33,26 @@ instance FragmentShaderOutput GSpecular
 instance GLES => Uniform GSpecular where
         type CPUUniform GSpecular = Specular
 
-light :: FragmentShader (GLight, ((GVec3, GVec3), (GFloat, GSpecular))) GVec3
-light = sarr $ \( (GLight lightPos ambCol difCol attenParams)
-                , ( (position, normal)
-                  , (obscurance, GSpecular specularPow specularInt)
-                  )
-                ) ->
-        let lightToObject = position ^-^ lightPos
-            lightDir = normalized lightToObject
-            lightDist = magnitude lightToObject
-            atten = attenuation attenParams lightDist
+pointLight :: FragmentShader (GLight, ((GVec3, GVec3), (GFloat, GSpecular)))
+                             GVec3
+pointLight = sarr $
+        \( (GLight lightPos ambCol difCol attenParams)
+         , ( (position, normal)
+           , (obscurance, GSpecular specularPow specularInt)
+           )
+         ) -> let lightToObject = position ^-^ lightPos
+                  lightDir = normalized lightToObject
+                  lightDist = magnitude lightToObject
+                  atten = attenuation attenParams lightDist
 
-            ambient = obscurance *^ ambCol
-            diffuse = maxG (normal <.> (negateV lightDir)) (0 :: GFloat)
+                  ambient = obscurance *^ ambCol
+                  diffuse = maxG (normal <.> (negateV lightDir)) (0 :: GFloat)
 
-            eye = normalized $ negateV position
-            ref = normalized $ reflect lightDir normal
-            specular0 = maxG (eye <.> ref) (0.0 :: GFloat)
-            specular = specularInt * specular0 ** specularPow
-        in (ambient ^+^ (diffuse ^+^ specular) *^ difCol) ^/ atten
+                  eye = normalized $ negateV position
+                  ref = normalized $ reflect lightDir normal
+                  specular0 = maxG (eye <.> ref) (0.0 :: GFloat)
+                  specular = specularInt * specular0 ** specularPow
+              in (ambient ^+^ (diffuse ^+^ specular) *^ difCol) ^/ atten
 
 attenuation :: GVec3 -> GFloat -> GFloat
 attenuation (GVec3 const linear exp) dist =

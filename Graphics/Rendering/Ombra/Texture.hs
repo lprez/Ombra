@@ -42,7 +42,9 @@ parameters min mag = potParameters (min, Nothing) mag
 -- height is not a power of two.
 potParameters :: (Filter, Maybe Filter) -- ^ Minification filter.
               -> Filter                 -- ^ Magnification filter.
-              -> Bool                   -- ^ Generate mipmaps automatically.
+              -> Bool                   -- ^ Generate mipmaps automatically. Do
+                                        -- not use mipmaps with 'GBuffer's or
+                                        -- 'DepthBuffer's.
               -> WrappingFunction       -- ^ Horizontal wrapping function.
               -> WrappingFunction       -- ^ Vertical wrapping function.
               -> TextureParameters
@@ -51,7 +53,8 @@ potParameters = TextureParameters
 -- | 'potParameters' with linear filters and repeat.
 potLinear :: Bool               -- ^ Generate mipmaps
           -> TextureParameters
-potLinear g = potParameters (Linear, Just Nearest) Linear g Repeat Repeat
+potLinear g = potParameters (Linear, mipf) Linear g Repeat Repeat
+        where mipf = if g then Just Nearest else Nothing
 
 -- | Creates a 'Texture' from a list of pixels.
 mkTexture :: GLES

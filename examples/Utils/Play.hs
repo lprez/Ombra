@@ -52,8 +52,8 @@ foreign import javascript unsafe "$1.clientY" clientY :: JSVal -> IO Int
 play :: Int
      -> Int
      -> Bool
-     -> Draw GVec4 ()
-     -> (Float -> (Int, Int) -> Draw GVec4 ())
+     -> Draw GVec4 a
+     -> (a -> Float -> (Int, Int) -> Draw GVec4 ())
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
      -> IO ()
@@ -70,9 +70,9 @@ play width height requireExts initialization frame inpCallback _ =
                 Nothing -> return ()
 
            runDraw width height ctx $
-                do initialization
+                do inval <- initialization
                    loop $ \t -> do clearColor >> clearDepth
-                                   frame (realToFrac t) (width, height)
+                                   frame inval (realToFrac t) (width, height)
         where loop a = do t <- liftIO waitFrame
                           a $ t / 1000
                           loop a
@@ -89,12 +89,12 @@ import System.Mem (performMinorGC)
 play :: Int
      -> Int
      -> Bool
-     -> Draw GVec4 ()
-     -> (Float -> (Int, Int) -> Draw GVec4 ())
+     -> Draw GVec4 a
+     -> (a -> Float -> (Int, Int) -> Draw GVec4 ())
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
      -> IO ()
-play width height requireExts initialization frame inpCallback sizeCallback =
+play width height requireExts initialize frame inpCallback sizeCallback =
         do w <- initWindow
            ctx <- makeContext
            t0 <- getCurrentTime
@@ -110,14 +110,14 @@ play width height requireExts initialization frame inpCallback sizeCallback =
                    do writeIORef sizeRef $ Just (width', height')
                       sizeCallback (width', height')
 
-           runDraw width height ctx $ (initialization >>) . loop t0 $ \t ->
+           runDraw width height ctx $ initialize >>= \inval -> loop t0 $ \t ->
                 do clearColor >> clearDepth
                    resized <- liftIO . atomicModifyIORef sizeRef $ (,) Nothing
                    case resized of
-                        Just (width, height) -> do resizeViewport width height
-                                                   frame t (width, height)
+                        Just size -> do resizeViewport (0, 0) size
+                                        frame inval t size
                         Nothing -> do (width, height) <- liftIO $ getWindowSize w
-                                      frame t (width, height)
+                                      frame inval t (width, height)
 
                    (width', height') <- liftIO $ getWindowSize w
                    liftIO $ performMinorGC >> swapBuffers w
@@ -163,13 +163,13 @@ checkExtensions requireAllExtensions ctx =
                          [] -> Nothing
                          errs -> Just $ "ERROR:" ++ concat errs
 
-animation :: (Float -> Draw GVec4 ()) -> IO ()
-animation f = play 512 512
-                   False
-                   (return ())
-                   (\t _ -> f t)
-                   (const (return ()))
-                   (const (return ()))
+animation :: Draw GVec4 a -> (a -> Float -> Draw GVec4 ()) -> IO ()
+animation init f = play 512 512
+                        False
+                        init
+                        (\x t _ -> f x t)
+                        (const (return ()))
+                        (const (return ()))
 
 static :: Draw GVec4 () -> IO ()
-static = animation . const
+static = flip animation $ \_ _ -> return ()

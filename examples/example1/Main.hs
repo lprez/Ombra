@@ -16,17 +16,19 @@ import Utils.Transform
 import Utils.Vertex3D
 
 main :: IO ()
-main = animation render
+main = animation init render
+        where init = snd <$> createBuffers 256 256 gInfo depthInfo (return ())
+              gInfo = byteGBufferInfo $ potLinear False
+              depthInfo = depthBufferInfo $ parameters Nearest Nearest
 
-render :: Float -> Draw GVec4 ()
-render time = do draw $ scene viewMat
-                 withBlendMode (Just transparency) $
-                        drawBuffers 256 256
-                                    (Right . byteGBuffer $ linearParams)
-                                    (Right . depthBuffer $ nearestParams)
-                                    (draw $ scene mirrorViewMat)
-                                  $ \buf _ _ ->
-                                          draw $ water buf viewMat light time
+render :: BufferPair GVec4 -> Float -> Draw GVec4 ()
+render reflectionBuffers time =
+        do draw $ scene viewMat
+           withDepthTest False $
+                drawBuffers reflectionBuffers
+                            (draw $ scene mirrorViewMat)
+           withBlendMode (Just transparency) $
+                   draw $ water (gBuffer reflectionBuffers) viewMat light time
         where viewMat =     rotYMat4 (sin (time / 2) / 4)
                         .*. transMat4 (Vec3 0 0.5 (- 1.8))
               mirrorMat = reflectionMat4 (Vec4 0 1 0 (- 0.5))
@@ -42,13 +44,11 @@ render time = do draw $ scene viewMat
                                       , rotatingCube viewMat light time 2.09
                                       , rotatingCube viewMat light time 4.19
                                       ]
-              linearParams = parameters Linear Linear
-              nearestParams = parameters Nearest Nearest
 
 rotatingCube :: Mat4 -> Light -> Float -> Float -> Image GVec4
 rotatingCube view light time off =
-        image (transform ~~ (view .*. transformMat) >>> first perspective)
-              (const color &&& id ^>> applyLight ~~ (light, specular))
+        image (transform ~< (view .*. transformMat) >>> first perspective)
+              (const color &&& id ^>> applyLight ~< (light, specular))
               cube
         where transformMat = let angle = time + off
                                  scale = scaleMat4 (Vec3 0.2 0.2 0.2)
@@ -61,18 +61,18 @@ rotatingCube view light time off =
               specular = Specular 4 1
 
 walls :: Mat4 -> Light -> Image GVec4
-walls viewMat light = image (    transform ~~ (viewMat .*. transformMat)
+walls viewMat light = image (    transform ~< (viewMat .*. transformMat)
                              >>> first perspective)
-                            (    applyTexture ~~ tex &&& arr id
-                             >>> applyLight ~~ (light, Specular 20 1))
+                            (    applyTexture ~< tex &&& arr id
+                             >>> applyLight ~< (light, Specular 20 1))
                             cube
         where transformMat = scaleMat4 $ Vec3 2 2 2
 
-water :: GBuffer t GVec4 -> Mat4 -> Light -> Float -> Image GVec4
+water :: GBuffer GVec4 -> Mat4 -> Light -> Float -> Image GVec4
 water buffer viewMat light time =
-        image (transform ~~ (viewMat .*. transformMat) >>> first perspective)
-              (    applyWater ~~ (time * 2, buffer) &&& arr id
-               >>> applyLight ~~ (light, specular))
+        image (transform ~< (viewMat .*. transformMat) >>> first perspective)
+              (    applyWater ~< (time * 2, buffer) &&& arr id
+               >>> applyLight ~< (light, specular))
               cube
         where transformMat =     transMat4 (Vec3 0 (-2) 0)
                              .*. scaleMat4 (Vec3 2.01 1 2.01)
@@ -85,7 +85,7 @@ transform = sarr $ \(viewMat, GVertex3D pos norm uv) ->
                         in (pos', GVertex3D (extract pos') norm' uv)
 
 perspective :: VertexShader GVec4 GVec4
-perspective = sarr (uncurry (.*)) ~~ perspectiveMat4 0.1 10000 90 1
+perspective = sarr (uncurry (.*)) ~< perspectiveMat4 0.1 10000 90 1
 
 reverseNormal :: FragmentShader GVertex3D GVertex3D
 reverseNormal = farr $ \fragment (GVertex3D pos norm uv) ->
@@ -94,7 +94,7 @@ reverseNormal = farr $ \fragment (GVertex3D pos norm uv) ->
 
 applyLight :: FragmentShader ((GLight, GSpecular), (GVec4, GVertex3D)) GVec4
 applyLight = shader $     second (second reverseNormal)
-                      >>> (lightInp >>> light) &&& arr (fst . snd)
+                      >>> (lightInp >>> pointLight) &&& arr (fst . snd)
                       >>^ (\(GVec3 lr lg lb, GVec4 r g b a) ->
                               clamp (GVec4 0 0 0 0) (GVec4 1 1 1 1) $
                                 GVec4 (lr * r) (lg * g) (lb * b) a)
@@ -103,9 +103,9 @@ applyLight = shader $     second (second reverseNormal)
 
 applyTexture :: FragmentShader (TextureSampler, GVertex3D) GVec4
 applyTexture = sarr $ \(sampler, GVertex3D _ _ (GVec2 s t)) ->
-                        sample sampler $ GVec2 s (1 - t)
+                        sampleTexture sampler $ GVec2 s (1 - t)
 
-applyWater :: FragmentShader ((GFloat, GBufferSampler t GVec4), GVertex3D) GVec4
+applyWater :: FragmentShader ((GFloat, GBufferSampler GVec4), GVertex3D) GVec4
 applyWater = sarr $ \((time, sampler), GVertex3D _ _ (GVec2 s t)) ->
                         let n = (sin (t * 40 + time) + cos (s * 30 + time)) / 90
                             st' = GVec2 (s + n) (t + n)

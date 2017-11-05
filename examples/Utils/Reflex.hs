@@ -75,9 +75,10 @@ selectKey convertKey tag (EventSelector select) key =
 playReflex :: Int
            -> Int
            -> Bool
-           -> Draw GVec4 ()
+           -> Draw GVec4 a
            -> (forall t m. MonadInput t m
-                        => Event t Float
+                        => Behavior t a
+                        -> Event t Float
                         -> m (Behavior t (Draw GVec4 ())))
            -> IO ()
 playReflex w h requireBuffers initialization layerf = runSpiderHost $
@@ -85,6 +86,7 @@ playReflex w h requireBuffers initialization layerf = runSpiderHost $
            (tickEvent, tickTriggerRef) <- newEventWithTriggerRef
            (inputEvent, inputTriggerRef) <- newEventWithTriggerRef
            (resizeEvent, resizeTriggerRef) <- newEventWithTriggerRef
+           (initEvent, initTriggerRef) <- newEventWithTriggerRef
 
            let inputSelector = fan $ fmap (fromList . (: [])) inputEvent
            pos <- holdDyn (0, 0) $ fmap fst (select inputSelector MouseMove)
@@ -98,17 +100,20 @@ playReflex w h requireBuffers initialization layerf = runSpiderHost $
                          , inputKeyDown = selectKey fromKey KeyDown inputSelector
                          , inputResize = resizeEvent
                          }
-           bFrame <- runHostFrame . flip runReaderT i $ layerf tickEvent
+           initVal <- hold undefined initEvent
+           bFrame <- runHostFrame . flip runReaderT i $ layerf initVal tickEvent
            
            liftIO $ play w h requireBuffers initialization
-                        (frame bFrame timeRef tickTriggerRef)
+                        (frame bFrame timeRef tickTriggerRef initTriggerRef)
                         (handleInput inputTriggerRef)
                         (handleResize resizeTriggerRef)
 
-        where frame bFrame timeRef tickTriggerRef time1 _ =
+        where frame bFrame timeRef tickTriggerRef initTriggerRef inval time1 _ =
                 do time0 <- liftIO . atomicModifyIORef timeRef $
                                                        \time0 -> (time1, time0)
                    let diff = if time0 == 0 then 0 else time1 - time0
+                   when (time0 == 0) . liftIO . withTrigger initTriggerRef $
+                        \trigger -> fireEvents [ trigger :=> Identity inval ]
                    liftIO . withTrigger tickTriggerRef $
                         \trigger -> fireEvents [ trigger :=> Identity diff ]
                    join . liftIO . runSpiderHost . runHostFrame $ sample bFrame
