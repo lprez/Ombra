@@ -28,38 +28,30 @@ class ( MonadGeometry (m o)
 
 -- | Monads that support drawing to 'GBuffer's and 'DepthBuffer's.
 class MonadDrawBuffers m where
-        -- | Draw an image to some buffers.
-        drawBuffers :: Int                      -- ^ Width of the buffers.
-                    -> Int                      -- ^ Height of the buffers.
-                    -> Either (GBuffer t o)
-                              (GBufferInfo o)   -- ^ The buffer that will
+        -- | Create a 'GBuffer' and a 'DepthBuffer' and draw something to them.
+        createBuffers :: Int
+                      -> Int
+                      -> GBufferInfo o          -- ^ The buffer that will
                                                 -- contain the output of the
-                                                -- fragment shader. Either a
-                                                -- previously used buffer, or
-                                                -- the info of a new buffer
-                                                -- that drawBuffers will create.
-                                                -- Do not reuse buffers with a
-                                                -- different width or height
-                                                -- than the one you specified
-                                                -- with the previous argument.
-                    -> Either (DepthBuffer t')
-                              DepthBufferInfo   -- ^ The buffer that contains
+                                                -- fragment shader.
+                      -> DepthBufferInfo        -- ^ The buffer that contains
                                                 -- the depth (and stencil)
                                                 -- values.
+                      -> m o a                  -- ^ Initializer.
+                      -> m o' (a, BufferPair o)
+        createGBuffer :: GBufferInfo o
+                      -> DepthBuffer
+                      -> m o a
+                      -> m o' (a, BufferPair o)
+        createDepthBuffer :: GBuffer o
+                          -> DepthBufferInfo
+                          -> m o a
+                          -> m o' (a, BufferPair o)
+        -- | Draw an image to some buffers.
+        drawBuffers :: BufferPair o
                     -> m o a                    -- ^ Image to draw to the
                                                 -- buffers.
-                    -> (forall t. GBuffer t o -> DepthBuffer t -> a -> m o' b)
-                    -> m o' b
-
-        -- | Use this instead of 'drawBuffers' if you need to reuse the newly
-        -- created buffers later. They will be deleted from the GPU when the
-        -- 'GBuffer'/'DepthBuffer' is garbage collected.
-        drawBuffers' :: Int
-                     -> Int
-                     -> Either (GBuffer t o) (GBufferInfo o)
-                     -> Either (DepthBuffer t1) DepthBufferInfo
-                     -> m o a
-                     -> m o' (a, GBuffer t2 o, DepthBuffer t3)
+                    -> m o' a
 
 class MonadDraw o m => MonadRead o m where
         -- | Read a rectangle of pixel colors from the screen (or texture).

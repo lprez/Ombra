@@ -80,7 +80,7 @@ data DrawState = DrawState
         , geometries :: ResMap LoadedGeometry
         , textureImages :: ResMap LoadedTexture
         , activeTextures :: Int
-        , textureCache :: [LoadedTexture]
+        -- , textureCache :: [LoadedTexture]
         , viewportSize :: ((Int, Int), (Int, Int))
         , blendMode :: Maybe Blend.Mode
         , stencilMode :: Maybe Stencil.Mode
@@ -119,6 +119,7 @@ instance (FragmentShaderOutput o, GLES) => MonadDraw o Draw where
         withDepthMask m a = stateReset depthMask setDepthMask m a
 
 instance GLES => MonadDrawBuffers Draw where
+        {-
         drawBuffers w h gBuffer depthBuffer draw cont =
                 do (ret, (newGBuffer, gBuffer'), (newDepthBuffer, depthBuffer'))
                         <- permanentDrawBuffers w h gBuffer depthBuffer draw
@@ -126,17 +127,41 @@ instance GLES => MonadDrawBuffers Draw where
                    when newGBuffer $ unusedTextures (textures gBuffer')
                    when newDepthBuffer $ unusedTextures (textures depthBuffer')
                    return ret'
-        drawBuffers' w h gBuffer depthBuffer draw =
-                do (ret, (newGBuffer, gBuffer'), (newDepthBuffer, depthBuffer'))
-                        <- permanentDrawBuffers w h gBuffer depthBuffer draw
-                   gl $ do when newGBuffer $ bufferUnloader gBuffer'
-                           when newDepthBuffer $ bufferUnloader depthBuffer'
-                   return (ret, gBuffer', depthBuffer')
-                where bufferUnloader buf = 
-                        mapM_ (\lt -> unloader buf
-                                               (Nothing :: Maybe TextureImage)
-                                               lt
-                              ) (textures buf)
+        -}
+        createBuffers w h gBufferInfo depthBufferInfo draw =
+                do (ret, gBuffer, depthBuffer) <-
+                        drawBuffers' w h
+                                     True
+                                     (Right gBufferInfo)
+                                     (Right depthBufferInfo)
+                                     draw
+                   return (ret, BufferPair gBuffer depthBuffer)
+        createGBuffer gBufferInfo depthBuffer draw =
+                do let (w, h) = bufferSize depthBuffer
+                   (ret, gBuffer, _) <-
+                        drawBuffers' w h
+                                     True
+                                     (Right gBufferInfo)
+                                     (Left depthBuffer)
+                                     draw
+                   return (ret, BufferPair gBuffer depthBuffer)
+        createDepthBuffer gBuffer depthBufferInfo draw =
+                do let (w, h) = bufferSize gBuffer
+                   (ret, _, depthBuffer) <-
+                        drawBuffers' w h
+                                     True
+                                     (Left gBuffer)
+                                     (Right depthBufferInfo)
+                                     draw
+                   return (ret, BufferPair gBuffer depthBuffer)
+        drawBuffers (BufferPair gBuffer depthBuffer) draw =
+                do let (w, h) = bufferSize gBuffer
+                   (ret, _, _) <- drawBuffers' w h
+                                               True
+                                               (Left gBuffer)
+                                               (Left depthBuffer)
+                                               draw
+                   return ret
 
 instance GLES => MonadRead GVec4 Draw where
         readColor = flip readPixels gl_RGBA
@@ -189,6 +214,10 @@ instance GLES => MonadTexture (Draw o) where
         setActiveTexturesCount n = Draw . modify  $ \s ->
                                         s { activeTextures = n }
         newTexture w h params i initialize =
+                gl $ do t <- emptyTexture params
+                        initialize t
+                        return $ LoadedTexture w' h' i t
+                {-
                 do cache <- textureCache <$> Draw get
                    let (c1, c2) = flip break cache $
                                         \(LoadedTexture cw ch i' t) ->
@@ -200,13 +229,16 @@ instance GLES => MonadTexture (Draw o) where
                         (lt : c2') -> do Draw . modify $ \s ->
                                                 s { textureCache = c1 ++ c2' }
                                          return lt
+                -}
                 where (w', h') = (fromIntegral w, fromIntegral h)
+        {-
         unusedTextures ts =
                 do cache <- textureCache <$> Draw get
                    let (cache', excess) = splitAt textureCacheMaxSize
                                                   (ts ++ cache)
                    Draw . modify $ \s -> s { textureCache = cache' }
                    mapM_ (removeTexture . TextureLoaded) excess
+        -}
 
 instance GLES => MonadGeometry (Draw o) where
         getAttribute = getDrawResource gl attributes
@@ -224,7 +256,7 @@ drawState :: GLES
 drawState w h = DrawState { currentFrameBuffer = noFramebuffer
                           , currentProgram = Nothing
                           , loadedProgram = Nothing
-                          , textureCache = []
+                          -- , textureCache = []
                           , activeTextures = 0
                           , viewportSize = ((0, 0), (w, h))
                           , blendMode = Nothing
@@ -522,11 +554,11 @@ clearBuffers = mapM_ $ gl . GL.clear . buffer
               buffer DepthBuffer = gl_DEPTH_BUFFER_BIT
               buffer StencilBuffer = gl_STENCIL_BUFFER_BIT
 
-createOutBuffer :: forall m t t' o. (GLES, MonadTexture m)
+createOutBuffer :: forall m o. (GLES, MonadTexture m)
                 => Int
                 -> Int
                 -> OutBufferInfo o
-                -> m (OutBuffer t' o)
+                -> m (OutBuffer o)
 createOutBuffer w h empty = 
         do let loader t = do bindTexture gl_TEXTURE_2D t
                              if pixelType == gl_FLOAT
@@ -542,12 +574,12 @@ createOutBuffer w h empty =
            textures <- replicateM (fromIntegral texNum)
                                   (newTexture w h params cacheIdentifier loader)
            return $ case empty of
-                         EmptyFloatGBuffer _ -> TextureFloatGBuffer textures
-                         EmptyByteGBuffer _ -> TextureByteGBuffer textures
+                         EmptyFloatGBuffer _ -> TextureFloatGBuffer w h textures
+                         EmptyByteGBuffer _ -> TextureByteGBuffer w h textures
                          EmptyDepthBuffer _ ->
-                                 TextureDepthBuffer $ head textures
+                                 TextureDepthBuffer w h $ head textures
                          EmptyDepthStencilBuffer _ ->
-                                 TextureDepthStencilBuffer $ head textures
+                                 TextureDepthStencilBuffer w h $ head textures
         where (w', h') = (fromIntegral w, fromIntegral h)
               cacheIdentifier = hash ( fromIntegral internalFormat :: Int
                                      , fromIntegral format :: Int
@@ -585,40 +617,43 @@ createOutBuffer w h empty =
                                    , 1
                                    )
 
-permanentDrawBuffers :: GLES
-                     => Int
-                     -> Int
-                     -> Either (GBuffer t o) (GBufferInfo o)
-                     -> Either (DepthBuffer t1) DepthBufferInfo
-                     -> Draw o a
-                     -> Draw o' ( a
-                                , (Bool, GBuffer t2 o)
-                                , (Bool, DepthBuffer t3)
-                                )
-permanentDrawBuffers w h gBuffer depthBuffer draw =
+drawBuffers' :: GLES
+             => Int
+             -> Int
+             -> Bool
+             -> Either (GBuffer o) (GBufferInfo o)
+             -> Either DepthBuffer DepthBufferInfo
+             -> Draw o a
+             -> Draw o' (a, GBuffer o, DepthBuffer)
+drawBuffers' w h addUnloader gBuffer depthBuffer draw =
         do (newColor, gBuffer') <-
                 case gBuffer of
                      Right b -> (,) True <$> createOutBuffer w h b
-                     Left b -> return (False, castBuffer b)
+                     Left b -> return (False, b)
            (newDepth, shouldClearStencil, depthBuffer') <-
                 case depthBuffer of
                      Right b@(EmptyDepthBuffer _) ->
                              (,,) True False <$> createOutBuffer w h b
                      Right b@(EmptyDepthStencilBuffer _) ->
                              (,,) True True <$> createOutBuffer w h b
-                     Left b -> return (False, False, castBuffer b)
+                     Left b -> return (False, False, b)
            ret <- drawUsedBuffers w h gBuffer' depthBuffer' $
                    do when newColor clearColor
                       when newDepth clearDepth
                       when shouldClearStencil clearStencil
                       draw
-           return (ret, (newColor, gBuffer'), (newDepth, depthBuffer'))
+           gl $ do when (addUnloader && newColor) $ bufferUnloader gBuffer'
+                   when (addUnloader && newDepth) $ bufferUnloader depthBuffer'
+           return (ret, gBuffer', depthBuffer')
+        where bufferUnloader buf = 
+                        mapM_ (unloader buf (Nothing :: Maybe TextureImage))
+                              (textures buf)
 
 drawUsedBuffers :: GLES
                 => Int
                 -> Int
-                -> GBuffer t o
-                -> DepthBuffer t1
+                -> GBuffer o
+                -> DepthBuffer
                 -> Draw o a
                 -> Draw o' a
 drawUsedBuffers w h gBuffer depthBuffer draw =
@@ -635,13 +670,14 @@ drawUsedBuffers w h gBuffer depthBuffer draw =
                                          [0 ..]
               depthAttachment =
                       case depthBuffer of
-                           TextureDepthBuffer (LoadedTexture _ _ _ t) ->
+                           TextureDepthBuffer _ _ (LoadedTexture _ _ _ t) ->
                                 (t, gl_DEPTH_ATTACHMENT)
-                           TextureDepthStencilBuffer (LoadedTexture _ _ _ t) ->
+                           TextureDepthStencilBuffer _ _ (LoadedTexture _ _ _ t) ->
                                 (t, gl_DEPTH_STENCIL_ATTACHMENT)
               attachments = depthAttachment : colorAttachments
               useDrawBuffers | (_ : _ : _) <- colorAttachments = True
-                              | otherwise = False
+                             | otherwise = False
+
 drawToTextures :: (GLES, MonadScreen m, MonadGL m)
                => Bool
                -> [(GL.Texture, GLEnum)]

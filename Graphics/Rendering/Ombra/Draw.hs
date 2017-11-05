@@ -14,7 +14,7 @@ module Graphics.Rendering.Ombra.Draw (
         runDraw,
         -- * Draw actions
         MonadDraw(..),
-        MonadDrawBuffers(drawBuffers, drawBuffers'),
+        MonadDrawBuffers(..),
         MonadRead(..),
         MonadScreen(resizeViewport),
         clearColor,

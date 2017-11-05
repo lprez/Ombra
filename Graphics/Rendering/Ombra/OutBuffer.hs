@@ -3,16 +3,21 @@
 module Graphics.Rendering.Ombra.OutBuffer (
         GBuffer,
         DepthBuffer,
+        BufferPair,
         GBufferInfo,
         DepthBufferInfo,
         GBufferSampler,
         DepthBufferSampler,
         sampleGBuffer,
         sampleDepthBuffer,
-        floatGBuffer,
-        byteGBuffer,
+        floatGBufferInfo,
+        byteGBufferInfo,
+        depthBufferInfo,
+        depthStencilBufferInfo,
+        bufferPair,
+        gBuffer,
         depthBuffer,
-        depthStencilBuffer,
+        bufferSize,
         -- * Conversion between buffers and textures
         toTextureSampler,
         fromTextureSampler
@@ -23,30 +28,39 @@ import Graphics.Rendering.Ombra.Shader
 import Graphics.Rendering.Ombra.Shader.Types
 import Graphics.Rendering.Ombra.Texture.Types
 
+bufferPair :: GBuffer o -> DepthBuffer -> Maybe (BufferPair o)
+bufferPair g d | bufferSize g == bufferSize d = Just $ BufferPair g d
+
+gBuffer :: BufferPair o -> GBuffer o
+gBuffer (BufferPair buf _) = buf
+
+depthBuffer :: BufferPair o -> DepthBuffer
+depthBuffer (BufferPair _ buf) = buf
+
 -- | Sample a value from a 'GBufferSampler'.
-sampleGBuffer :: GBufferSampler t o -> GVec2 -> o
+sampleGBuffer :: GBufferSampler o -> GVec2 -> o
 sampleGBuffer (GBufferSampler samplers) st =
         fromGVec4s $ map (flip sample st) samplers
 
 -- | Sample a value from a 'DepthBufferSampler'.
-sampleDepthBuffer :: DepthBufferSampler t -> GVec2 -> GFloat
+sampleDepthBuffer :: DepthBufferSampler -> GVec2 -> GFloat
 sampleDepthBuffer (DepthBufferSampler sampler) st =
         let GVec4 x _ _ _ = sample sampler st in x
 
-fromTextureSampler :: TextureSampler -> GBufferSampler t GVec4
+fromTextureSampler :: TextureSampler -> GBufferSampler GVec4
 fromTextureSampler sampler = GBufferSampler [sampler]
 
-toTextureSampler :: GBufferSampler t GVec4 -> TextureSampler
+toTextureSampler :: GBufferSampler GVec4 -> TextureSampler
 toTextureSampler (GBufferSampler (sampler : _)) = sampler
 
-floatGBuffer :: FragmentShaderOutput o => TextureParameters -> GBufferInfo o
-floatGBuffer = EmptyFloatGBuffer
+floatGBufferInfo :: FragmentShaderOutput o => TextureParameters -> GBufferInfo o
+floatGBufferInfo = EmptyFloatGBuffer
 
-byteGBuffer :: FragmentShaderOutput o => TextureParameters -> GBufferInfo o
-byteGBuffer = EmptyByteGBuffer
+byteGBufferInfo :: FragmentShaderOutput o => TextureParameters -> GBufferInfo o
+byteGBufferInfo = EmptyByteGBuffer
 
-depthBuffer :: TextureParameters -> DepthBufferInfo
-depthBuffer = EmptyDepthBuffer
+depthBufferInfo :: TextureParameters -> DepthBufferInfo
+depthBufferInfo = EmptyDepthBuffer
 
-depthStencilBuffer :: TextureParameters -> DepthBufferInfo
-depthStencilBuffer = EmptyDepthStencilBuffer
+depthStencilBufferInfo :: TextureParameters -> DepthBufferInfo
+depthStencilBufferInfo = EmptyDepthStencilBuffer

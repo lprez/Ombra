@@ -30,7 +30,7 @@ class (MonadGL m, GLES) => MonadTexture m where
                    -> Int
                    -> (GL.Texture -> GL ())
                    -> m LoadedTexture
-        unusedTextures :: [LoadedTexture] -> m ()
+        -- unusedTextures :: [LoadedTexture] -> m ()
 
 instance GLES => Resource TextureImage LoadedTexture GL where
         loadResource i = Right <$> loadTextureImage i
