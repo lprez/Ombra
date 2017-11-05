@@ -15,6 +15,7 @@ import Graphics.Rendering.Ombra.Geometry.Types
 import Graphics.Rendering.Ombra.Internal.GL (MonadGL)
 import Graphics.Rendering.Ombra.Texture.Draw
 import Graphics.Rendering.Ombra.Shader.Program
+import Graphics.Rendering.Ombra.Shader.Types
 import Graphics.Rendering.Ombra.Screen
 import Graphics.Rendering.Ombra.Vector
 
@@ -29,14 +30,24 @@ class ( MonadGeometry (m o)
                              => Geometry g
                              -> m o ()
         drawGeometry = defaultDrawGeometry
+        -- | Enable/disable writing to one or more color channels.
         withColorMask :: (Bool, Bool, Bool, Bool) -> m o a -> m o a
+        -- | Enable/disable depth testing.
         withDepthTest :: Bool -> m o a -> m o a
+        -- | Enable/disable writing to the depth buffer.
         withDepthMask :: Bool -> m o a -> m o a
+        -- | Clear the color buffer.
+        clearColor :: m o ()
+        -- | Clear the depth buffer.
+        clearDepth :: m o ()
+        -- | Clear the stencil buffer.
+        clearStencil :: m o ()
 
 -- | Monads that support drawing to 'GBuffer's and 'DepthBuffer's.
 class MonadDrawBuffers m where
         -- | Create a 'GBuffer' and a 'DepthBuffer' and draw something to them.
-        createBuffers :: Int
+        createBuffers :: FragmentShaderOutput o
+                      => Int
                       -> Int
                       -> GBufferInfo o          -- ^ The buffer that will
                                                 -- contain the output of the
@@ -46,16 +57,19 @@ class MonadDrawBuffers m where
                                                 -- values.
                       -> m o a                  -- ^ Initializer.
                       -> m o' (a, BufferPair o)
-        createGBuffer :: GBufferInfo o
+        createGBuffer :: FragmentShaderOutput o
+                      => GBufferInfo o
                       -> DepthBuffer
                       -> m o a
                       -> m o' (a, BufferPair o)
-        createDepthBuffer :: GBuffer o
+        createDepthBuffer :: FragmentShaderOutput o
+                          => GBuffer o
                           -> DepthBufferInfo
                           -> m o a
                           -> m o' (a, BufferPair o)
         -- | Draw an image to some buffers.
-        drawBuffers :: BufferPair o
+        drawBuffers :: FragmentShaderOutput o
+                    => BufferPair o
                     -> m o a                    -- ^ Image to draw to the
                                                 -- buffers.
                     -> m o' a

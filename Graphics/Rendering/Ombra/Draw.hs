@@ -13,13 +13,16 @@ module Graphics.Rendering.Ombra.Draw (
         -- * Running the Draw monad
         runDraw,
         -- * Draw actions
-        MonadDraw(withColorMask, withDepthTest, withDepthMask),
+        MonadDraw( withColorMask
+                 , withDepthTest
+                 , withDepthMask
+                 , clearColor
+                 , clearDepth
+                 , clearStencil
+                 ),
         MonadDrawBuffers(..),
         MonadRead(..),
         MonadScreen(resizeViewport),
-        clearColor,
-        clearDepth,
-        clearStencil,
         -- ** Culling
         CullFace(..),
         MonadCulling(withCulling),

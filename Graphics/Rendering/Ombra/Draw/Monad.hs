@@ -117,6 +117,9 @@ instance (FragmentShaderOutput o, GLES) => MonadDraw o Draw where
         withColorMask m a = stateReset colorMask setColorMask m a
         withDepthTest d a = stateReset depthTest setDepthTest d a
         withDepthMask m a = stateReset depthMask setDepthMask m a
+        clearColor = clearBuffers [ColorBuffer]
+        clearDepth = clearBuffers [DepthBuffer]
+        clearStencil = clearBuffers [StencilBuffer]
 
 instance GLES => MonadDrawBuffers Draw where
         {-
@@ -540,18 +543,6 @@ removeDrawResource lft mg i = do
 textureCacheMaxSize :: Num a => a
 textureCacheMaxSize = 16
 
--- | Clear the color buffer.
-clearColor :: (GLES, MonadGL m) => m ()
-clearColor = clearBuffers [ColorBuffer]
-
--- | Clear the depth buffer.
-clearDepth :: (GLES, MonadGL m) => m ()
-clearDepth = clearBuffers [DepthBuffer]
-
--- | Clear the stencil buffer.
-clearStencil :: (GLES, MonadGL m) => m ()
-clearStencil = clearBuffers [StencilBuffer]
-
 clearBuffers :: (GLES, MonadGL m) => [Buffer] -> m ()
 clearBuffers = mapM_ $ gl . GL.clear . buffer
         where buffer ColorBuffer = gl_COLOR_BUFFER_BIT
@@ -621,7 +612,7 @@ createOutBuffer w h empty =
                                    , 1
                                    )
 
-drawBuffers' :: GLES
+drawBuffers' :: (GLES, FragmentShaderOutput o)
              => Int
              -> Int
              -> Bool
