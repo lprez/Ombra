@@ -30,6 +30,7 @@ import Graphics.Rendering.Ombra.Texture.Types
 
 bufferPair :: GBuffer o -> DepthBuffer -> Maybe (BufferPair o)
 bufferPair g d | bufferSize g == bufferSize d = Just $ BufferPair g d
+               | otherwise = Nothing
 
 gBuffer :: BufferPair o -> GBuffer o
 gBuffer (BufferPair buf _) = buf
