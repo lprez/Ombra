@@ -17,6 +17,7 @@ module Graphics.Rendering.Ombra.Geometry (
         Triangle(..),
         mkGeometry,
         mapVertices,
+        foldGeometry,
         decompose,
         -- * Geometry builder
         Attributes,
@@ -55,14 +56,14 @@ rehashGeometry g = let Elements elemsHash _ = elements g
 emptyGeometry :: GeometryVertex g => Geometry e g
 emptyGeometry = rehashGeometry $ Geometry 0 0 emptyAttrCol (Elements 0 []) (-1)
 
-foldVertices :: NotTop p
-             => (AttrVertex is -> b -> b)
-             -> b
-             -> AttrTable p is
-             -> (Int, b)
-foldVertices f acc AttrEnd = (-1, acc)
-foldVertices f acc cell@(AttrCell _ _ down) =
-        let (didx, acc') = foldVertices f acc down
+foldAttrVertices :: NotTop p
+                 => (AttrVertex is -> b -> b)
+                 -> b
+                 -> AttrTable p is
+                 -> (Int, b)
+foldAttrVertices f acc AttrEnd = (-1, acc)
+foldAttrVertices f acc cell@(AttrCell _ _ down) =
+        let (didx, acc') = foldAttrVertices f acc down
             idx = didx + 1
             widx = fromIntegral idx
         in (idx, f (AttrVertex widx cell) acc')
@@ -168,48 +169,76 @@ decompose g@(Geometry _ _ _ (Elements _ elems) _) =
 type AttrVertexMap is v = H.HashMap (AttrVertex is) v
 
 -- | Transform each vertex of a geometry.
-mapVertices :: forall e g g'.
-               (GLES, GeometryVertex g, GeometryVertex g', ElementType e)
-            => ([e (Vertex g)] -> Vertex g -> Vertex g') -- ^ The first argument
-                                                         -- is the list of
-                                                         -- elements the
-                                                         -- vertex belongs to.
+mapVertices :: (GLES, GeometryVertex g, GeometryVertex g', ElementType e)
+            => (e (Vertex g) -> a)            -- ^ Value to associate to each
+                                              -- element.
+            -> ([a] -> Vertex g -> Vertex g') -- ^ The first argument is the
+                                              -- list of values associated with
+                                              -- the elements the vertex belongs
+                                              -- to.
             -> Geometry e g
             -> Geometry e g'
-mapVertices f (Geometry _ _ (AttrTop _ _ row0) (Elements thash elems) _) =
-        let accElem vertMap elem (velems, elems) =
-                    let velem = fmap ( fromVertexAttributes
-                                     . attrVertexToVertex
-                                     ) elem
-                        velems' = foldr (flip (H.insertWith (++)) [velem])
-                                        velems
-                                        (toList elem)
-                        elem' = fmap (vertMap H.!) elem
-                    in (velems', elem' : elems)
+mapVertices valf f = 
+        let addValue elem valMap = let val = valf $ fmap ( fromVertexAttributes
+                                                         . attrVertexToVertex
+                                                         ) elem
+                                   in foldr (flip (H.insertWith (++)) [val])
+                                            valMap
+                                            (toList elem)
+            mapVertex valMap avert _ = let attrs = attrVertexToVertex avert
+                                           vert = fromVertexAttributes attrs
+                                           vert' = f (valMap H.! avert) vert
+                                           attrs' = toVertexAttributes vert'
+                                       in ((), attrs')
+        in snd . modifyVertices addValue mapVertex H.empty ()
 
-            accVertex :: H.HashMap (AttrVertex (AttributeTypes g))
-                                   ([e (Vertex g)])
-                      -> AttrVertex (AttributeTypes g)
-                      -> ( H.HashMap (AttrVertex (AttributeTypes g))
-                                     (AttrVertex (AttributeTypes g'))
-                         , Geometry e g'
-                         )
-                      -> ( H.HashMap (AttrVertex (AttributeTypes g))
-                                     (AttrVertex (AttributeTypes g'))
-                         , Geometry e g'
-                         )
-            accVertex valueMap avert (vertMap, geom) =
-                    let value = valueMap H.! avert
-                        vert = fromVertexAttributes $ attrVertexToVertex avert
-                        vert' = toVertexAttributes $ f value vert
-                        (avert', geom') = addVertex vert' geom
+-- | Fold elements and then vertices.
+foldGeometry :: forall g e vacc eacc. (GLES, GeometryVertex g, ElementType e)
+             => (e (Vertex g) -> eacc -> eacc)
+             -> (eacc -> Vertex g -> vacc -> vacc)
+             -> eacc
+             -> vacc
+             -> Geometry e g
+             -> (eacc, vacc)
+foldGeometry ef vf eacc vacc g =
+        let accElems e = ef $ fmap (fromVertexAttributes . attrVertexToVertex) e
+            accVerts eacc av vacc = let v = attrVertexToVertex av
+                                        vacc' = vf eacc
+                                                   (fromVertexAttributes v)
+                                                   vacc
+                                    in (vacc', v)
+            (accs', _) = modifyVertices accElems accVerts eacc vacc g
+                                :: ((eacc, vacc), Geometry e g)
+        in accs'
+
+-- | Fold triangles, then map and fold vertices using the previously accumulated
+-- value.
+modifyVertices :: forall e eacc vacc g g'.
+                  (GLES, GeometryVertex g, GeometryVertex g', ElementType e)
+               => (e (AttrVertex (AttributeTypes g)) -> eacc -> eacc)
+               -> (   eacc
+                   -> AttrVertex (AttributeTypes g)
+                   -> vacc
+                   -> (vacc, VertexAttributes (AttributeTypes g'))
+                  )
+               -> eacc
+               -> vacc
+               -> Geometry e g
+               -> ((eacc, vacc), Geometry e g')
+modifyVertices ef vf eacc vacc
+               (Geometry _ _ (AttrTop _ _ row0) (Elements thash elems) _) =
+        let accElem vertMap elem (eacc, elems) =
+                    (ef elem eacc, fmap (vertMap H.!) elem : elems)
+            accVertex eacc avert (vertMap, vacc, (geom :: Geometry e g')) =
+                    let (vacc', attrs') = vf eacc avert vacc
+                        (avert', geom') = addVertex attrs' geom
                         vertMap' = H.insert avert avert' vertMap
-                    in (vertMap', geom')
+                    in (vertMap', vacc', geom')
 
-            (valueMap, elems') = foldr (accElem vertMap) (H.empty, []) elems
-            (_, (vertMap, Geometry tophash' _ top' _ lidx)) =
-                    foldVertices (accVertex valueMap)
-                                 (H.empty, emptyGeometry)
-                                 row0
+            (eacc', elems') = foldr (accElem vertMap) (eacc, []) elems
+            (_, (vertMap, vacc', Geometry tophash' _ top' _ lidx)) =
+                    foldAttrVertices (accVertex eacc')
+                                     (H.empty, vacc, emptyGeometry)
+                                     row0
             geom' = Geometry tophash' 0 top' (Elements thash elems') lidx
-        in rehashGeometry geom'
+        in ((eacc', vacc'), rehashGeometry geom')
