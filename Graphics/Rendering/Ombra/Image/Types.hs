@@ -9,8 +9,12 @@ import Graphics.Rendering.Ombra.Geometry.Types
 import Graphics.Rendering.Ombra.Shader
 
 data Image o where
-       Image :: (ShaderInput i, ShaderInput v, Foldable t, GeometryVertex i)
-             => t (Geometry i, vu, fu)
+       Image :: ( ShaderInput i
+                , ShaderInput v
+                , Foldable t
+                , GeometryVertex i
+                , ElementType e)
+             => t (Geometry e i, vu, fu)
              -> (UniformSetter vu -> VertexShader i (GVec4, v))
              -> (UniformSetter fu -> FragmentShader v o)
              -> Image o

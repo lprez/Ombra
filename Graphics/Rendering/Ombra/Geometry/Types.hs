@@ -8,6 +8,9 @@ module Graphics.Rendering.Ombra.Geometry.Types (
         GeometryVertex(..),
         GGeometryVertex(..),
         VertexAttributes(..),
+        ElementType(..),
+        Point(..),
+        Line(..),
         Triangle(..),
         AttrTable(..),
         AttrCol,
@@ -34,6 +37,7 @@ import GHC.Generics
 
 import Graphics.Rendering.Ombra.Backend (GLES)
 import Graphics.Rendering.Ombra.Internal.TList
+import Graphics.Rendering.Ombra.Internal.GL
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Vector
@@ -75,6 +79,24 @@ class Attributes (AttributeTypes a) => GeometryVertex a where
         fromVertexAttributes =
                 to . gfromVertexAttributes (Proxy :: Proxy (Rep a))
 
+class (Functor e, Foldable e) => ElementType e where
+        elementType :: GLES => proxy e -> GLEnum
+        elementFromList :: [a] -> e a
+
+instance ElementType Point where
+        elementType _ = gl_POINTS
+        elementFromList [x] = Point x
+
+instance ElementType Line where
+        elementType _ = gl_LINES
+        elementFromList [x, y] = Line x y
+
+instance ElementType Triangle where
+        elementType _ = gl_TRIANGLES
+        elementFromList [x, y, z] = Triangle x y z
+
+data Point a = Point a
+data Line a = Line a a
 data Triangle a = Triangle a a a
 
 -- TODO: use AttrTable rows instead
@@ -88,22 +110,22 @@ data VertexAttributes (is :: [*]) where
 
 infixr 5 :~
 
-data Elements is = Triangles Int [Triangle (AttrVertex is)]
+data Elements e is = Elements Int [e (AttrVertex is)]
 
 -- | A set of triangles.
-data Geometry g where
+data Geometry e g where
         Geometry :: { topHash :: Int            -- TODO: ?
                     , geometryHash :: Int       -- TODO: ?
                     , top :: AttrCol (AttributeTypes g)
-                    , elements :: Elements (AttributeTypes g)
+                    , elements :: Elements e (AttributeTypes g)
                     , lastIndex :: Int
                     }
-                 -> Geometry g
+                 -> Geometry e g
 
-newtype GeometryBuilderT g m a = GeometryBuilderT (StateT (Geometry g) m a)
+newtype GeometryBuilderT e g m a = GeometryBuilderT (StateT (Geometry e g) m a)
         deriving (Functor, Applicative, Monad, MonadTrans)
 
-type GeometryBuilder g = GeometryBuilderT g Identity
+type GeometryBuilder e g = GeometryBuilderT e g Identity
 
 -- | A vertex in a 'Geometry'.
 data AttrVertex (is :: [*]) where
@@ -177,6 +199,12 @@ instance ( BaseAttribute i1
         rowToVertexAttributes (AttrCell x next _) =
                 Attr x :~ rowToVertexAttributes next
 
+instance Functor Point where
+        fmap f (Point x) = Point (f x)
+
+instance Functor Line where
+        fmap f (Line x y) = Line (f x) (f y)
+
 instance Functor Triangle where
         fmap f (Triangle x y z) = Triangle (f x) (f y) (f z)
 
@@ -188,20 +216,35 @@ instance Eq (VertexAttributes is) where
         (Attr x) == (Attr x') = x == x'
         (Attr x :~ v) == (Attr x' :~ v') = x == x' && v == v'
 
+instance H.Hashable a => H.Hashable (Point a) where
+        hashWithSalt salt (Point x) = H.hashWithSalt salt x
+
+instance H.Hashable a => H.Hashable (Line a) where
+        hashWithSalt salt (Line x y) = H.hashWithSalt salt (x, y)
+
 instance H.Hashable a => H.Hashable (Triangle a) where
         hashWithSalt salt (Triangle x y z) = H.hashWithSalt salt (x, y, z)
 
-instance Eq (Geometry is) where
+instance Foldable Point where
+        foldr f s (Point x) = f x s
+
+instance Foldable Line where
+        foldr f s (Line x y) = f x $ f y s
+
+instance Foldable Triangle where
+        foldr f s (Triangle x y z) = f x $ f y $ f z s
+
+instance Eq (Geometry e is) where
         g == g' = geometryHash g == geometryHash g'
 
-instance H.Hashable (Geometry is) where
+instance H.Hashable (Geometry e is) where
         hashWithSalt salt = H.hashWithSalt salt . geometryHash
 
-instance H.Hashable (Elements is) where
-        hashWithSalt salt (Triangles h _) = H.hashWithSalt salt h
+instance H.Hashable (Elements e is) where
+        hashWithSalt salt (Elements h _) = H.hashWithSalt salt h
 
-instance Eq (Elements is) where
-        (Triangles h _) == (Triangles h' _) = h == h'
+instance Eq (Elements e is) where
+        (Elements h _) == (Elements h' _) = h == h'
 
 instance H.Hashable (AttrVertex is) where
         hashWithSalt salt (AttrVertex i _) = H.hashWithSalt salt i

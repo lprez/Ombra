@@ -25,9 +25,11 @@ class ( MonadGeometry (m o)
       , MonadTexture (m o)
       , MonadScreen (m o)
       ) => MonadDraw o m where
-        drawGeometry :: GeometryVertex g => Geometry g -> m o ()
-        default drawGeometry :: (MonadGL (m o), GeometryVertex g)
-                             => Geometry g
+        drawGeometry :: (GeometryVertex g, ElementType e)
+                     => Geometry e g
+                     -> m o ()
+        default drawGeometry :: (MonadGL (m o), GeometryVertex g, ElementType e)
+                             => Geometry e g
                              -> m o ()
         drawGeometry = defaultDrawGeometry
         -- | Enable/disable writing to one or more color channels.
@@ -47,8 +49,8 @@ class ( MonadGeometry (m o)
 class MonadDrawBuffers m where
         -- | Create a 'GBuffer' and a 'DepthBuffer' and draw something to them.
         createBuffers :: FragmentShaderOutput o
-                      => Int
-                      -> Int
+                      => Int                    -- ^ Width.
+                      -> Int                    -- ^ Height.
                       -> GBufferInfo o          -- ^ The buffer that will
                                                 -- contain the output of the
                                                 -- fragment shader.

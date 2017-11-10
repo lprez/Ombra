@@ -22,20 +22,25 @@ import Graphics.Rendering.Ombra.Image.Types
 import Graphics.Rendering.Ombra.Texture.Draw
 
 -- | Create an 'Image'.
-image :: (ShaderInput i, GeometryVertex i, ShaderInput v)
+image :: (ShaderInput i, GeometryVertex i, ElementType e, ShaderInput v)
       => VertexShader i (GVec4, v)
       -> FragmentShader v o
-      -> Geometry i
+      -> Geometry e i
       -> Image o
 image vs fs g = uimage (const vs) (const fs) (Identity (g, (), ()))
 
 -- | Create an 'Image' using the same shader with different uniforms for each
 -- geometry. The resulting image can be rendered more efficiently than an
 -- equivalent sequence of images created with 'image'.
-uimage :: (ShaderInput i, GeometryVertex i, ShaderInput v, Foldable t)
+uimage :: ( ShaderInput i
+          , GeometryVertex i
+          , ElementType e
+          , ShaderInput v
+          , Foldable t
+          )
        => (UniformSetter vu -> VertexShader i (GVec4, v))
        -> (UniformSetter fu -> FragmentShader v o)
-       -> t (Geometry i, vu, fu)
+       -> t (Geometry e i, vu, fu)
        -> Image o
 uimage vs fs g = Image g vs fs
 

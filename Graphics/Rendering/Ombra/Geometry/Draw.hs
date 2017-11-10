@@ -14,6 +14,7 @@ import Control.Monad.Trans.Control
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
+import Data.Foldable (toList)
 import Data.Proxy
 
 import Graphics.Rendering.Ombra.Geometry.Types
@@ -26,13 +27,14 @@ class (GLES, Monad m) => MonadGeometry m where
         getAttribute :: BaseAttribute i
                      => AttrCol (i ': is)
                      -> m (Either String LoadedAttribute)
-        getElementBuffer :: Elements is -> m (Either String LoadedBuffer)
-        getGeometry :: GeometryVertex g
-                    => Geometry g
+        getElementBuffer :: ElementType e
+                         => Elements e is
+                         -> m (Either String LoadedBuffer)
+        getGeometry :: (GeometryVertex g, ElementType e)
+                    => Geometry e g
                     -> m (Either String LoadedGeometry)
 
 data LoadedGeometry = LoadedGeometry {
-        -- elementType :: GLEnum,
         elementCount :: Int,
         vao :: VertexArrayObject
 }
@@ -56,20 +58,22 @@ instance (GLES, BaseAttribute i) =>
         unloadResource _ (LoadedAttribute _ as) =
                 mapM_ (\(buf, _) -> deleteBuffer buf) as
 
-instance GLES => Resource (Elements is) LoadedBuffer GL where
-        loadResource (Triangles _ ts) =
-                liftIO (encodeUInt16s elems) >>=
+instance (GLES, ElementType e) => Resource (Elements e is) LoadedBuffer GL where
+        loadResource (Elements _ es) =
+                liftIO (encodeUInt16s $ es >>= map idx . toList) >>=
                         fmap (Right . LoadedBuffer) .
                         loadBuffer gl_ELEMENT_ARRAY_BUFFER
                         . fromUInt16Array
-                where elems = ts >>= ids
-                      ids (Triangle (AttrVertex x _)
-                                    (AttrVertex y _)
-                                    (AttrVertex z _)) = [x, y, z]
+                where idx (AttrVertex i _) = i
         unloadResource _ (LoadedBuffer buf) = deleteBuffer buf
 
-instance (MonadGeometry m, MonadGL m, MonadBaseControl IO m, GeometryVertex g) =>
-        Resource (Geometry g) LoadedGeometry m where
+instance ( MonadGeometry m
+         , MonadGL m
+         , MonadBaseControl IO m
+         , GeometryVertex g
+         , ElementType e
+         ) =>
+        Resource (Geometry e g) LoadedGeometry m where
         loadResource = loadGeometry
         unloadResource _ = gl . deleteGeometry
 
@@ -77,8 +81,8 @@ downList :: NotTop p => AttrTable p (i ': is) -> [CPUBase i] -> [CPUBase i]
 downList AttrEnd xs = xs
 downList (AttrCell x _ down) xs = downList down $ x : xs
 
-loadGeometry :: (MonadGeometry m, MonadGL m, GeometryVertex g)
-             => Geometry g
+loadGeometry :: (MonadGeometry m, MonadGL m, GeometryVertex g, ElementType e)
+             => Geometry e g
              -> m (Either String LoadedGeometry)
 loadGeometry geometry@(Geometry _ _ _ _ _) = runExceptT $
         do vao <- lift $ gl createVertexArray
@@ -93,7 +97,8 @@ loadGeometry geometry@(Geometry _ _ _ _ _) = runExceptT $
                           bindBuffer gl_ARRAY_BUFFER noBuffer
 
            return $ LoadedGeometry (elementCount $ elements geometry) vao
-        where elementCount (Triangles _ ts) = 3 * length ts
+        where elementCount (Elements _ ts) =
+                length (head ts) * length ts
 
 setAttrTop :: (GLES, MonadGeometry m, MonadGL m, Attributes is)
            => GLUInt
@@ -123,15 +128,20 @@ loadBuffer ty bufData =
            bindBuffer ty noBuffer
            return buffer
 
-defaultDrawGeometry :: (MonadGeometry m, MonadGL m, GeometryVertex g)
-                    => Geometry g
+defaultDrawGeometry :: forall e m g.
+                       ( MonadGeometry m
+                       , MonadGL m
+                       , GeometryVertex g
+                       , ElementType e
+                       )
+                    => Geometry e g
                     -> m ()
 defaultDrawGeometry g = getGeometry g >>= \eg ->
         case eg of
              Left _ -> return ()
              Right (LoadedGeometry ec vao) ->
                      gl $ do bindVertexArray vao
-                             drawElements gl_TRIANGLES
+                             drawElements (elementType (Proxy :: Proxy e))
                                           (fromIntegral ec)
                                           gl_UNSIGNED_SHORT
                                           nullGLPtr
