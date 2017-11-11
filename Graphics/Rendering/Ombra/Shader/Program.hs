@@ -9,7 +9,6 @@ module Graphics.Rendering.Ombra.Shader.Program (
         Program,
         ProgramIndex,
         program,
-        setProgram,
         UniformLocation(..),
         programIndex
 ) where
