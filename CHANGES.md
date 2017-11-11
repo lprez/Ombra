@@ -1,6 +1,6 @@
 ## 1.1.0
 
-  * Renamed (~~) to (~<) and (~*) to (~<*)
+  * Renamed (&#126;&#126;) to (&#126;&lt;) and (&#126;&#42;) to (&#126;&lt;&#42;)
   * Added sampleTexture = sample
   * Added clearColorWith, clearDepthWith, clearStencilWith
   * Added Point and Line geometries
