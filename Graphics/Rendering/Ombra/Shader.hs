@@ -79,7 +79,10 @@ instance Monad UniformSetter where
 hashMST :: MultiShaderType a => a -> a
 hashMST = mapMST (fromExpr . HashDummy . hash . toExpr)
 
--- | Create a shader function that can be reused efficiently.
+-- | Create a shader function that can be reused efficiently. Ideally, every
+-- operation on G* and *Sampler types should be performed by a top level Shader
+-- created with this function, while arrow combinators and uniforms can appear
+-- anywhere.
 shader :: (MultiShaderType i, MultiShaderType o) => Shader s i o -> Shader s i o
 shader (Shader f hf) = Shader f (memoHash hf)
 -- BUG: shader modifies the hash of the shader
@@ -89,7 +92,7 @@ shader (Shader f hf) = Shader f (memoHash hf)
 -- to a new value, therefore parameters should not be used for things like
 -- model matrices (for which uniforms are more appropriate). Unlike uniforms,
 -- parameters can be used anywhere, in particular they can be used to change the
--- shader structure.
+-- shader structure. 'Shader's themselves can be used as parameters.
 shaderParam :: (HasTrie p, MultiShaderType i, MultiShaderType o)
             => Shader s (p, i) o
             -> Shader s (p, i) o
@@ -97,7 +100,9 @@ shaderParam (Shader f hf) =
         let hf' = memo (\p -> memoHash $ \(uid, i) -> hf (uid, (p, i)))
         in Shader f (\(uid, (p, i)) -> hf' p (uid, i))
 
--- | See 'shaderParam'.
+-- | See 'shaderParam'. The result of partially applying this function is a
+-- function for which the same rules of 'shader' apply (that is, it should be
+-- reused rather than recreated at every frame).
 pshader :: (HasTrie p, MultiShaderType i, MultiShaderType o)
         => (p -> Shader s i o)
         -> (p -> Shader s i o)
@@ -105,7 +110,8 @@ pshader shaderf = let shader' = shaderParam $ first shaderf ^>> app
                   in \p -> const p &&& id ^>> shader'
 
 -- | 'shader' with an additional parameter that can be used to set the values of
--- the uniforms.
+-- the uniforms. Like 'pshader', this should be used as a function of
+-- functions, not a function with two arguments.
 ushader :: (MultiShaderType i, MultiShaderType o)
         => (UniformSetter x -> Shader s i o)
         -> (UniformSetter x -> Shader s i o)
@@ -189,10 +195,10 @@ frag = Fragment { fragCoord = Shader.fragCoord
                 , fwidth = Shader.fwidth
                 }
 
--- | This function implements raw GLSL loops. The same effect can be achieved
--- using Haskell list functions, but that may result in a large compiled GLSL
--- source, which in turn might slow down compilation or cause an out of memory
--- error.
+-- | Repeatedly apply a function to a shader value. This is compiled to an
+-- actual for loop, therefore it won't duplicate the function code (doing that
+-- could slow down compilation or cause an out of memory error). The same
+-- applies to derived functions like 'foldGArray' and 'foldUniforms'.
 forLoop :: ShaderInput a 
         => Int -- ^ Maximum number of iterations (should be as low as possible)
         -> a -- ^ Initial value
@@ -218,6 +224,8 @@ foldGArray f iacc arr = forLoop (fromIntegral $ natVal (Proxy :: Proxy n))
                                 iacc
                                 (\i acc -> (f acc $ arr ! i, false))
 
+-- | Create an array uniform and then fold over it with the given function and
+-- initial value.
 foldUniforms :: forall a u s. (ShaderInput a, ArrayUniform u, GLES)
              => Shader s (((a -> u -> a), a), [CPUBase u]) a
 foldUniforms = (\((f, i), us) -> case someNatVal . fromIntegral $ length us of
