@@ -211,6 +211,12 @@ instance GLES => Uniform GBool where
         type CPUUniform GBool = CPUBase GBool
         foldrUniform proxy f s u = f (UniformValue proxy u) s
 
+instance HasTrie GBool where
+        newtype (GBool :->: b) = GBoolTrie (ExprMST GBool :->: b)
+        trie f = GBoolTrie $ trie (f . fromExprMST)
+        untrie (GBoolTrie t) = untrie t . toExprMST
+        enumerate (GBoolTrie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GFloat where
         type ExprMST GFloat = Expr
         mapMST f = f
@@ -230,6 +236,12 @@ instance FragmentShaderOutput GFloat where
         fromGFloats (x : xs) = (x, xs)
         toGFloats x = (x :)
 
+instance HasTrie GFloat where
+        newtype (GFloat :->: b) = GFloatTrie (ExprMST GFloat :->: b)
+        trie f = GFloatTrie $ trie (f . fromExprMST)
+        untrie (GFloatTrie t) = untrie t . toExprMST
+        enumerate (GFloatTrie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GInt where
         type ExprMST GInt = Expr
         mapMST f = f
@@ -244,6 +256,12 @@ instance GLES => Uniform GInt where
         type CPUUniform GInt = CPUBase GInt
         foldrUniform proxy f s u = f (UniformValue proxy u) s
 
+instance HasTrie GInt where
+        newtype (GInt :->: b) = GIntTrie (ExprMST GInt :->: b)
+        trie f = GIntTrie $ trie (f . fromExprMST)
+        untrie (GIntTrie t) = untrie t . toExprMST
+        enumerate (GIntTrie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GSampler2D where
         type ExprMST GSampler2D = Expr
         mapMST f = f
@@ -257,6 +275,12 @@ instance ShaderInput GSampler2D where
 instance GLES => Uniform GSampler2D where
         type CPUUniform GSampler2D = Texture
         foldrUniform _ f s u = f (UniformTexture u) s
+
+instance HasTrie GSampler2D where
+        newtype (GSampler2D :->: b) = GSampler2DTrie (ExprMST GSampler2D :->: b)
+        trie f = GSampler2DTrie $ trie (f . fromExprMST)
+        untrie (GSampler2DTrie t) = untrie t . toExprMST
+        enumerate (GSampler2DTrie t) = map (first fromExprMST) (enumerate t)
 
 instance MultiShaderType GVec2 where
         type ExprMST GVec2 = Expr
@@ -277,6 +301,12 @@ instance FragmentShaderOutput GVec2 where
         fromGFloats (x : y : xs) = (GVec2 x y, xs)
         toGFloats (GVec2 x y) xs = x : y : xs
 
+instance HasTrie GVec2 where
+        newtype (GVec2 :->: b) = GVec2Trie (ExprMST GVec2 :->: b)
+        trie f = GVec2Trie $ trie (f . fromExprMST)
+        untrie (GVec2Trie t) = untrie t . toExprMST
+        enumerate (GVec2Trie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GVec3 where
         type ExprMST GVec3 = Expr
         mapMST f = f
@@ -295,6 +325,12 @@ instance FragmentShaderOutput GVec3 where
         type NFloats GVec3 = 3
         fromGFloats (x : y : z : xs) = (GVec3 x y z, xs)
         toGFloats (GVec3 x y z) xs = x : y : z : xs
+
+instance HasTrie GVec3 where
+        newtype (GVec3 :->: b) = GVec3Trie (ExprMST GVec3 :->: b)
+        trie f = GVec3Trie $ trie (f . fromExprMST)
+        untrie (GVec3Trie t) = untrie t . toExprMST
+        enumerate (GVec3Trie t) = map (first fromExprMST) (enumerate t)
 
 instance MultiShaderType GVec4 where
         type ExprMST GVec4 = Expr
@@ -315,6 +351,12 @@ instance FragmentShaderOutput GVec4 where
         fromGFloats (x : y : z : w : xs) = (GVec4 x y z w, xs)
         toGFloats (GVec4 x y z w) xs = x : y : z : w : xs
 
+instance HasTrie GVec4 where
+        newtype (GVec4 :->: b) = GVec4Trie (ExprMST GVec4 :->: b)
+        trie f = GVec4Trie $ trie (f . fromExprMST)
+        untrie (GVec4Trie t) = untrie t . toExprMST
+        enumerate (GVec4Trie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GIVec2 where
         type ExprMST GIVec2 = Expr
         mapMST f = f
@@ -328,6 +370,12 @@ instance ShaderInput GIVec2 where
 instance GLES => Uniform GIVec2 where
         type CPUUniform GIVec2 = CPUBase GIVec2
         foldrUniform proxy f s u = f (UniformValue proxy u) s
+
+instance HasTrie GIVec2 where
+        newtype (GIVec2 :->: b) = GIVec2Trie (ExprMST GIVec2 :->: b)
+        trie f = GIVec2Trie $ trie (f . fromExprMST)
+        untrie (GIVec2Trie t) = untrie t . toExprMST
+        enumerate (GIVec2Trie t) = map (first fromExprMST) (enumerate t)
 
 instance MultiShaderType GIVec3 where
         type ExprMST GIVec3 = Expr
@@ -343,6 +391,12 @@ instance GLES => Uniform GIVec3 where
         type CPUUniform GIVec3 = CPUBase GIVec3
         foldrUniform proxy f s u = f (UniformValue proxy u) s
 
+instance HasTrie GIVec3 where
+        newtype (GIVec3 :->: b) = GIVec3Trie (ExprMST GIVec3 :->: b)
+        trie f = GIVec3Trie $ trie (f . fromExprMST)
+        untrie (GIVec3Trie t) = untrie t . toExprMST
+        enumerate (GIVec3Trie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GIVec4 where
         type ExprMST GIVec4 = Expr
         mapMST f = f
@@ -356,6 +410,12 @@ instance ShaderInput GIVec4 where
 instance GLES => Uniform GIVec4 where
         type CPUUniform GIVec4 = CPUBase GIVec4
         foldrUniform proxy f s u = f (UniformValue proxy u) s
+
+instance HasTrie GIVec4 where
+        newtype (GIVec4 :->: b) = GIVec4Trie (ExprMST GIVec4 :->: b)
+        trie f = GIVec4Trie $ trie (f . fromExprMST)
+        untrie (GIVec4Trie t) = untrie t . toExprMST
+        enumerate (GIVec4Trie t) = map (first fromExprMST) (enumerate t)
 
 instance MultiShaderType GBVec2 where
         type ExprMST GBVec2 = Expr
@@ -371,6 +431,12 @@ instance GLES => Uniform GBVec2 where
         type CPUUniform GBVec2 = CPUBase GBVec2
         foldrUniform proxy f s u = f (UniformValue proxy u) s
 
+instance HasTrie GBVec2 where
+        newtype (GBVec2 :->: b) = GBVec2Trie (ExprMST GBVec2 :->: b)
+        trie f = GBVec2Trie $ trie (f . fromExprMST)
+        untrie (GBVec2Trie t) = untrie t . toExprMST
+        enumerate (GBVec2Trie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GBVec3 where
         type ExprMST GBVec3 = Expr
         mapMST f = f
@@ -384,6 +450,12 @@ instance ShaderInput GBVec3 where
 instance GLES => Uniform GBVec3 where
         type CPUUniform GBVec3 = CPUBase GBVec3
         foldrUniform proxy f s u = f (UniformValue proxy u) s
+
+instance HasTrie GBVec3 where
+        newtype (GBVec3 :->: b) = GBVec3Trie (ExprMST GBVec3 :->: b)
+        trie f = GBVec3Trie $ trie (f . fromExprMST)
+        untrie (GBVec3Trie t) = untrie t . toExprMST
+        enumerate (GBVec3Trie t) = map (first fromExprMST) (enumerate t)
 
 instance MultiShaderType GBVec4 where
         type ExprMST GBVec4 = Expr
@@ -399,6 +471,12 @@ instance GLES => Uniform GBVec4 where
         type CPUUniform GBVec4 = CPUBase GBVec4
         foldrUniform proxy f s u = f (UniformValue proxy u) s
 
+instance HasTrie GBVec4 where
+        newtype (GBVec4 :->: b) = GBVec4Trie (ExprMST GBVec4 :->: b)
+        trie f = GBVec4Trie $ trie (f . fromExprMST)
+        untrie (GBVec4Trie t) = untrie t . toExprMST
+        enumerate (GBVec4Trie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GMat2 where
         type ExprMST GMat2 = Expr
         mapMST f = f
@@ -412,6 +490,12 @@ instance ShaderInput GMat2 where
 instance GLES => Uniform GMat2 where
         type CPUUniform GMat2 = CPUBase GMat2
         foldrUniform proxy f s u = f (UniformValue proxy u) s
+
+instance HasTrie GMat2 where
+        newtype (GMat2 :->: b) = GMat2Trie (ExprMST GMat2 :->: b)
+        trie f = GMat2Trie $ trie (f . fromExprMST)
+        untrie (GMat2Trie t) = untrie t . toExprMST
+        enumerate (GMat2Trie t) = map (first fromExprMST) (enumerate t)
 
 instance MultiShaderType GMat3 where
         type ExprMST GMat3 = Expr
@@ -427,6 +511,12 @@ instance GLES => Uniform GMat3 where
         type CPUUniform GMat3 = CPUBase GMat3
         foldrUniform proxy f s u = f (UniformValue proxy u) s
 
+instance HasTrie GMat3 where
+        newtype (GMat3 :->: b) = GMat3Trie (ExprMST GMat3 :->: b)
+        trie f = GMat3Trie $ trie (f . fromExprMST)
+        untrie (GMat3Trie t) = untrie t . toExprMST
+        enumerate (GMat3Trie t) = map (first fromExprMST) (enumerate t)
+
 instance MultiShaderType GMat4 where
         type ExprMST GMat4 = Expr
         mapMST f = f
@@ -440,6 +530,12 @@ instance ShaderInput GMat4 where
 instance GLES => Uniform GMat4 where
         type CPUUniform GMat4 = CPUBase GMat4
         foldrUniform proxy f s u = f (UniformValue proxy u) s
+
+instance HasTrie GMat4 where
+        newtype (GMat4 :->: b) = GMat4Trie (ExprMST GMat4 :->: b)
+        trie f = GMat4Trie $ trie (f . fromExprMST)
+        untrie (GMat4Trie t) = untrie t . toExprMST
+        enumerate (GMat4Trie t) = map (first fromExprMST) (enumerate t)
 
 instance (KnownNat n, ShaderType t) => MultiShaderType (GArray n t) where
         type ExprMST (GArray n t) = Expr
@@ -455,6 +551,12 @@ instance (KnownNat n, ShaderType t, BaseUniform (GArray n t), GLES) =>
         Uniform (GArray n t) where
         type CPUUniform (GArray n t) = CPUBase (GArray n t)
         foldrUniform proxy f s u = f (UniformValue proxy u) s
+
+instance (KnownNat n, ShaderType t) => HasTrie (GArray n t) where
+        newtype (GArray n t :->: b) = GArrayTrie (ExprMST (GArray n t) :->: b)
+        trie f = GArrayTrie $ trie (f . fromExprMST)
+        untrie (GArrayTrie t) = untrie t . toExprMST
+        enumerate (GArrayTrie t) = map (first fromExprMST) (enumerate t)
 
 instance MultiShaderType () where
         type ExprMST () = ()
@@ -553,6 +655,12 @@ instance (ShaderInput a, MultiShaderType b) => MultiShaderType (a -> b) where
         toExprMST = toExprMST . dummyFun
         fromExprMST x = const $ fromExprMST x
 
+instance (ShaderInput a, MultiShaderType b) => HasTrie (a -> b) where
+        newtype ((a -> b) :->: c) = FunTrie (ExprMST (a -> b) :->: c)
+        trie f = FunTrie $ trie (f . fromExprMST)
+        untrie (FunTrie t) = untrie t . toExprMST
+        enumerate (FunTrie t) = map (first fromExprMST) (enumerate t)
+
 instance (ShaderInput a, MultiShaderType b) =>
         MultiShaderType (Shader s a b) where
         type ExprMST (Shader s a b) = (ExprMST b, UniformID)
@@ -567,6 +675,12 @@ instance (ShaderInput a, MultiShaderType b) =>
                                           , fromExprMST out
                                           )
                                  in Shader f hf
+
+instance (ShaderInput a, MultiShaderType b) => HasTrie (Shader s a b) where
+        newtype (Shader s a b :->: c) = SFunTrie (ExprMST (Shader s a b) :->: c)
+        trie f = SFunTrie $ trie (f . fromExprMST)
+        untrie (SFunTrie t) = untrie t . toExprMST
+        enumerate (SFunTrie t) = map (first fromExprMST) (enumerate t)
 
 dummyFun :: ShaderInput a => (a -> b) -> b
 dummyFun g = g . fst $ buildMST (fromExpr . Dummy) 0
