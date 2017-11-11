@@ -45,9 +45,9 @@ class ( MonadGeometry (m o)
         clearColorWith :: Vec4 -> m o ()
         -- | Clear the depth buffer.
         clearDepth :: m o ()
-        clearDepth = clearDepthWith 0
+        clearDepth = clearDepthWith 1
         -- | Clear the depth buffer filling it with the given value.
-        clearDepthWith :: Float -> m o ()
+        clearDepthWith :: Double -> m o ()
         -- | Clear the stencil buffer.
         clearStencil :: m o ()
         clearStencil = clearStencilWith 0

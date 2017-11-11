@@ -127,7 +127,7 @@ instance (FragmentShaderOutput o, GLES) => MonadDraw o Draw where
         clearDepth = clearBuffers [DepthBuffer]
         clearDepthWith value = gl $ do GL.clearDepth $ realToFrac value
                                        clearBuffers [DepthBuffer]
-                                       GL.clearDepth 0
+                                       GL.clearDepth 1
         clearStencil = clearBuffers [StencilBuffer]
         clearStencilWith value = gl $ do GL.clearStencil $ fromIntegral value
                                          clearBuffers [StencilBuffer]
@@ -289,7 +289,7 @@ drawInit = do programs <- liftIO newResMap
 
               ((x, y), (w, h)) <- viewportSize <$> Draw get
               gl $ do GL.clearColor 0.0 0.0 0.0 1.0
-                      GL.clearDepth 0
+                      GL.clearDepth 1
                       GL.clearStencil 0
                       enable gl_DEPTH_TEST
                       depthFunc gl_LESS
