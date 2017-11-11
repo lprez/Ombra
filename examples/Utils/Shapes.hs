@@ -4,7 +4,7 @@ import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.Vector
 import Utils.Vertex3D
 
-cube :: GLES => Geometry GVertex3D
+cube :: GLES => Geometry Triangle GVertex3D
 cube = buildGeometry $
         do let vertex3D pos norm uv = vertex $ Vertex3D pos norm uv
 

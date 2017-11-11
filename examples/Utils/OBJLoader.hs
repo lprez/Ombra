@@ -26,7 +26,7 @@ import Data.Text.IO as T
 geometry :: (GLES, GeometryVertex v)
          => (Triangle Vertex3D -> Triangle (O.Vertex v))
          -> [Command]
-         -> Geometry v
+         -> Geometry Triangle v
 geometry trans = mkGeometry . reverse . fst7 . foldl' cmd initState
         where initState = ([], 1, H.empty, 1, H.empty, 1, H.empty)
               fst7 (x, _, _, _, _, _, _) = x
@@ -73,7 +73,7 @@ geometry trans = mkGeometry . reverse . fst7 . foldl' cmd initState
 loadOBJ :: (GLES, GeometryVertex v)
         => (Triangle Vertex3D -> Triangle (O.Vertex v))
         -> FilePath
-        -> IO (Either String (Geometry v))
+        -> IO (Either String (Geometry Triangle v))
 loadOBJ transform path = downloadOBJ path >>= \etxt -> return $
         case etxt of
              Left s -> Left s

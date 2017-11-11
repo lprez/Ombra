@@ -14,7 +14,6 @@ import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Draw
 import Graphics.Rendering.Ombra.Shader (GVec4)
 import Control.Monad.IO.Class
-import Data.Hashable
 import Data.IORef
 import System.Exit (exitFailure)
 
@@ -144,7 +143,7 @@ play width height requireExts initialize frame inpCallback sizeCallback =
                               return w
 #endif
 
-checkExtensions :: GLES => Bool -> Ctx -> IO (Maybe String)
+checkExtensions :: Bool -> Ctx -> IO (Maybe String)
 checkExtensions requireAllExtensions ctx =
         do vaoExt <- hasVertexArrayObjects ctx
            floatTexExt <- hasFloatTextures ctx
@@ -159,7 +158,7 @@ checkExtensions requireAllExtensions ctx =
                e4 = [ "\nStandard derivatives are not supported."
                     | requireAllExtensions && not derivativesExt ]
            
-           return $ case concat [e1, e2, e3] of
+           return $ case concat [e1, e2, e3, e4] of
                          [] -> Nothing
                          errs -> Just $ "ERROR:" ++ concat errs
 
