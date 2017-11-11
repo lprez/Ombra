@@ -118,8 +118,20 @@ instance (FragmentShaderOutput o, GLES) => MonadDraw o Draw where
         withDepthTest d a = stateReset depthTest setDepthTest d a
         withDepthMask m a = stateReset depthMask setDepthMask m a
         clearColor = clearBuffers [ColorBuffer]
+        clearColorWith (Vec4 r g b a) = gl $ do GL.clearColor (realToFrac r)
+                                                              (realToFrac g)
+                                                              (realToFrac b)
+                                                              (realToFrac a)
+                                                clearBuffers [ColorBuffer]
+                                                GL.clearColor 0.0 0.0 0.0 1.0
         clearDepth = clearBuffers [DepthBuffer]
+        clearDepthWith value = gl $ do GL.clearDepth $ realToFrac value
+                                       clearBuffers [DepthBuffer]
+                                       GL.clearDepth 0
         clearStencil = clearBuffers [StencilBuffer]
+        clearStencilWith value = gl $ do GL.clearStencil $ fromIntegral value
+                                         clearBuffers [StencilBuffer]
+                                         GL.clearStencil 0
 
 instance GLES => MonadDrawBuffers Draw where
         {-
@@ -277,6 +289,8 @@ drawInit = do programs <- liftIO newResMap
 
               ((x, y), (w, h)) <- viewportSize <$> Draw get
               gl $ do GL.clearColor 0.0 0.0 0.0 1.0
+                      GL.clearDepth 0
+                      GL.clearStencil 0
                       enable gl_DEPTH_TEST
                       depthFunc gl_LESS
                       viewport (fromIntegral x) (fromIntegral y)
@@ -401,7 +415,7 @@ withProgram p act =
                                                , activeTextures = 0
                                                }
                                             act lp
-                             Left _ -> return ()
+                             Left err -> error err
 
 setBlendMode :: GLES => Maybe Blend.Mode -> Draw o ()
 setBlendMode Nothing = do m <- blendMode <$> Draw get

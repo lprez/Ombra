@@ -40,10 +40,19 @@ class ( MonadGeometry (m o)
         withDepthMask :: Bool -> m o a -> m o a
         -- | Clear the color buffer.
         clearColor :: m o ()
+        clearColor = clearColorWith $ Vec4 0 0 0 1
+        -- | Clear the color buffer filling it with the given color.
+        clearColorWith :: Vec4 -> m o ()
         -- | Clear the depth buffer.
         clearDepth :: m o ()
+        clearDepth = clearDepthWith 0
+        -- | Clear the depth buffer filling it with the given value.
+        clearDepthWith :: Float -> m o ()
         -- | Clear the stencil buffer.
         clearStencil :: m o ()
+        clearStencil = clearStencilWith 0
+        -- | Clear the stencil buffer filling it with the given value.
+        clearStencilWith :: Int -> m o ()
 
 -- | Monads that support drawing to 'GBuffer's and 'DepthBuffer's.
 class MonadDrawBuffers m where

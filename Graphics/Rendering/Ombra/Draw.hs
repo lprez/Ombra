@@ -8,7 +8,6 @@
 module Graphics.Rendering.Ombra.Draw (
         module Graphics.Rendering.Ombra.OutBuffer,
         Draw,
-        DrawState,
         Ctx,
         -- * Running the Draw monad
         runDraw,
@@ -17,8 +16,11 @@ module Graphics.Rendering.Ombra.Draw (
                  , withDepthTest
                  , withDepthMask
                  , clearColor
+                 , clearColorWith
                  , clearDepth
+                 , clearDepthWith
                  , clearStencil
+                 , clearStencilWith
                  ),
         MonadDrawBuffers(..),
         MonadRead(..),
@@ -47,6 +49,7 @@ import Graphics.Rendering.Ombra.OutBuffer
 import Graphics.Rendering.Ombra.Shader.Language.Types (GVec4)
 import Graphics.Rendering.Ombra.Screen
 
+-- | Run a 'Draw' program.
 runDraw :: GLES
         => Int          -- ^ Viewport width
         -> Int          -- ^ Viewport height
