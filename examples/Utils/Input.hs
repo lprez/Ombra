@@ -68,23 +68,25 @@ instance GEq InputTag where
 instance GCompare InputTag where
         gcompare KeyDown KeyDown = GEQ
         gcompare KeyDown _ = GLT
-        gcompare KeyUp KeyDown = GGT
+        gcompare _ KeyDown = GGT
+
         gcompare KeyUp KeyUp = GEQ
         gcompare KeyUp _ = GLT
-        gcompare MouseDown KeyDown = GGT
-        gcompare MouseDown KeyUp = GGT
+        gcompare _ KeyUp = GGT
+
         gcompare MouseDown MouseDown = GEQ
         gcompare MouseDown _ = GLT
-        gcompare MouseUp KeyDown = GGT
-        gcompare MouseUp KeyUp = GGT
-        gcompare MouseUp MouseDown = GGT
+        gcompare _ MouseDown = GGT
+
         gcompare MouseUp MouseUp = GEQ
         gcompare MouseUp _ = GLT
-        gcompare MouseMove PointerLockChange = GLT
+        gcompare _ MouseUp = GGT
+
         gcompare MouseMove MouseMove = GEQ
-        gcompare MouseMove _ = GGT
+        gcompare MouseMove _ = GLT
+        gcompare _ MouseMove = GGT
+
         gcompare PointerLockChange PointerLockChange = GEQ
-        gcompare PointerLockChange _ = GGT
 
 #ifdef __GHCJS__
 
