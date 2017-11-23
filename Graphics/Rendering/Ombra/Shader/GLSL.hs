@@ -310,7 +310,7 @@ compileAction aID (If cExpr ty tExpr fExpr) =
                         (ShallowContext $ H.unions [cCtxs, tCtxs, fCtxs])
            , deps )
 
-compileAction aID (For iters initValuesTypes body) =
+compileAction aID (For iters initValuesTypes (ForBody body)) =
         let iterNameS = showString $ contextVarName LoopIteration aID
             valueNameSs = map (\i -> showString $ contextVarName (LoopValue i)
                                                                  aID)

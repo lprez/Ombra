@@ -389,8 +389,8 @@ unsafeLoop :: GInt
            -> [Expr]
 unsafeLoop iters ivs f =
         let for = For (toExpr iters) ivs
-                      (\ie ve -> let (next, stop) = f (fromExpr ie) ve
-                                 in (next, toExpr stop))
+                      (ForBody $ \ie ve -> let (next, stop) = f (fromExpr ie) ve
+                                           in (next, toExpr stop))
         in Prelude.zipWith (\_ i -> Action for i) ivs [0 ..]
 
 -- | Texture lookup function.

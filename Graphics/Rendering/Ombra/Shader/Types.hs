@@ -649,11 +649,14 @@ instance MultiShaderType a => MultiShaderType [a] where
         toExprMST = map toExprMST
         fromExprMST = map fromExprMST
 
-instance (ShaderInput a, MultiShaderType b) => MultiShaderType (a -> b) where
+instance {-# OVERLAPPABLE #-} (ShaderInput a, MultiShaderType b) =>
+        MultiShaderType (a -> b) where
         type ExprMST (a -> b) = ExprMST b
-        mapMST f g = \x -> mapMST f $ g x
+        mapMST f g = mapMST f . g
         toExprMST = toExprMST . dummyFun
-        fromExprMST x = const $ fromExprMST x
+        fromExprMST x = let getArg s = (foldrMST (\e -> (toExpr e :)) [] s !!)
+                            mapExprs f = mapMST $ fromExpr . f . toExpr
+                        in reconstructExprFun getArg mapExprs $ fromExprMST x
 
 instance (ShaderInput a, MultiShaderType b) => HasTrie (a -> b) where
         newtype ((a -> b) :->: c) = FunTrie (ExprMST (a -> b) :->: c)
@@ -663,13 +666,15 @@ instance (ShaderInput a, MultiShaderType b) => HasTrie (a -> b) where
 
 instance (ShaderInput a, MultiShaderType b) =>
         MultiShaderType (Shader s a b) where
-        type ExprMST (Shader s a b) = (ExprMST b, UniformID)
+        type ExprMST (Shader s a b) = (ExprMST (a -> b), UniformID)
         mapMST f s = s >>^ mapMST f
         toExprMST (Shader _ hf) = let err = "This shader can't be used as MST"
                                       (uid, _) = hf (0, error err)
-                                      out = snd . dummyFun $ hf . (,) 0
+                                      out = snd . hf . (,) 0
                                   in (toExprMST out, uid)
-        fromExprMST (out, dif) = let hf (uid, _) = (uid + dif, fromExprMST out)
+        fromExprMST (out, dif) = let hf (uid, x) = ( uid + dif
+                                                   , fromExprMST out $ x
+                                                   )
                                      f (ShaderState uid u t, _) =
                                           ( ShaderState (uid + dif) u t
                                           , fromExprMST out
@@ -683,7 +688,7 @@ instance (ShaderInput a, MultiShaderType b) => HasTrie (Shader s a b) where
         enumerate (SFunTrie t) = map (first fromExprMST) (enumerate t)
 
 dummyFun :: ShaderInput a => (a -> b) -> b
-dummyFun g = g . fst $ buildMST (fromExpr . Dummy) 0
+dummyFun g = g . fst $ buildMST (fromExpr . ArgDummy) 0
 
 class GMultiShaderType (g :: * -> *) where
         type GExprMST g :: *

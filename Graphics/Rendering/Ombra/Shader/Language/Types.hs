@@ -1,9 +1,11 @@
 {-# LANGUAGE MultiParamTypeClasses, DataKinds, KindSignatures, TypeOperators,
-             ScopedTypeVariables, DeriveGeneric, TypeFamilies #-}
+             ScopedTypeVariables, DeriveGeneric, TypeFamilies, FlexibleInstances
+#-}
 
 module Graphics.Rendering.Ombra.Shader.Language.Types where
 
 import Data.Typeable
+import GHC.Generics
 import GHC.TypeLits
 import Data.MemoTrie
 import Data.Hashable
@@ -15,8 +17,8 @@ data Expr = Empty | Read String String | Op1 String String Expr
           | Literal String String | Action Action Int | Dummy Int
           | ArrayIndex String Expr Expr | ContextVar String Int ContextVarType
           | HashDummy Int | Uniform String Int | Input String Int
-          | Attribute String Int
-          deriving Eq
+          | Attribute String Int | ArgDummy Int
+          deriving (Eq, Generic)
 
 subExprs :: Expr -> [Expr]
 subExprs (Op1 _ _ e) = [e]
@@ -70,11 +72,28 @@ actionType (Store t _) _ = t
 actionType (If _ t _ _) _ = t
 actionType (For _ is _) n = fst $ is !! n
 
+reconstructExprFun :: (a -> Int -> Expr)
+                   -> ((Expr -> Expr) -> b -> b)
+                   -> b
+                   -> (a -> b)
+reconstructExprFun (!) mapExprs b = \args -> mapExprs (iter args) b
+        where iter args (ArgDummy n) = args ! n
+              iter args expr =
+                      replaceSubExprs expr . map (iter args) $ subExprs expr
+
+reconstructForBody :: ([Expr], Expr) -> ForBody
+reconstructForBody (es, e) = let ef = reconstructExprFun (!!) id e
+                                 efs = reconstructExprFun (!!) map es
+                             in ForBody $ \x y -> (efs (x : y), ef (x : y))
+
 -- | Expressions that are transformed into statements.
 data Action = Store String Expr | If Expr String Expr Expr
-            | For Expr [(String, Expr)] (Expr -> [Expr] -> ([Expr], Expr))
+            | For Expr [(String, Expr)] ForBody
+            deriving Generic
 
-data ContextVarType = LoopIteration | LoopValue Int deriving Eq
+newtype ForBody = ForBody (Expr -> [Expr] -> ([Expr], Expr))
+
+data ContextVarType = LoopIteration | LoopValue Int deriving (Eq, Generic)
 
 -- | A GPU boolean.
 newtype GBool = GBool Expr 
@@ -509,18 +528,42 @@ instance Hashable Expr where
                                 Uniform _ i -> hash2 s 15 i
                                 Input _ i -> hash2 s 16 i
                                 Attribute _ i -> hash2 s 17 i
-                                HashDummy h -> h
+                                HashDummy h -> h -- TODO: hashWithSalt?
+                                ArgDummy n -> hash2 s 18 n
+
+instance HasTrie Action where
+        newtype (Action :->: a) = ActionTrie { unActionTrie
+                                                :: Reg Action :->: a }
+        trie = trieGeneric ActionTrie
+        untrie = untrieGeneric unActionTrie
+        enumerate = enumerateGeneric unActionTrie
+
+instance HasTrie ContextVarType where
+        newtype (ContextVarType :->: a) =
+                ContextVarTypeTrie { unContextVarTypeTrie
+                                        :: Reg ContextVarType :->: a }
+        trie = trieGeneric ContextVarTypeTrie
+        untrie = untrieGeneric unContextVarTypeTrie
+        enumerate = enumerateGeneric unContextVarTypeTrie
+
+instance HasTrie ForBody where
+        newtype (ForBody :->: b) = ForBodyTrie (([Expr], Expr) :->: b)
+        trie f = ForBodyTrie . trie $ f . reconstructForBody 
+        untrie (ForBodyTrie t) = untrie t . (\(ForBody f) -> applyArgs f)
+                where applyArgs f = f (ArgDummy 0) [ArgDummy n | n <- [1 ..]]
+        enumerate (ForBodyTrie t) =
+                map (\(a, b) -> (reconstructForBody a, b)) $ enumerate t
 
 instance HasTrie Expr where
-        newtype (Expr :->: a) = ExprTrie { unExprTrie :: Int :->: a }
-        trie f = ExprTrie . trie $ f . HashDummy
-        untrie t = untrie (unExprTrie t) . hash
-        enumerate = map (\(i, b) -> (HashDummy i, b)) . enumerate . unExprTrie
+        newtype (Expr :->: a) = ExprTrie { unExprTrie :: Reg Expr :->: a }
+        trie = trieGeneric ExprTrie
+        untrie = untrieGeneric unExprTrie
+        enumerate = enumerateGeneric unExprTrie
 
 instance Hashable Action where
         hashWithSalt s (Store t e) = hash2 s 0 (t, e)
         hashWithSalt s (If eb tt et ef) = hash2 s 1 (eb, tt, et, ef)
-        hashWithSalt s (For iters ivs eFun) =
+        hashWithSalt s (For iters ivs (ForBody eFun)) =
                 let dummies n = zipWith (const Dummy) ivs [n ..]
                     baseHash = hash (iters, ivs, eFun (Dummy 0) (dummies 1))
                 in hash2 s 2 ( baseHash
