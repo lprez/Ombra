@@ -3,6 +3,8 @@
 
 module Utils.Reflex (
         playReflex,
+        DynDrawRoute,
+        dynDrawRoute,
         MonadInput(..),
         Key(..),
         MouseButton(..)
@@ -15,7 +17,9 @@ import Data.IORef
 import Reflex
 import Reflex.Host.Class
 import Graphics.Rendering.Ombra.Draw
-import Graphics.Rendering.Ombra.Shader (GVec4)
+import Graphics.Rendering.Ombra.Draw.Mode
+import Graphics.Rendering.Ombra.Geometry
+import Graphics.Rendering.Ombra.Shader hiding (sample)
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Fix
@@ -30,6 +34,8 @@ data Input t = Input { inputMousePosition :: Dynamic t (Float, Float)
                      , inputKeyDown :: Key -> Event t ()
                      , inputResize :: Event t (Int, Int)
                      }
+
+type DynDrawRoute t = ApDrawRoute (Dynamic t)
 
 class (Reflex t, MonadHold t m, MonadFix m, MonadSample t m) =>
         MonadInput t m where
@@ -57,6 +63,21 @@ instance (Reflex t, MonadHold t m, MonadFix m, MonadSample t m) =>
                    button up down
         resize = inputResize <$> ask
 
+dynDrawRoute :: ( GeometryVertex g
+                , ElementType e
+                , ShaderInput g
+                , ShaderInput v
+                , FragmentShaderOutput o
+                , Reflex t
+                , MonadSample t m
+                )
+             => Dynamic t (Geometry e g)     -- ^ Effective Geometry
+             -> Dynamic t (DrawMode g v v o) -- ^ Effective DrawMode
+             -> m (DynDrawRoute t o)
+dynDrawRoute fgeom fmode = do geom <- sample $ current fgeom
+                              mode <- sample $ current fmode
+                              return $ apRoute geom mode fgeom fmode
+
 button :: (Reflex t, MonadHold t m)
        => Event t ()
        -> Event t ()
@@ -77,16 +98,15 @@ playReflex :: Int
            -> Bool
            -> Draw GVec4 a
            -> (forall t m. MonadInput t m
-                        => Behavior t a
+                        => a
                         -> Event t Float
                         -> m (Behavior t (Draw GVec4 ())))
            -> IO ()
-playReflex w h requireBuffers initialization layerf = runSpiderHost $
+playReflex w h requireBuffers initialization framef = runSpiderHost $
         do timeRef <- liftIO $ newIORef 0
            (tickEvent, tickTriggerRef) <- newEventWithTriggerRef
            (inputEvent, inputTriggerRef) <- newEventWithTriggerRef
            (resizeEvent, resizeTriggerRef) <- newEventWithTriggerRef
-           (initEvent, initTriggerRef) <- newEventWithTriggerRef
 
            let inputSelector = fan $ fmap (fromList . (: [])) inputEvent
            pos <- holdDyn (0, 0) $ fmap fst (select inputSelector MouseMove)
@@ -100,20 +120,20 @@ playReflex w h requireBuffers initialization layerf = runSpiderHost $
                          , inputKeyDown = selectKey fromKey KeyDown inputSelector
                          , inputResize = resizeEvent
                          }
-           initVal <- hold undefined initEvent
-           bFrame <- runHostFrame . flip runReaderT i $ layerf initVal tickEvent
            
-           liftIO $ play w h requireBuffers initialization
-                        (frame bFrame timeRef tickTriggerRef initTriggerRef)
+           liftIO $ play w h requireBuffers
+                        (do initVal <- initialization
+                            liftIO . runSpiderHost . runHostFrame $
+                                runReaderT ( framef initVal tickEvent) i
+                        )
+                        (frame timeRef tickTriggerRef)
                         (handleInput inputTriggerRef)
                         (handleResize resizeTriggerRef)
 
-        where frame bFrame timeRef tickTriggerRef initTriggerRef inval time1 _ =
+        where frame timeRef tickTriggerRef bFrame time1 _ =
                 do time0 <- liftIO . atomicModifyIORef timeRef $
                                                        \time0 -> (time1, time0)
                    let diff = if time0 == 0 then 0 else time1 - time0
-                   when (time0 == 0) . liftIO . withTrigger initTriggerRef $
-                        \trigger -> fireEvents [ trigger :=> Identity inval ]
                    liftIO . withTrigger tickTriggerRef $
                         \trigger -> fireEvents [ trigger :=> Identity diff ]
                    join . liftIO . runSpiderHost . runHostFrame $ sample bFrame

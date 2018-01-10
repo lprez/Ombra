@@ -4,9 +4,10 @@ module Main where
 
 import Control.Arrow
 import Control.Applicative
-import Data.Monoid (mconcat)
+import Data.Semigroup
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.Blend (transparency, withBlendMode)
+import Graphics.Rendering.Ombra.Draw.Mode
 import Graphics.Rendering.Ombra.Vector
 
 import Utils.Play (animation)
@@ -23,12 +24,45 @@ main = animation init render
 
 render :: BufferPair GVec4 -> Float -> Draw GVec4 ()
 render reflectionBuffers time =
-        do draw $ scene viewMat
-           withDepthTest False $
-                drawBuffers reflectionBuffers
-                            (draw $ scene mirrorViewMat)
-           withBlendMode (Just transparency) $
-                   draw $ water (gBuffer reflectionBuffers) viewMat light time
+        do let mode = commonMode False time
+               reflectionMode = commonMode True time
+           drawRoute $ sceneWithoutWater mode
+           drawBuffers reflectionBuffers $
+                   do clearColor >> clearDepth
+                      drawRoute $ sceneWithoutWater reflectionMode
+           drawRoute $ water (gBuffer reflectionBuffers) time mode
+        where sceneWithoutWater mode =    walls mode
+                                       <> rotatingCube time 0 mode
+                                       <> rotatingCube time 2.09 mode
+                                       <> rotatingCube time 4.19 mode
+
+-- | This is the type of root of all the other DrawModes.
+type CommonMode = DrawMode GHVertex3D   -- ^ The vertex shader output of the
+                                        -- children. It represents an already
+                                        -- transformed vertex, and the common
+                                        -- draw mode further transforms it by
+                                        -- applying the view matrix.
+
+                           GVertex3D    -- ^ The information passed from the
+                                        -- vertex shader to the fragment shader.
+
+                           ( GVertex3D
+                           , (GVec4, GSpecular)
+                           )            -- ^ The fragment shader output of the
+                                        -- children. That is, the computed
+                                        -- color, the specular parameters and
+                                        -- the output of the vertex shader.
+
+                           GVec4        -- ^ The final output of the DrawMode.
+                                        -- In this case, it's the output of
+                                        -- the fragment shader.
+
+commonMode :: Bool -> Float -> CommonMode
+commonMode reflection time =
+        if reflection
+        then mode (vertexShader mirrorViewMat) fragmentShader
+        else mode (vertexShader viewMat) fragmentShader
+
         where viewMat =     rotYMat4 (sin (time / 2) / 4)
                         .*. transMat4 (Vec3 0 0.5 (- 1.8))
               mirrorMat = reflectionMat4 (Vec4 0 1 0 (- 0.5))
@@ -39,67 +73,67 @@ render reflectionBuffers time =
                             , lightDiffuse = Vec3 0.7 0.7 0.7
                             , lightAttenuation = Vec3 0 0.12 0.1
                             }
-              scene viewMat = mconcat [ walls viewMat light
-                                      , rotatingCube viewMat light time 0
-                                      , rotatingCube viewMat light time 2.09
-                                      , rotatingCube viewMat light time 4.19
-                                      ]
+              vertexShader view = transform ~< view >>> perspective
+              fragmentShader = applyLight ~< light
 
-rotatingCube :: Mat4 -> Light -> Float -> Float -> Image GVec4
-rotatingCube view light time off =
-        image (transform ~< (view .*. transformMat) >>> first perspective)
-              (const color &&& id ^>> applyLight ~< (light, specular))
-              cube
-        where transformMat = let angle = time + off
-                                 scale = scaleMat4 (Vec3 0.2 0.2 0.2)
-                                 rot = rotYMat4 (time * 3)
-                                 trans = transMat4 $ Vec3 (sin angle)
-                                                          0.5
-                                                          (cos angle)
-                             in trans .*. scale .*. rot
+
+rotatingCube :: Float -> Float -> CommonMode -> DrawRoute GVec4
+rotatingCube time off = routeShader cube
+                                    (extendGVertex3D >>> transform ~< transMat)
+                                    (arr $ id &&& const (color, specular))
+        where angle = time + off
+              scale = scaleMat4 (Vec3 0.2 0.2 0.2)
+              rot = rotYMat4 (time * 3)
+              trans = transMat4 $ Vec3 (sin angle) 0.5 (cos angle)
+              transMat = trans .*. scale .*. rot
               color = GVec4 0.8 0.2 0 1
-              specular = Specular 4 1
+              specular = GSpecular 4 1
 
-walls :: Mat4 -> Light -> Image GVec4
-walls viewMat light = image (    transform ~< (viewMat .*. transformMat)
-                             >>> first perspective)
-                            (    applyTexture ~< tex &&& arr id
-                             >>> applyLight ~< (light, Specular 20 1))
-                            cube
-        where transformMat = scaleMat4 $ Vec3 2 2 2
+walls :: CommonMode -> DrawRoute GVec4
+walls = routeShader cube
+                    (extendGVertex3D >>> transform ~< scaleMat4 (Vec3 2 2 2))
+                    (arr id &&& (applyTexture ~< tex &&& arr (const specular)))
+        where specular = GSpecular 30 1
 
-water :: GBuffer GVec4 -> Mat4 -> Light -> Float -> Image GVec4
-water buffer viewMat light time =
-        image (transform ~< (viewMat .*. transformMat) >>> first perspective)
-              (    applyWater ~< (time * 2, buffer) &&& arr id
-               >>> applyLight ~< (light, specular))
-              cube
-        where transformMat =     transMat4 (Vec3 0 (-2) 0)
-                             .*. scaleMat4 (Vec3 2.01 1 2.01)
-              specular = Specular 1 0.5
+water :: GBuffer GVec4 -> Float -> CommonMode -> DrawRoute GVec4
+water buffer time =   route cube
+                    . blend (const transparency)
+                    . preVertex vertexShader 
+                    . preFragment fragmentShader
+        where transMat =     transMat4 (Vec3 0 (-2) 0)
+                         .*. scaleMat4 (Vec3 2.01 1 2.01)
+              specular = GSpecular 1 0.5
+              vertexShader = extendGVertex3D >>> transform ~< transMat
+              fragmentShader =     arr id &&& applyWater ~< (time * 2, buffer)
+                               >>^ second (arr $ id &&& const specular)
 
-transform :: VertexShader (GMat4, GVertex3D) (GVec4, GVertex3D)
-transform = sarr $ \(viewMat, GVertex3D pos norm uv) ->
-                        let pos' = viewMat .* (pos ^| 1)
-                            norm' = extract $ viewMat .* (norm ^| 0)
-                        in (pos', GVertex3D (extract pos') norm' uv)
+extendGVertex3D :: Shader s GVertex3D GHVertex3D
+extendGVertex3D = sarr $ \(GVertex3D pos norm uv) ->
+                        GHVertex3D (pos ^| 1) (norm ^| 0) uv
 
-perspective :: VertexShader GVec4 GVec4
-perspective = sarr (uncurry (.*)) ~< perspectiveMat4 0.1 10000 90 1
+transform :: VertexShader (GMat4, GHVertex3D) GHVertex3D
+transform = sarr $ \(transMat, GHVertex3D pos norm uv) ->
+                        GHVertex3D (transMat .* pos) (transMat .* norm) uv
+
+perspective :: VertexShader GHVertex3D (GVec4, GVertex3D)
+perspective =    sarr (\(mat, GHVertex3D pos norm uv) ->
+                        (mat .* pos, GVertex3D (extract pos) (extract norm) uv))
+              ~< perspectiveMat4 0.1 10000 90 1
 
 reverseNormal :: FragmentShader GVertex3D GVertex3D
 reverseNormal = farr $ \fragment (GVertex3D pos norm uv) ->
                         let factor = ifB (fragFrontFacing fragment) 1 (-1)
                         in GVertex3D pos (factor *^ norm) uv
 
-applyLight :: FragmentShader ((GLight, GSpecular), (GVec4, GVertex3D)) GVec4
-applyLight = shader $     second (second reverseNormal)
-                      >>> (lightInp >>> pointLight) &&& arr (fst . snd)
+applyLight :: FragmentShader (GLight, (GVertex3D, (GVec4, GSpecular))) GVec4
+applyLight = shader $     second (first reverseNormal)
+                      >>> lightColor &&& arr (fst . snd . snd)
                       >>^ (\(GVec3 lr lg lb, GVec4 r g b a) ->
                               clamp (GVec4 0 0 0 0) (GVec4 1 1 1 1) $
                                 GVec4 (lr * r) (lg * g) (lb * b) a)
-        where lightInp = arr $ \((gLight, gSpec), (_, GVertex3D pos norm _)) ->
-                                        (gLight, ((pos, norm), (1, gSpec)))
+        where lightColor = second (\(GVertex3D pos norm _, (_, specular)) ->
+                                        ((pos, norm), (1, specular)))
+                           ^>> pointLight
 
 applyTexture :: FragmentShader (TextureSampler, GVertex3D) GVec4
 applyTexture = sarr $ \(sampler, GVertex3D _ _ (GVec2 s t)) ->

@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, DataKinds #-}
+{-# LANGUAGE CPP, DataKinds, FlexibleContexts #-}
 
 #ifdef __GHCJS__
 {-# LANGUAGE OverloadedStrings, JavaScriptFFI, InterruptibleFFI #-}
@@ -13,7 +13,8 @@ module Utils.Play (
 import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Draw
 import Graphics.Rendering.Ombra.Shader (GVec4)
-import Control.Monad.IO.Class
+import Control.Monad.Base
+import Control.Monad.Trans.Control
 import Data.IORef
 import System.Exit (exitFailure)
 
@@ -48,31 +49,38 @@ foreign import javascript unsafe "$1.addEventListener($2, $3)"
 foreign import javascript unsafe "$1.clientX" clientX :: JSVal -> IO Int
 foreign import javascript unsafe "$1.clientY" clientY :: JSVal -> IO Int
 
-play :: Int
+play :: MonadBaseControl IO m
+     => Int
      -> Int
      -> Bool
-     -> Draw GVec4 a
-     -> (a -> Float -> (Int, Int) -> Draw GVec4 ())
+     -> DrawT GVec4 m a
+     -> (a -> Float -> (Int, Int) -> DrawT GVec4 m ())
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
-     -> IO ()
+     -> m ()
 play width height requireExts initialization frame inpCallback _ =
-        do canvas <- query "canvas"
-           ctx <- makeContext canvas
-           width <- getWidth canvas
-           height <- getHeight canvas
-           inpCtl <- mkInputControl canvas inpCallback
+        do canvas <- liftBase $ query "canvas"
+           ctx <- liftBase $ makeContext canvas
+           width <- liftBase $ getWidth canvas
+           height <- liftBase $ getHeight canvas
+           inpCtl <- liftBase $ mkInputControl canvas inpCallback
 
-           mextError <- checkExtensions requireExts ctx
+           mextError <- liftBase $ checkExtensions requireExts ctx
            case mextError of
-                Just extError -> alert (fromString extError) >> exitFailure
+                Just extError -> liftBase $ do alert (fromString extError)
+                                               exitFailure
                 Nothing -> return ()
 
-           runDraw width height ctx $
-                do inval <- initialization
-                   loop $ \t -> do clearColor >> clearDepth
-                                   frame inval (realToFrac t) (width, height)
-        where loop a = do t <- liftIO waitFrame
+           runDrawT (do inval <- initialization
+                         loop $ \t -> do clearColor >> clearDepth
+                                         frame inval
+                                               (realToFrac t)
+                                               (width, height)
+                    )
+                    ctx
+                    width
+                    height
+        where loop a = do t <- liftBase waitFrame
                           a $ t / 1000
                           loop a
 
@@ -85,49 +93,57 @@ import Graphics.Rendering.Ombra.Backend.OpenGL
 import Graphics.UI.GLFW as G
 import System.Mem (performMinorGC)
 
-play :: Int
+play :: MonadBaseControl IO m
+     => Int
      -> Int
      -> Bool
-     -> Draw GVec4 a
-     -> (a -> Float -> (Int, Int) -> Draw GVec4 ())
+     -> DrawT GVec4 m a
+     -> (a -> Float -> (Int, Int) -> DrawT GVec4 m ())
      -> (InputEvent -> IO ())
      -> ((Int, Int) -> IO ())
-     -> IO ()
+     -> m ()
 play width height requireExts initialize frame inpCallback sizeCallback =
-        do w <- initWindow
-           ctx <- makeContext
-           t0 <- getCurrentTime
-           inpCtl <- mkInputControl w inpCallback
-           sizeRef <- newIORef Nothing
+        do w <- liftBase initWindow
+           ctx <- liftBase makeContext
+           t0 <- liftBase getCurrentTime
+           inpCtl <- liftBase $ mkInputControl w inpCallback
+           sizeRef <- liftBase $ newIORef Nothing
 
-           mextError <- checkExtensions requireExts ctx
+           mextError <- liftBase $ checkExtensions requireExts ctx
            case mextError of
-                Just extError -> putStrLn extError >> exitFailure
+                Just extError -> liftBase $ putStrLn extError >> exitFailure
                 Nothing -> return ()
 
-           setWindowSizeCallback w . Just $ \_ width' height' ->
+           liftBase . setWindowSizeCallback w . Just $ \_ width' height' ->
                    do writeIORef sizeRef $ Just (width', height')
                       sizeCallback (width', height')
 
-           runDraw width height ctx $ initialize >>= \inval -> loop t0 $ \t ->
-                do clearColor >> clearDepth
-                   resized <- liftIO . atomicModifyIORef sizeRef $ (,) Nothing
-                   case resized of
-                        Just size -> do resizeViewport (0, 0) size
-                                        frame inval t size
-                        Nothing -> do (width, height) <- liftIO $ getWindowSize w
-                                      frame inval t (width, height)
+           let size = (width, height)
+           runDrawT (initialize >>= \inval -> loop t0 $ \t ->
+                        do clearColor >> clearDepth
+                           resized <- liftBase . atomicModifyIORef sizeRef $
+                                          (,) Nothing
+                           case resized of
+                                Just size -> do resizeViewport (0, 0) size
+                                                frame inval t size
+                                Nothing -> do size <- liftBase $ getWindowSize w
+                                              let (width, height) = size
+                                              frame inval t (width, height)
 
-                   (width', height') <- liftIO $ getWindowSize w
-                   liftIO $ performMinorGC >> swapBuffers w
-        where loop t0 a = do t <- liftIO $ getCurrentTime
+                           (width', height') <- liftBase $ getWindowSize w
+                           liftBase $ performMinorGC >> swapBuffers w
+                    )
+                    ctx
+                    width
+                    height
+        where loop t0 a = do t <- liftBase $ getCurrentTime
                              a . realToFrac $ diffUTCTime t t0
-                             tf <- liftIO $ getCurrentTime
+                             tf <- liftBase $ getCurrentTime
                              let diff = realToFrac $ diffUTCTime tf t
                                  delaySec = max 0 $ maxDelay - diff
                                  delay = floor $ delaySec * 1000000
-                             liftIO pollEvents
-                             liftIO . threadDelay $ delay
+                             liftBase pollEvents
+                             liftBase . threadDelay $ delay
                              loop t0 a
 
               maxDelay = 0.03 :: Float
