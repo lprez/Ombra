@@ -16,18 +16,20 @@ module Graphics.Rendering.Ombra.Geometry (
         Line(..),
         Triangle(..),
         mkGeometry,
-        mapVertices,
+        mapGeometry,
         foldGeometry,
+        foldMapGeometry,
         decompose,
         -- * Geometry builder
         Attributes,
-        AttrVertex,
+        IndVertex,
         GeometryBuilder,
         GeometryBuilderT,
         vertex,
         point,
         line,
         triangle,
+        autoElements,
         buildGeometry,
         buildGeometryT,
         -- *
@@ -35,6 +37,7 @@ module Graphics.Rendering.Ombra.Geometry (
         ElementType
 ) where
 
+import Control.Applicative
 import Control.Monad.Trans.State
 import Data.Foldable (toList, foldlM, foldrM)
 import qualified Data.Hashable as H
@@ -48,6 +51,9 @@ import Graphics.Rendering.Ombra.Geometry.Types
 import Graphics.Rendering.Ombra.Internal.TList (Remove, Append)
 import Graphics.Rendering.Ombra.Shader.CPU
 import Graphics.Rendering.Ombra.Vector
+
+-- | A vertex inside of a 'Geometry'.
+type IndVertex g = AttrVertex (AttributeTypes g)
 
 rehashGeometry :: Geometry e g -> Geometry e g
 rehashGeometry g = let Elements elemsHash _ = elements g
@@ -71,7 +77,7 @@ foldAttrVertices f acc cell@(AttrCell _ _ down) =
 addVertex :: GeometryVertex g
           => VertexAttributes (AttributeTypes g)
           -> Geometry e g
-          -> (AttrVertex (AttributeTypes g), Geometry e g)
+          -> (IndVertex g, Geometry e g)
 addVertex v g =
         let top' = addTop v $ top g
             topHash = H.hash top'
@@ -85,8 +91,8 @@ addVertex v g =
                                 }
            )
 
-addElement :: (GeometryVertex g, H.Hashable (e (AttrVertex (AttributeTypes g))))
-           => e (AttrVertex (AttributeTypes g))
+addElement :: (GeometryVertex g, H.Hashable (e (IndVertex g)))
+           => e (IndVertex g)
            -> Geometry e g
            -> Geometry e g
 addElement t g = let Elements h ts = elements g
@@ -97,34 +103,33 @@ addElement t g = let Elements h ts = elements g
 -- | Create a new vertex that can be used in 'triangle', 'line' and 'point'.
 vertex :: (Monad m, GeometryVertex g)
        => Vertex g
-       -> GeometryBuilderT e g m (AttrVertex (AttributeTypes g))
+       -> GeometryBuilderT e g m (IndVertex g)
 vertex = GeometryBuilderT . state . addVertex . toVertexAttributes
 
 -- | Add a point to the current geometry.
 point :: (Monad m, GeometryVertex g)
-      => AttrVertex (AttributeTypes g)
+      => IndVertex g
       -> GeometryBuilderT Point g m ()
 point x = GeometryBuilderT . state $ \g -> ((), addElement (Point x) g)
 
 -- | Add a line to the current geometry.
 line :: (Monad m, GeometryVertex g)
-     => AttrVertex (AttributeTypes g)
-     -> AttrVertex (AttributeTypes g)
+     => IndVertex g
+     -> IndVertex g
      -> GeometryBuilderT Line g m ()
 line x y = GeometryBuilderT . state $ \g -> ((), addElement t g)
         where t = Line x y
 
 -- | Add a triangle to the current geometry.
 triangle :: (Monad m, GeometryVertex g)
-         => AttrVertex (AttributeTypes g)
-         -> AttrVertex (AttributeTypes g)
-         -> AttrVertex (AttributeTypes g)
+         => IndVertex g
+         -> IndVertex g
+         -> IndVertex g
          -> GeometryBuilderT Triangle g m ()
 triangle x y z = GeometryBuilderT . state $ \g -> ((), addElement t g)
         where t = Triangle x y z
 
--- | Create a 'Geometry' using the 'GeometryBuilder' monad. This is more
--- efficient than 'mkGeometry'.
+-- | Create a 'Geometry' using the 'GeometryBuilder' monad.
 buildGeometry :: GeometryVertex g => GeometryBuilder e g () -> Geometry e g
 buildGeometry (GeometryBuilderT m) = execState m emptyGeometry
 
@@ -134,14 +139,34 @@ buildGeometryT :: (Monad m, GeometryVertex g)
 buildGeometryT (GeometryBuilderT m) = execStateT m emptyGeometry
 
 -- | Create a 'Geometry' using a list of points, lines or triangles.
+--
+-- @
+-- mkGeometry es = 'buildGeometry' (() <$ 'autoElements' es)
+-- @
 mkGeometry :: ( GLES
               , GeometryVertex g
               , ElementType e
-              , H.Hashable (e (AttrVertex (AttributeTypes g)))
+              , H.Hashable (e (IndVertex g))
               )
            => [e (Vertex g)]    -- ^ List of elements.
            -> Geometry e g
-mkGeometry t = buildGeometry (foldlM add H.empty t >> return ())
+mkGeometry es = buildGeometry (() <$ autoElements es)
+
+-- | Add a list of elements with their vertices to the current geometry. It
+-- checks for duplicate vertices inside the list, therefore it is slower than
+-- adding all the vertices and elements manually, but automatically generates
+-- the least amount of vertices possible. The returned function lets you
+-- retrieve the generated vertices.
+autoElements :: ( GLES
+                , Monad m
+                , GeometryVertex g
+                , ElementType e
+                , H.Hashable (e (IndVertex g))
+                )
+             => [e (Vertex g)]  -- ^ List of elements.
+             -> GeometryBuilderT e g m (Vertex g -> Maybe (IndVertex g))
+autoElements =   fmap (\m -> flip H.lookup m . toVertexAttributes)
+               . foldlM add H.empty
         where add verts e =
                 do vsavs <- foldrM (\v (verts, avs) ->
                                         do let attrs = toVertexAttributes v
@@ -158,6 +183,7 @@ mkGeometry t = buildGeometry (foldlM add H.empty t >> return ())
                      Nothing -> do av <- vertex $ fromVertexAttributes v
                                    return (H.insert v av vertices, av)
 
+
 attrVertexToVertex :: Attributes is => AttrVertex is -> VertexAttributes is
 attrVertexToVertex (AttrVertex _ tab) = rowToVertexAttributes tab
 
@@ -169,7 +195,7 @@ decompose g@(Geometry _ _ _ (Elements _ elems) _) =
 type AttrVertexMap is v = H.HashMap (AttrVertex is) v
 
 -- | Transform each vertex of a geometry.
-mapVertices :: (GLES, GeometryVertex g, GeometryVertex g', ElementType e)
+mapGeometry :: (GLES, GeometryVertex g, GeometryVertex g', ElementType e)
             => (e (Vertex g) -> a)            -- ^ Value to associate to each
                                               -- element.
             -> ([a] -> Vertex g -> Vertex g') -- ^ The first argument is the
@@ -178,29 +204,48 @@ mapVertices :: (GLES, GeometryVertex g, GeometryVertex g', ElementType e)
                                               -- to.
             -> Geometry e g
             -> Geometry e g'
-mapVertices valf f = 
-        let addValue elem valMap = let val = valf $ fmap ( fromVertexAttributes
-                                                         . attrVertexToVertex
-                                                         ) elem
-                                   in foldr (flip (H.insertWith (++)) [val])
-                                            valMap
-                                            (toList elem)
-            mapVertex valMap avert _ = let attrs = attrVertexToVertex avert
-                                           vert = fromVertexAttributes attrs
-                                           vert' = f (valMap H.! avert) vert
-                                           attrs' = toVertexAttributes vert'
-                                       in ((), attrs')
-        in snd . modifyVertices addValue mapVertex H.empty ()
+mapGeometry valf vf = snd . foldMapGeometry (\e _ -> (valf e, ()))
+                                            (\a _ v _ -> (vf a v, ()))
+                                            ()
+                                            ()
+
+-- | Fold elements, then map and fold vertices using the previously accumulated
+-- value.
+foldMapGeometry :: (GLES, GeometryVertex g, GeometryVertex g', ElementType e)
+                => (e (Vertex g) -> eacc -> (a, eacc))
+                -> ([a] -> eacc -> Vertex g -> vacc -> (Vertex g', vacc))
+                -> eacc
+                -> vacc
+                -> Geometry e g
+                -> ((eacc, vacc), Geometry e g')
+foldMapGeometry ef vf eacc vacc = 
+        let accElems aelem (valMap, eacc) =
+                    let (val, eacc') = ef elem eacc
+                        elem = fmap ( fromVertexAttributes
+                                    . attrVertexToVertex
+                                    ) aelem
+                        valMap' = foldr (flip (H.insertWith (++)) [val])
+                                        valMap
+                                        (toList aelem)
+                    in (valMap', eacc')
+            accVerts (valMap, eacc) avert vacc =
+                    let attrs = attrVertexToVertex avert
+                        vert = fromVertexAttributes attrs
+                        (vert', vacc') = vf (valMap H.! avert) eacc vert vacc
+                        attrs' = toVertexAttributes vert'
+                    in (vacc', attrs')
+            removeValMap (((_, eacc'), vacc'), g') = ((eacc', vacc'), g')
+        in removeValMap . modifyVertices accElems accVerts (H.empty, eacc) vacc
 
 -- | Fold elements and then vertices.
-foldGeometry :: forall g e vacc eacc. (GLES, GeometryVertex g, ElementType e)
+foldGeometry :: (GLES, GeometryVertex g, ElementType e)
              => (e (Vertex g) -> eacc -> eacc)
              -> (eacc -> Vertex g -> vacc -> vacc)
              -> eacc
              -> vacc
              -> Geometry e g
              -> (eacc, vacc)
-foldGeometry ef vf eacc vacc g =
+foldGeometry ef vf (eacc :: eacc) (vacc :: vacc) (g :: Geometry e g) =
         let accElems e = ef $ fmap (fromVertexAttributes . attrVertexToVertex) e
             accVerts eacc av vacc = let v = attrVertexToVertex av
                                         vacc' = vf eacc
@@ -211,13 +256,11 @@ foldGeometry ef vf eacc vacc g =
                                 :: ((eacc, vacc), Geometry e g)
         in accs'
 
--- | Fold triangles, then map and fold vertices using the previously accumulated
--- value.
 modifyVertices :: forall e eacc vacc g g'.
                   (GLES, GeometryVertex g, GeometryVertex g', ElementType e)
-               => (e (AttrVertex (AttributeTypes g)) -> eacc -> eacc)
+               => (e (IndVertex g) -> eacc -> eacc)
                -> (   eacc
-                   -> AttrVertex (AttributeTypes g)
+                   -> IndVertex g
                    -> vacc
                    -> (vacc, VertexAttributes (AttributeTypes g'))
                   )
