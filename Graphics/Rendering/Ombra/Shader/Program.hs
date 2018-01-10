@@ -4,13 +4,12 @@
              TypeSynonymInstances, FlexibleContexts, DefaultSignatures #-}
 
 module Graphics.Rendering.Ombra.Shader.Program (
-        MonadProgram(..),
         LoadedProgram(..),
         Program,
         ProgramIndex,
         program,
         UniformLocation(..),
-        programIndex
+        setUniform
 ) where
 
 import Data.Hashable
@@ -45,13 +44,14 @@ instance Hashable LoadedProgram where
 instance Eq LoadedProgram where
         (LoadedProgram _ _ h) == (LoadedProgram _ _ h') = h == h'
 
-instance GLES => Resource (Program g i) LoadedProgram GL where
+instance (GLES, MonadGL m) => MonadLoad (Program g i) LoadedProgram m where
         -- TODO: err check!
-        loadResource i = loadProgram i
-        unloadResource _ (LoadedProgram p _ _) = deleteProgram p
+        loadResource i = gl $ loadProgram i
+        unloadResource _ (LoadedProgram p _ _) = gl $ deleteProgram p
 
-instance GLES => Resource (LoadedProgram, UniformID) UniformLocation GL where
-        loadResource (LoadedProgram prg _ _, g) =
+instance (GLES, MonadGL m) => MonadLoad (LoadedProgram, UniformID)
+                                        UniformLocation m where
+        loadResource (LoadedProgram prg _ _, g) = gl $
                 do loc <- getUniformLocation prg . toGLString $ uniformName g
                    return . Right $ UniformLocation loc
         unloadResource _ _ = return ()
@@ -64,36 +64,6 @@ program :: (ShaderInput i, ShaderInput v, FragmentShaderOutput o)
 program vs fs = let (vss, (uid, attrs)) = compileVertexShader vs
                     fss = compileFragmentShader uid fs
                 in Program (vss, attrs) fss (hash (vs, fs))
-
-programIndex :: Program gs is -> ProgramIndex
-programIndex (Program _ _ h) = ProgramIndex h
-
-class (GLES, Monad m) => MonadProgram m where
-        setProgram :: Program i o -> m ()
-        getUniform :: UniformID -> m (Either String UniformLocation)
-        setUniform :: BaseUniform g => UniformID -> proxy g -> CPUBase g -> m ()
-        default setUniform :: (MonadGL m, BaseUniform g)
-                           => UniformID
-                           -> proxy g
-                           -> CPUBase g
-                           -> m ()
-        setUniform uid g val = getUniform uid >>= \eu ->
-                case eu of
-                     Right (UniformLocation l) -> gl $ setBaseUniform l g val
-                     Left _ -> return ()
-
-{-
-setUniformValue :: (MonadProgram m, ShaderVar g, BaseUniform g)
-                => proxy (s :: CPUSetterType *)
-                -> g
-                -> CPUBase g
-                -> m ()
-setUniformValue p g c = withUniforms p g c $ \n ug uc ->
-        getUniform (uniformName g n) >>= \eu ->
-                case eu of
-                     Right (UniformLocation l) -> gl $ setUniform l ug uc
-                     Left _ -> return ()
--}
 
 loadProgram :: GLES => Program g i -> GL (Either String LoadedProgram)
 loadProgram (Program (vss, attrs) fss h) =
@@ -144,3 +114,18 @@ loadSource ty src =
            shaderSource shader $ toGLString src
            compileShader shader
            return shader
+
+setUniform :: ( MonadGL m
+              , MonadResource (LoadedProgram, UniformID) UniformLocation m
+              , BaseUniform g
+              )
+           => LoadedProgram
+           -> UniformID
+           -> proxy g
+           -> CPUBase g
+           -> m ()
+setUniform prg uid g val =
+        getResource' (Just prg) (prg, uid) >>= \eu ->
+                case eu of
+                     Right (UniformLocation l) -> gl $ setBaseUniform l g val
+                     Left _ -> return ()

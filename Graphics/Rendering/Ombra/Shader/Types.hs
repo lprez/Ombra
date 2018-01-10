@@ -140,6 +140,14 @@ data UniformValue = forall g. BaseUniform g => UniformValue (Proxy g)
                                                             (CPUBase g)
                   | UniformTexture Texture
 
+instance GLES => Eq UniformValue where
+        UniformValue _ c == UniformValue _ c' = hash c == hash c'
+        UniformTexture t == UniformTexture t' = t == t'
+
+instance GLES => Hashable UniformValue where
+        hashWithSalt salt (UniformValue _ c) = hash c
+        hashWithSalt salt (UniformTexture t) = hash t
+
 data ShaderState = ShaderState UniformID
                                [(UniformID, UniformValue)]
                                [Texture]

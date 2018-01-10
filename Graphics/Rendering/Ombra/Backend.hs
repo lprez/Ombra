@@ -38,7 +38,9 @@ type GLTypes enum uint int size ptrdiff texture program =
       , Eq size
       , Eq texture
       , Eq program
+      , Ord texture
       , Hashable program
+      , Hashable texture
       )
 
 -- | Instances of this class are implementations of the OpenGL API.

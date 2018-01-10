@@ -1,43 +1,59 @@
 {-# LANGUAGE GADTs, DataKinds, FlexibleContexts, TypeSynonymInstances,
              FlexibleInstances, MultiParamTypeClasses, KindSignatures,
-             GeneralizedNewtypeDeriving, RankNTypes, TypeOperators, CPP,
+             GeneralizedNewtypeDeriving, StandaloneDeriving, TypeOperators, CPP,
              ScopedTypeVariables, UndecidableInstances, TypeFamilies #-}
 
 module Graphics.Rendering.Ombra.Draw.Monad (
+        DrawT,
         Draw,
-        DrawState,
-        ResStatus(..),
         Buffer(..),
-        drawState,
-        drawInit,
-        clearColor,
-        clearDepth,
-        clearStencil,
+        runDrawT,
+        {-
         preloadGeometry,
         preloadTexture,
         preloadProgram,
+        -- TODO:
         removeGeometry,
         removeTexture,
         removeProgram,
         checkGeometry,
         checkTexture,
         checkProgram,
-        textureSize,
         setProgram,
-        resizeViewport,
-        evalDraw,
-        gl,
-        drawGet
+        -}
 ) where
+
+import Data.Hashable
+import qualified Data.HashMap.Lazy as H
+import qualified Data.HashSet as HS
+import Data.Maybe
+import Data.Proxy
+import qualified Data.Set as S
+import Data.Word
+import Control.Applicative
+import Control.Monad
+import Control.Monad.Base
+import Control.Monad.Cont
+import Control.Monad.Fail
+import Control.Monad.Zip
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.RWS
+import Control.Monad.State hiding (state)
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Control
+import Control.Monad.Trans.Class
 
 import qualified Graphics.Rendering.Ombra.Blend.Draw as Blend
 import qualified Graphics.Rendering.Ombra.Blend.Types as Blend
 import Graphics.Rendering.Ombra.Color
-import Graphics.Rendering.Ombra.Culling.Draw
-import Graphics.Rendering.Ombra.Culling.Types
+import Graphics.Rendering.Ombra.Culling
 import Graphics.Rendering.Ombra.Draw.Class
+import Graphics.Rendering.Ombra.Draw.State
 import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.Geometry.Draw
+import Graphics.Rendering.Ombra.Geometry.Types
+import Graphics.Rendering.Ombra.OutBuffer (gBuffer, depthBuffer)
 import Graphics.Rendering.Ombra.OutBuffer.Types
 import Graphics.Rendering.Ombra.Texture
 import Graphics.Rendering.Ombra.Texture.Draw
@@ -49,8 +65,10 @@ import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, Buffer,
                                                     drawBuffers, clearColor,
                                                     clearDepth, clearStencil)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
+import Graphics.Rendering.Ombra.Internal.SM (initial)
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Screen
+import Graphics.Rendering.Ombra.Shader (TextureSampler)
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Shader.Types
@@ -58,65 +76,88 @@ import qualified Graphics.Rendering.Ombra.Stencil.Draw as Stencil
 import qualified Graphics.Rendering.Ombra.Stencil.Types as Stencil
 import Graphics.Rendering.Ombra.Vector
 
-import Data.Hashable
-import Data.Proxy
-import Data.Word
-import Control.Monad
-import Control.Monad.Base
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Control
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.State
-
--- | The state of the 'Draw' monad.
-data DrawState = DrawState
-        { currentFrameBuffer :: FrameBuffer
-        , currentProgram :: Maybe ProgramIndex
-        , loadedProgram :: Maybe LoadedProgram
-        , programs :: ResMap LoadedProgram
-        , uniforms :: ResMap UniformLocation
-        , elemBuffers :: ResMap LoadedBuffer
-        , attributes :: ResMap LoadedAttribute
-        , geometries :: ResMap LoadedGeometry
-        , textureImages :: ResMap LoadedTexture
-        , activeTextures :: Int
-        -- , textureCache :: [LoadedTexture]
-        , viewportSize :: ((Int, Int), (Int, Int))
-        , blendMode :: Maybe Blend.Mode
-        , stencilMode :: Maybe Stencil.Mode
-        , cullFace :: Maybe CullFace
-        , depthTest :: Bool
-        , depthMask :: Bool
-        , colorMask :: (Bool, Bool, Bool, Bool)
-        }
+data ExtDrawState o = ExtDrawState { ctx :: Ctx
+                                   , activeTextures :: H.HashMap Texture Int
+                                   , activeTexturesHoles :: S.Set Int
+                                   , loadedProgram :: Maybe LoadedProgram
+                                   , defaultFrameBuffer :: FrameBuffer
+                                   , targetFrameBuffer :: Maybe FrameBuffer
+                                   , defaultViewport :: ((Int, Int), (Int, Int))
+                                   , targetViewport :: ((Int, Int), (Int, Int))
+                                   , drawState :: DrawState o
+                                   }
 
 data Buffer = ColorBuffer
             | DepthBuffer
             | StencilBuffer
 
--- | An implementation of 'MonadDraw' and 'MonadDrawBuffers'.
-newtype Draw o a = Draw { unDraw :: StateT DrawState GL a }
+type Draw o = DrawT o IO
+
+newtype DrawT o m a = DrawT
+        { unDrawT :: StateT (ExtDrawState o)
+                            (Resource3T LoadedTexture
+                                        LoadedProgram
+                                        LoadedGeometry
+                                        (Resource3T LoadedBuffer
+                                                    LoadedAttribute
+                                                    UniformLocation
+                                                    m))
+                            a
+        }
         deriving ( Functor
                  , Applicative
+                 , Alternative
                  , Monad
+                 , MonadFix
+                 , MonadFail
                  , MonadIO
-                 , MonadBase IO
-#if __GLASGOW_HASKELL__ >= 802
-                 , MonadBaseControl IO
-                 )
-#else
+                 , MonadPlus
                  )
 
-instance MonadBaseControl IO (Draw o) where
-        type StM (Draw o) a = ComposeSt (StateT DrawState) GL a
-        liftBaseWith f = Draw $ liftBaseWith $ \tf -> f (tf . unDraw)
-        restoreM = Draw . restoreM
-#endif
+deriving instance MonadCont m => MonadCont (DrawT o m)
+deriving instance MonadRWS r w s m => MonadRWS r w s (DrawT o m)
+deriving instance MonadReader r m => MonadReader r (DrawT o m)
+deriving instance (MonadWriter w m, Monoid w) => MonadWriter w (DrawT o m)
+deriving instance MonadError e m => MonadError e (DrawT o m)
 
-instance (FragmentShaderOutput o, GLES) => MonadDraw o Draw where
+instance MonadState s m => MonadState s (DrawT o m) where
+        get = DrawT . lift . lift . lift $ get
+        put = DrawT . lift . lift . lift . put
+        state = DrawT . lift . lift . lift . state
+
+instance MonadBase b m => MonadBase b (DrawT o m) where
+        liftBase = liftBaseDefault
+
+instance MonadTrans (DrawT o) where
+        lift = DrawT . lift . lift . lift
+
+instance MonadTransControl (DrawT o) where
+        type StT (DrawT o) a =
+                StT (Resource3T LoadedTexture LoadedProgram LoadedGeometry)
+                    (StT (Resource3T LoadedBuffer LoadedAttribute
+                                     UniformLocation)
+                         (StT (StateT (ExtDrawState o)) a))
+        liftWith f = DrawT $ liftWith $ \run0 -> liftWith $ \run1 ->
+                        liftWith $ \run2 -> f $ run2 . run1 . run0 . unDrawT
+        restoreT = DrawT . restoreT . restoreT . restoreT
+
+instance MonadBaseControl b m => MonadBaseControl b (DrawT o m) where
+        type StM (DrawT o m) a = ComposeSt (DrawT o) m a
+        liftBaseWith = defaultLiftBaseWith
+        restoreM = defaultRestoreM
+
+instance MonadBase IO m => MonadGL (DrawT o m) where
+        gl a = ctx <$> DrawT get >>= liftBase . runReaderT (unGL a)
+
+instance (FragmentShaderOutput o, MonadBaseControl IO m, GLES) =>
+        MonadDraw o (DrawT o m) where
+        type BufferDraw o' (DrawT o m) = DrawT o' m
+        foldDraw = mapM_ (switchState True)
+        {-
         withColorMask m a = stateReset colorMask setColorMask m a
         withDepthTest d a = stateReset depthTest setDepthTest d a
         withDepthMask m a = stateReset depthMask setDepthMask m a
+        -}
         clearColor = clearBuffers [ColorBuffer]
         clearColorWith (Vec4 r g b a) = gl $ do GL.clearColor (realToFrac r)
                                                               (realToFrac g)
@@ -132,17 +173,6 @@ instance (FragmentShaderOutput o, GLES) => MonadDraw o Draw where
         clearStencilWith value = gl $ do GL.clearStencil $ fromIntegral value
                                          clearBuffers [StencilBuffer]
                                          GL.clearStencil 0
-
-instance GLES => MonadDrawBuffers Draw where
-        {-
-        drawBuffers w h gBuffer depthBuffer draw cont =
-                do (ret, (newGBuffer, gBuffer'), (newDepthBuffer, depthBuffer'))
-                        <- permanentDrawBuffers w h gBuffer depthBuffer draw
-                   ret' <- cont gBuffer' depthBuffer' ret
-                   when newGBuffer $ unusedTextures (textures gBuffer')
-                   when newDepthBuffer $ unusedTextures (textures depthBuffer')
-                   return ret'
-        -}
         createBuffers w h gBufferInfo depthBufferInfo draw =
                 do (ret, gBuffer, depthBuffer) <-
                         drawBuffers' w h
@@ -178,386 +208,320 @@ instance GLES => MonadDrawBuffers Draw where
                                                draw
                    return ret
 
-instance GLES => MonadRead GVec4 Draw where
+instance (GLES, MonadBaseControl IO m) => MonadRead GVec4 (DrawT GVec4 m) where
         readColor = flip readPixels gl_RGBA
         readColorFloat = flip readPixels gl_RGBA
         readDepth = flip readPixels gl_DEPTH_COMPONENT
         readDepthFloat = flip readPixels gl_DEPTH_COMPONENT
         readStencil = flip readPixels gl_STENCIL_INDEX
 
-instance GLES => MonadScreen (Draw o) where
-        currentViewport = viewportSize <$> Draw get
+instance (GLES, MonadBase IO m) => MonadScreen (DrawT o m) where
+        currentViewport = targetViewport <$> DrawT get
         resizeViewport p w = do setViewport p w
-                                Draw . modify $ \s ->
-                                        s { viewportSize = (p, w) }
-instance GLES => MonadProgram (Draw o) where
-        setProgram p = withProgram p $ \(LoadedProgram glp _ _) ->
-                                                gl $ useProgram glp
-        getUniform id = do mprg <- loadedProgram <$> Draw get
-                           case mprg of
-                                Just prg -> do map <- uniforms <$> Draw get
-                                               gl $ getResource' (Just prg)
-                                                                 (prg, id)
-                                                                 map
-                                Nothing -> return $ Left "No loaded program."
+                                s <- DrawT get
+                                let s' = s { targetViewport = (p, w) }
+                                if isNothing (targetFrameBuffer s)
+                                then DrawT . put $
+                                        s' { defaultViewport = (p, w) }
+                                else DrawT . put $ s'
+                                        
 
-instance GLES => MonadCulling (Draw o) where
-        withCulling face a = stateReset cullFace setCullFace face a
+instance (GLES, MonadBaseControl IO m, GeometryVertex g, ElementType e) =>
+        MonadResource (Geometry e g) LoadedGeometry (DrawT o m) where
+        getResource' k i = inGL . DrawT . lift $ getResource' k i
 
-instance GLES => Blend.MonadBlend (Draw o) where
-        withBlendMode m a = stateReset blendMode setBlendMode m a
+instance (GLES, MonadBaseControl IO m) =>
+        MonadResource TextureImage LoadedTexture (DrawT o m) where
+        getResource' k i = inGL . DrawT . lift $ getResource' k i
 
-instance GLES => Stencil.MonadStencil (Draw o) where
-        withStencilMode m a = stateReset stencilMode setStencilMode m a
+instance (GLES, MonadBaseControl IO m) =>
+        MonadResource (Program g i) LoadedProgram (DrawT o m) where
+        getResource' k i = inGL . DrawT . lift $ getResource' k i
 
-instance GLES => MonadTexture (Draw o) where
-        getTexture (TextureLoaded l) = return $ Right l
-        getTexture (TextureImage t) = getTextureImage t
-        withActiveTextures =
-                defaultWithActiveTextures (activeTextures <$> Draw get)
-                                          (\n -> Draw . modify  $ \s ->
-                                                s { activeTextures = n })
-        newTexture w h params i initialize =
-                gl $ do t <- emptyTexture params
-                        initialize t
-                        return $ LoadedTexture w' h' i t
-                {-
-                do cache <- textureCache <$> Draw get
-                   let (c1, c2) = flip break cache $
-                                        \(LoadedTexture cw ch i' t) ->
-                                                w' == cw && h' == ch && i == i'
-                   case c2 of
-                        [] -> gl $ do t <- emptyTexture params
-                                      initialize t
-                                      return $ LoadedTexture w' h' i t
-                        (lt : c2') -> do Draw . modify $ \s ->
-                                                s { textureCache = c1 ++ c2' }
-                                         return lt
-                -}
-                where (w', h') = (fromIntegral w, fromIntegral h)
-        {-
-        unusedTextures ts =
-                do cache <- textureCache <$> Draw get
-                   let (cache', excess) = splitAt textureCacheMaxSize
-                                                  (ts ++ cache)
-                   Draw . modify $ \s -> s { textureCache = cache' }
-                   mapM_ (removeTexture . TextureLoaded) excess
-        -}
+instance (GLES, MonadBaseControl IO m, ElementType e) =>
+        MonadResource (Elements e is) LoadedBuffer (DrawT o m) where
+        getResource' k i = inGL . DrawT . lift . lift $ getResource' k i
 
-instance GLES => MonadGeometry (Draw o) where
-        getAttribute = getDrawResource gl attributes
-        getElementBuffer = getDrawResource gl elemBuffers
-        getGeometry = getDrawResource id geometries
+instance (GLES, MonadBaseControl IO m) =>
+        MonadResource AttributeData LoadedAttribute (DrawT o m) where
+        getResource' k i = inGL . DrawT . lift . lift $ getResource' k i
 
-instance MonadGL (Draw o) where
-        gl = Draw . lift
+instance (GLES, MonadBaseControl IO m) =>
+        MonadResource (LoadedProgram, UniformID)
+                      UniformLocation (DrawT o m) where
+        getResource' k i = inGL . DrawT . lift . lift $ getResource' k i
 
--- | Create a 'DrawState'.
-drawState :: GLES
-          => Int         -- ^ Viewport width
-          -> Int         -- ^ Viewport height
-          -> DrawState
-drawState w h = DrawState { currentFrameBuffer = noFramebuffer
-                          , currentProgram = Nothing
-                          , loadedProgram = Nothing
-                          -- , textureCache = []
-                          , activeTextures = 0
-                          , viewportSize = ((0, 0), (w, h))
-                          , blendMode = Nothing
-                          , depthTest = True
-                          , depthMask = True
-                          , stencilMode = Nothing
-                          , cullFace = Nothing
-                          , colorMask = (True, True, True, True)
-                          , programs = err
-                          , elemBuffers = err
-                          , attributes = err
-                          , geometries = err
-                          , uniforms = err
-                          , textureImages = err
-                          }
-        where err = error "Call drawInit first"
+inGL :: MonadBase IO m => DrawT o GL a -> DrawT o m a
+inGL a = do c <- ctx <$> DrawT get
+            mapDrawT (liftBase . flip runReaderT c . unGL) a
 
--- | Initialize the render engine.
-drawInit :: GLES => Draw GVec4 ()
-drawInit = do programs <- liftIO newResMap
-              elemBuffers <- liftIO newResMap
-              attributes <- liftIO newResMap
-              geometries <- liftIO newResMap
-              uniforms <- liftIO newResMap
-              textureImages <- liftIO newResMap
+mapDrawT :: (m (a, ExtDrawState o) -> n (b, ExtDrawState o))
+         -> DrawT o m a
+         -> DrawT o n b
+mapDrawT f = DrawT . mapStateT (mapResource3T (mapResource3T f)) . unDrawT
 
-              ((x, y), (w, h)) <- viewportSize <$> Draw get
-              gl $ do GL.clearColor 0.0 0.0 0.0 1.0
-                      GL.clearDepth 1
-                      GL.clearStencil 0
-                      enable gl_DEPTH_TEST
-                      depthFunc gl_LESS
-                      viewport (fromIntegral x) (fromIntegral y)
-                               (fromIntegral w) (fromIntegral h)
+runDrawT :: (GLES, MonadBaseControl IO m)
+         => DrawT GVec4 m a
+         -> Ctx
+         -> Int
+         -> Int
+         -> m a
+runDrawT act ctx w h = runNewResource3T . runNewResource3T $ evalStateT draw ext
+        where DrawT draw = initialize (w, h) >> act
+              ext = initExtState ctx (w, h)
 
-              Draw . modify $ \s -> s { programs = programs
-                                      , elemBuffers = elemBuffers
-                                      , attributes = attributes
-                                      , geometries = geometries
-                                      , uniforms = uniforms
-                                      , textureImages = textureImages
-                                      }
+initExtState :: GLES => Ctx -> (Int, Int) -> ExtDrawState GVec4
+initExtState ctx vp = ExtDrawState { ctx = ctx
+                                   , activeTextures = H.empty
+                                   , activeTexturesHoles = S.fromList [0 .. 256]
+                                   -- TODO: glGetIntegerv GL_MAX_TEXTURE_
+                                   --                     IMAGE_UNITS
+                                   , loadedProgram = Nothing
+                                   , targetFrameBuffer = Nothing
+                                   , defaultFrameBuffer = noFramebuffer
+                                   , defaultViewport = ((0, 0), vp)
+                                   , targetViewport = ((0, 0), vp)
+                                   , drawState = initial
+                                   }
 
-{-
-maxTexs :: (Integral a, GLES) => a
-maxTexs = fromIntegral gl_MAX_COMBINED_TEXTURE_IMAGE_UNITS
--}
+initialize :: (GLES, MonadBaseControl IO m) => (Int, Int) -> DrawT GVec4 m ()
+initialize vp = do gl $ do GL.clearColor 0.0 0.0 0.0 1.0
+                           GL.clearDepth 1
+                           GL.clearStencil 0
+                           depthFunc gl_LESS
+                   resizeViewport (0, 0) vp
+                   switchStateDiff False
+                                   (DrawDiff { changedShader = False
+                                             , changedGeometry = True
+                                             , changedTarget = True
+                                             , changedUniforms = H.empty
+                                             , addedTextures = HS.empty
+                                             , removedTextures = HS.empty
+                                             , changedBlendEnabled = True
+                                             , changedBlendConstantColor = True
+                                             , changedBlendEquation = True
+                                             , changedBlendFunction = True
+                                             , changedStencilEnabled = True
+                                             , changedStencilFunction = True
+                                             , changedStencilOperation = True
+                                             , changedCullEnabled = True
+                                             , changedCullFace = True
+                                             , changedDepthTest = True
+                                             , changedDepthMask = True
+                                             , changedColorMask = True
+                                             })
+                                   initial
 
-{-
--- | Run a 'Draw' action.
-runDraw :: Draw GVec4 a
-        -> DrawState
-        -> GL (a, DrawState)
-runDraw (Draw a) = runStateT a
+switchState :: (GLES, MonadBaseControl IO m, FragmentShaderOutput o)
+            => Bool
+            -> DrawState o
+            -> DrawT o m ()
+switchState draw state' = do state <- drawState <$> DrawT get
+                             switchStateDiff draw (diff state state') state'
 
--- | Execute a 'Draw' action.
-execDraw :: Draw GVec4 a
-         -> DrawState
-         -> GL DrawState
-execDraw (Draw a) = execStateT a
--}
+switchStateDiff :: (GLES, MonadBaseControl IO m, FragmentShaderOutput o)
+                => Bool
+                -> DrawDiff
+                -> DrawState o
+                -> DrawT o m ()
+switchStateDiff draw diff state' =
+        do setBuffer diff state'
+           setProgram diff state'
+           setTextures diff state'
+           setUniforms diff state'
+           setBlendMode diff state'
+           setStencilMode diff state'
+           setCulling diff state'
+           setDepthTest diff state'
+           setDepthMask diff state'
+           setColorMask diff state'
+           setGeometry draw diff state'
+           DrawT . modify $ \s -> s { drawState = state' }
 
--- | Evaluate a 'Draw' action.
-evalDraw :: Draw GVec4 a
-         -> DrawState
-         -> GL a
-evalDraw (Draw a) = evalStateT a
+-- TODO: spostare la parte centrale su Shader.Program
+setProgram :: (GLES, MonadBaseControl IO m, FragmentShaderOutput o)
+           => DrawDiff
+           -> DrawState o
+           -> DrawT o m ()
+setProgram (DrawDiff { changedShader = False }) _ = return ()
+setProgram diff (DrawState { stateVertexShader = Just vs
+                           , stateFragmentShader = Just fs}) =
+        getResource' Nothing (program vs fs) >>= \elp ->
+                case elp of
+                     Right lp@(LoadedProgram glp _ _) ->
+                             do DrawT . modify $ \s ->
+                                 s { loadedProgram = Just lp
+                                   -- XXX , activeTextures = 0
+                                   }
+                                gl $ useProgram glp
+                     Left err -> error err
+setProgram _ _ = DrawT . modify $ \s -> s { loadedProgram = Nothing }
 
-left :: Either String a -> Maybe String
-left (Left x) = Just x
-left _ = Nothing
+setGeometry :: (GLES, MonadBaseControl IO m)
+            => Bool
+            -> DrawDiff
+            -> DrawState o
+            -> DrawT o m ()
+setGeometry draw diff (DrawState { stateGeometry = Just geometry }) =
+        drawGeometry (changedGeometry diff) draw geometry
+setGeometry _ diff _ | changedGeometry diff = gl $ bindVertexArray noVAO
+setGeometry _ _ _ = return ()
 
--- | Manually allocate a 'Geometry' in the GPU. Eventually returns an error
--- string.
-preloadGeometry :: (GLES, GeometryVertex g, ElementType e)
-                => Geometry e g
-                -> Draw o (Maybe String)
-preloadGeometry g = left <$> getGeometry g
+setBuffer :: (GLES, MonadBaseControl IO m)
+          => DrawDiff
+          -> DrawState o
+          -> DrawT o m ()
+setBuffer (DrawDiff { changedTarget = False }) _ = return ()
+setBuffer diff (DrawState { stateTarget = BufferTarget bp }) =
+        do deleteCurrentFrameBuffer
+           oldFb <- targetFrameBuffer <$> DrawT get
+           let (w, h) = bufferSize $ gBuffer bp
+           drawUsedBuffers w h (gBuffer bp) (depthBuffer bp) Nothing
+           return ()
+setBuffer diff (DrawState { stateTarget = DefaultTarget }) =
+        do deleteCurrentFrameBuffer
+           resetFrameBuffer
+setBuffer diff _ = return ()
 
--- | Manually allocate a 'Texture' in the GPU.
-preloadTexture :: GLES => Texture -> Draw o (Maybe String)
-preloadTexture t = left <$> getTexture t
+setUniforms :: (GLES, MonadBaseControl IO m)
+            => DrawDiff
+            -> DrawState o
+            -> DrawT o m ()
+setUniforms diff _ =
+        do texs <- activeTextures <$> DrawT get
+           mprg <- loadedProgram <$> DrawT get
+           case mprg of
+                Just prg -> do H.traverseWithKey (setUniform' prg texs)
+                                                 (changedUniforms diff)
+                               return ()
+                Nothing -> return ()
+        where setUniform' prg _ uid (UniformValue proxy value) =
+                      setUniform prg uid proxy value
+              setUniform' prg texs uid (UniformTexture tex) =
+                      setUniform prg uid
+                                 (Proxy :: Proxy TextureSampler)
+                                 (Sampler2D . fromIntegral $ texs H.! tex) 
 
--- | Manually allocate a 'Program' in the GPU.
-preloadProgram :: GLES => Program gs is -> Draw o (Maybe String)
-preloadProgram p = left <$> getProgram p
+setTextures :: (GLES, MonadBaseControl IO m)
+            => DrawDiff
+            -> DrawState o
+            -> DrawT o m ()
+setTextures (DrawDiff { addedTextures = added, removedTextures = removed }) _ = 
+        do oldActives <- activeTextures <$> DrawT get
+           oldHoles <- activeTexturesHoles <$> DrawT get
+           let removedActives = HS.foldr (\t -> S.insert (oldActives H.! t))
+                                         S.empty
+                                         removed
+               actives = H.difference oldActives (HS.toMap removed)
+               holes = S.foldr S.insert oldHoles removedActives
+               accHelper tex (hs, map) = let (holeSing, hs') = S.splitAt 1 hs
+                                             hole = S.elemAt 0 holeSing
+                                         in (hs', H.insert tex hole map)
+                                         -- TODO: check holeSing size = 0
+               (holes', addedActives) = foldr accHelper
+                                              (holes, H.empty)
+                                              (HS.toList added)
+                                        -- TODO: con le IntMap si può
+                                        -- usare mapAccumL
+               actives' = H.union actives addedActives
+           flip mapM_ (S.intersection removedActives holes') $ \i ->
+                   gl $ do activeTexture $ gl_TEXTURE0 + fromIntegral i
+                           bindTexture gl_TEXTURE_2D noTexture
+           flip H.traverseWithKey addedActives $ \tex i ->
+                   do etex <- case tex of
+                                   TextureImage img -> getResource img
+                                   TextureLoaded lt -> return $ Right lt
+                      case etex of
+                           Right (LoadedTexture _ _ _ t) -> gl $
+                                   do let i' = fromIntegral i
+                                      activeTexture $ gl_TEXTURE0 + i'
+                                      bindTexture gl_TEXTURE_2D t
+                           Left _ -> return ()
+           DrawT . modify $ \s -> s { activeTextures = actives'
+                                    , activeTexturesHoles = holes'
+                                    }
 
--- | Manually delete a 'Geometry' from the GPU.
-removeGeometry :: (GLES, GeometryVertex g, ElementType e)
-               => Geometry e g
-               -> Draw o ()
-removeGeometry g = removeDrawResource id geometries g
-
--- | Manually delete a 'Texture' from the GPU.
-removeTexture :: GLES => Texture -> Draw o ()
-removeTexture (TextureImage i) = removeDrawResource gl textureImages i
-removeTexture (TextureLoaded l) = gl $ unloadResource
-                                        (Nothing :: Maybe TextureImage) l
-
--- | Manually delete a 'Program' from the GPU.
-removeProgram :: GLES => Program gs is -> Draw o ()
-removeProgram = removeDrawResource gl programs
-
--- | Check if a 'Geometry' failed to load.
-checkGeometry :: (GLES, GeometryVertex g, ElementType e)
-              => Geometry e g
-              -> Draw o (ResStatus ())
-checkGeometry g = fmap (const ()) <$> checkDrawResource id geometries g
-
--- | Check if a 'Texture' failed to load. Eventually returns the texture width
--- and height.
-checkTexture :: (GLES, Num a) => Texture -> Draw o (ResStatus (a, a))
-checkTexture (TextureImage i) =
-        fmap loadedTextureSize <$> checkDrawResource gl textureImages i
-checkTexture (TextureLoaded l) = return $ Loaded (loadedTextureSize l)
-
-loadedTextureSize :: (GLES, Num a) => LoadedTexture -> (a, a)
-loadedTextureSize (LoadedTexture w h _ _) = (fromIntegral w, fromIntegral h)
-
--- | Check if a 'Program' failed to load.
-checkProgram :: GLES => Program gs is -> Draw o (ResStatus ())
-checkProgram p = fmap (const ()) <$> checkDrawResource gl programs p
-
-stateReset :: (DrawState -> a)
-           -> (a -> Draw o ())
-           -> a
-           -> Draw o b
-           -> Draw o b
-stateReset getOld set new act = do old <- getOld <$> Draw get
-                                   set new
-                                   b <- act
-                                   set old
-                                   return b
-
-getTextureImage :: GLES => TextureImage
-                -> Draw o (Either String LoadedTexture)
-getTextureImage = getDrawResource gl textureImages
-
-getProgram :: GLES => Program gs is -> Draw o (Either String LoadedProgram)
-getProgram = getDrawResource' gl programs Nothing
-
-withProgram :: GLES => Program i o -> (LoadedProgram -> Draw x ()) -> Draw x ()
-withProgram p act =
-        do current <- currentProgram <$> Draw get
-           when (current /= Just (programIndex p)) $
-                   getProgram p >>= \elp ->
-                        case elp of
-                             Right lp -> do Draw . modify $ \s ->
-                                             s { currentProgram = Just $
-                                                     programIndex p
-                                               , loadedProgram = Just lp
-                                               , activeTextures = 0
-                                               }
-                                            act lp
-                             Left err -> error err
-
-setBlendMode :: GLES => Maybe Blend.Mode -> Draw o ()
-setBlendMode Nothing = do m <- blendMode <$> Draw get
-                          case m of
-                               Just _ -> gl $ disable gl_BLEND
-                               Nothing -> return ()
-                          Draw . modify $ \s -> s { blendMode = Nothing }
-setBlendMode (Just newMode) =
-        do mOldMode <- blendMode <$> Draw get
-           case mOldMode of
-                Nothing -> do gl $ enable gl_BLEND
-                              changeColor >> changeEquation >> changeFunction
-                Just oldMode ->
-                     do when (Blend.constantColor oldMode /= constantColor)
-                                changeColor
-                        when (Blend.equation oldMode /= equation)
-                                changeEquation
-                        when (Blend.function oldMode /= function)
-                                changeFunction
-           Draw . modify $ \s -> s { blendMode = Just newMode }
-        where constantColor = Blend.constantColor newMode
+setBlendMode :: (GLES, MonadBase IO m)
+             => DrawDiff
+             -> DrawState o
+             -> DrawT o m ()
+setBlendMode diff state' =
+        do when (changedBlendEnabled diff) $
+                   case stateBlendEnabled state' of
+                        False -> gl $ disable gl_BLEND
+                        True -> gl $ enable gl_BLEND
+           when (changedBlendConstantColor diff) $
+                 case constantColor of
+                      Just (Vec4 r g b a) -> gl $ blendColor r g b a
+                      Nothing -> return ()
+           when (changedBlendEquation diff) $
+                 gl $ blendEquationSeparate rgbEq alphaEq
+           when (changedBlendFunction diff) $
+                 gl $ blendFuncSeparate rgbs rgbd alphas alphad
+   
+        where newMode = stateBlendMode state'
+              constantColor = Blend.constantColor newMode
               equation@(rgbEq, alphaEq) = Blend.equation newMode
               function@(rgbs, rgbd, alphas, alphad) = Blend.function newMode
-              changeColor = case constantColor of
-                                 Just (Vec4 r g b a) -> gl $ blendColor r g b a
-                                 Nothing -> return ()
-              changeEquation = gl $ blendEquationSeparate rgbEq alphaEq
-              changeFunction = gl $ blendFuncSeparate rgbs rgbd
-                                                      alphas alphad
 
-setStencilMode :: GLES => Maybe Stencil.Mode -> Draw o ()
-setStencilMode Nothing = do m <- stencilMode <$> Draw get
-                            case m of
-                                 Just _ -> gl $ disable gl_STENCIL_TEST
-                                 Nothing -> return ()
-                            Draw . modify $ \s -> s { stencilMode = Nothing }
-setStencilMode (Just newMode@(Stencil.Mode newFun newOp)) =
-        do mOldMode <- stencilMode <$> Draw get
-           case mOldMode of
-                Nothing -> do gl $ enable gl_STENCIL_TEST
-                              sides newFun changeFunction
-                              sides newOp changeOperation
-                Just (Stencil.Mode oldFun oldOp) ->
-                        do when (oldFun /= newFun) $
-                                sides newFun changeFunction
-                           when (oldOp /= newOp) $
-                                sides newOp changeOperation
-           Draw . modify $ \s -> s { stencilMode = Just newMode }
-        where changeFunction face f = let (t, v, m) = Stencil.function f
-                                      in gl $ stencilFuncSeparate face t v m
-              changeOperation face o = let (s, d, n) = Stencil.operation o
+setStencilMode :: (GLES, MonadBase IO m)
+               => DrawDiff
+               -> DrawState o
+               -> DrawT o m ()
+setStencilMode diff state' =
+        do when (changedStencilEnabled diff) $
+                   case stateStencilEnabled state' of
+                        False -> gl $ disable gl_STENCIL_TEST
+                        True -> gl $ enable gl_STENCIL_TEST
+           when (changedStencilFunction diff) $
+                   sides (Stencil.sideFunction $ stateStencilMode state') $
+                           \face fun -> let (t, v, m) = Stencil.function fun
+                                        in gl $ stencilFuncSeparate face t v m
+           when (changedStencilOperation diff) $
+                   sides (Stencil.sideOperation $ stateStencilMode state') $
+                           \face op -> let (s, d, n) = Stencil.operation op
                                        in gl $ stencilOpSeparate face s d n
-              sides (Stencil.FrontBack x) f = f gl_FRONT_AND_BACK x
+
+        where sides (Stencil.FrontBack x) f = f gl_FRONT_AND_BACK x
               sides (Stencil.Separate x y) f = f gl_FRONT x >> f gl_BACK y
 
-setCullFace :: GLES => Maybe CullFace -> Draw o ()
-setCullFace Nothing = do old <- cullFace <$> Draw get
-                         case old of
-                              Just _ -> gl $ disable gl_CULL_FACE
-                              Nothing -> return ()
-                         Draw . modify $ \s -> s { cullFace = Nothing }
-setCullFace (Just newFace) =
-        do old <- cullFace <$> Draw get
-           when (old == Nothing) . gl $ enable gl_CULL_FACE
-           case old of
-                Just oldFace | oldFace == newFace -> return ()
-                _ -> gl . GL.cullFace $ case newFace of
-                                             CullFront -> gl_FRONT
-                                             CullBack -> gl_BACK
-                                             CullFrontBack -> gl_FRONT_AND_BACK
-           Draw . modify $ \s -> s { cullFace = Just newFace }
-                   
-setDepthTest :: GLES => Bool -> Draw o ()
-setDepthTest = setFlag depthTest (\x s -> s { depthTest = x })
-                       (gl $ enable gl_DEPTH_TEST) (gl $ disable gl_DEPTH_TEST)
-                   
-setDepthMask :: GLES => Bool -> Draw o ()
-setDepthMask = setFlag depthMask (\x s -> s { depthMask = x })
-                       (gl $ GL.depthMask true) (gl $ GL.depthMask false)
+setCulling :: (GLES, MonadBase IO m) => DrawDiff -> DrawState o -> DrawT o m ()
+setCulling diff state' =
+        do when (changedCullEnabled diff) $
+                   case stateCullEnabled state' of
+                        False -> gl $ disable gl_CULL_FACE
+                        True -> gl $ enable gl_CULL_FACE
+           when (changedCullFace diff) $
+                   gl . GL.cullFace $ case stateCullFace state' of
+                                           CullFront -> gl_FRONT
+                                           CullBack -> gl_BACK
+                                           CullFrontBack -> gl_FRONT_AND_BACK
 
-setFlag :: (DrawState -> Bool)
-        -> (Bool -> DrawState -> DrawState)
-        -> Draw o ()
-        -> Draw o ()
-        -> Bool
-        -> Draw o ()
-setFlag getF setF enable disable new =
-        do old <- getF <$> Draw get
-           case (old, new) of
-                   (False, True) -> enable
-                   (True, False) -> disable
-                   _ -> return ()
-           Draw . modify $ setF new
+setDepthTest :: (GLES, MonadBase IO m)
+             => DrawDiff
+             -> DrawState o
+             -> DrawT o m ()
+setDepthTest (DrawDiff { changedDepthTest = False }) _ = return ()
+setDepthTest _ (DrawState { stateDepthTest = True }) = gl $ enable gl_DEPTH_TEST
+setDepthTest _ _ = gl $ disable gl_DEPTH_TEST
 
-setColorMask :: GLES => (Bool, Bool, Bool, Bool) -> Draw o ()
-setColorMask new@(r, g, b, a) = do old <- colorMask <$> Draw get
-                                   when (old /= new) . gl $
-                                           GL.colorMask r' g' b' a'
-                                   Draw . modify $ \s -> s { colorMask = new }
-        where (r', g', b', a') = (bool r, bool g, bool b, bool a)
-              bool True = true
+setDepthMask :: (GLES, MonadBase IO m)
+             => DrawDiff
+             -> DrawState o
+             -> DrawT o m ()
+setDepthMask (DrawDiff { changedDepthMask = False }) _ = return ()
+setDepthMask _ (DrawState { stateDepthMask = True }) = gl $ GL.depthMask true
+setDepthMask _ _ = gl $ GL.depthMask false
+
+setColorMask :: (GLES, MonadBase IO m)
+             => DrawDiff
+             -> DrawState o
+             -> DrawT o m ()
+setColorMask (DrawDiff { changedColorMask = False }) _ = return ()
+setColorMask _ (DrawState { stateColorMask = (r, g, b, a) }) =
+        gl $ GL.colorMask (bool r) (bool g) (bool b) (bool a)
+        where bool True = true
               bool False = false
-
-getDrawResource :: Resource i r m
-                => (m (Either String r) -> Draw o (Either String r))
-                -> (DrawState -> ResMap r)
-                -> i
-                -> Draw o (Either String r)
-getDrawResource lft mg i = do
-        map <- mg <$> Draw get
-        lft $ getResource i map
-
-getDrawResource' :: Resource i r m
-                => (m (Either String r) -> Draw o (Either String r))
-                -> (DrawState -> ResMap r)
-                -> Maybe k
-                -> i
-                -> Draw o (Either String r)
-getDrawResource' lft mg k i = do
-        map <- mg <$> Draw get
-        lft $ getResource' k i map
-
-checkDrawResource :: Resource i r m
-                  => (m (ResStatus r) -> Draw o (ResStatus r))
-                  -> (DrawState -> ResMap r)
-                  -> i
-                  -> Draw o (ResStatus r)
-checkDrawResource lft mg i = do
-        map <- mg <$> Draw get
-        lft $ checkResource i map
-
-removeDrawResource :: (Resource i r m, Hashable i)
-                   => (m () -> Draw o ())
-                   -> (DrawState -> ResMap r)
-                   -> i
-                   -> Draw o ()
-removeDrawResource lft mg i = do
-        s <- mg <$> Draw get
-        lft $ removeResource i s
-
-textureCacheMaxSize :: Num a => a
-textureCacheMaxSize = 16
 
 clearBuffers :: (GLES, MonadGL m) => [Buffer] -> m ()
 clearBuffers = mapM_ $ gl . GL.clear . buffer
@@ -565,19 +529,19 @@ clearBuffers = mapM_ $ gl . GL.clear . buffer
               buffer DepthBuffer = gl_DEPTH_BUFFER_BIT
               buffer StencilBuffer = gl_STENCIL_BUFFER_BIT
 
-createOutBuffer :: forall m o. (GLES, MonadTexture m)
+createOutBuffer :: forall m o o'. (GLES, MonadBaseControl IO m)
                 => Int
                 -> Int
                 -> OutBufferInfo o
-                -> m (OutBuffer o)
+                -> DrawT o' m (OutBuffer o)
 createOutBuffer w h empty = 
         do let loader t = do bindTexture gl_TEXTURE_2D t
                              if pixelType == gl_FLOAT
-                             then liftIO noFloat32Array >>=
+                             then liftBase noFloat32Array >>=
                                           texImage2DFloat gl_TEXTURE_2D 0
                                                           internalFormat w' h'
                                                           0 format pixelType
-                             else liftIO noUInt8Array >>=
+                             else liftBase noUInt8Array >>=
                                           texImage2DUInt gl_TEXTURE_2D 0
                                                          internalFormat w' h'
                                                          0 format pixelType
@@ -628,14 +592,15 @@ createOutBuffer w h empty =
                                    , 1
                                    )
 
-drawBuffers' :: (GLES, FragmentShaderOutput o)
+-- TODO: spostare su OutBuffer?
+drawBuffers' :: (GLES, FragmentShaderOutput o, MonadBaseControl IO m)
              => Int
              -> Int
              -> Bool
              -> Either (GBuffer o) (GBufferInfo o)
              -> Either DepthBuffer DepthBufferInfo
-             -> Draw o a
-             -> Draw o' (a, GBuffer o, DepthBuffer)
+             -> DrawT o m a
+             -> DrawT o' m (a, GBuffer o, DepthBuffer)
 drawBuffers' w h addUnloader gBuffer depthBuffer draw =
         do (newColor, gBuffer') <-
                 case gBuffer of
@@ -648,7 +613,7 @@ drawBuffers' w h addUnloader gBuffer depthBuffer draw =
                      Right b@(EmptyDepthStencilBuffer _) ->
                              (,,) True True <$> createOutBuffer w h b
                      Left b -> return (False, False, b)
-           ret <- drawUsedBuffers w h gBuffer' depthBuffer' $
+           Just ret <- drawUsedBuffers w h gBuffer' depthBuffer' . Just $
                    do when newColor clearColor
                       when newDepth clearDepth
                       when shouldClearStencil clearStencil
@@ -660,19 +625,49 @@ drawBuffers' w h addUnloader gBuffer depthBuffer draw =
                         mapM_ (unloader buf (Nothing :: Maybe TextureImage))
                               (textures buf)
 
-drawUsedBuffers :: GLES
+drawUsedBuffers :: (GLES, MonadBase IO m)
                 => Int
                 -> Int
                 -> GBuffer o
                 -> DepthBuffer
-                -> Draw o a
-                -> Draw o' a
-drawUsedBuffers w h gBuffer depthBuffer draw =
-        do oldFb <- currentFrameBuffer <$> Draw get
-           ret <- drawToTextures useDrawBuffers attachments w h oldFb $ \fb -> 
-                do Draw . modify $ \s -> s { currentFrameBuffer = fb }
-                   castDraw draw
-           Draw . modify $ \s -> s { currentFrameBuffer = oldFb }
+                -> Maybe (DrawT o m a)
+                -> DrawT o' m (Maybe a)
+drawUsedBuffers w h gBuffer depthBuffer mdraw =
+        do oldFb <- targetFrameBuffer <$> DrawT get
+           oldDefaultFb <- defaultFrameBuffer <$> DrawT get
+           oldViewport <- currentViewport
+           oldDefaultViewport <- defaultViewport <$> DrawT get
+           let oldFb' | isJust mdraw = oldFb <|> Just oldDefaultFb
+                      | otherwise = Nothing
+           ret <- drawToTextures useDrawBuffers attachments oldFb' $ \fb -> 
+                case mdraw of
+                     Nothing -> do resizeViewport (0, 0) (w, h)
+                                   DrawT . modify $
+                                        \s -> s { targetFrameBuffer = Just fb }
+                                   return Nothing
+                     Just (DrawT draw) ->
+                        do resizeViewport (0, 0) (w, h)
+                           es <- DrawT get
+                           let es1 = es { targetFrameBuffer = Nothing
+                                        , defaultFrameBuffer = fb
+                                        , defaultViewport = ((0, 0), (w, h))
+                                        , drawState =
+                                            setTarget (noTarget DefaultTarget)
+                                                      (drawState es)
+                                        }
+                           (ret, es2) <- DrawT . lift $ runStateT draw es1
+                           let ds3 = case drawState es of
+                                          DrawState {stateTarget = oldt} ->
+                                                setTarget (noTarget oldt)
+                                                          (drawState es2)
+                               es3 = es2 { targetFrameBuffer = oldFb
+                                         , defaultFrameBuffer = oldDefaultFb
+                                         , defaultViewport = oldDefaultViewport
+                                         , drawState = ds3
+                                         }
+                           DrawT $ put es3
+                           uncurry resizeViewport oldViewport
+                           return $ Just ret
            return ret
         where colorAttachments = zipWith (\(LoadedTexture _ _ _ t) n ->
                                                 (t, gl_COLOR_ATTACHMENT0 + n)
@@ -689,15 +684,26 @@ drawUsedBuffers w h gBuffer depthBuffer draw =
               useDrawBuffers | (_ : _ : _) <- colorAttachments = True
                              | otherwise = False
 
+deleteCurrentFrameBuffer :: (GLES, MonadBaseControl IO m) => DrawT o m ()
+deleteCurrentFrameBuffer = do mfb <- targetFrameBuffer <$> DrawT get
+                              case mfb of
+                                   Just fb -> gl $ deleteFramebuffer fb
+                                   Nothing -> return ()
+
+resetFrameBuffer :: (GLES, MonadBaseControl IO m) => DrawT o m ()
+resetFrameBuffer = do (sp, ss) <- defaultViewport <$> DrawT get
+                      fb <- defaultFrameBuffer <$> DrawT get
+                      resizeViewport sp ss
+                      gl $ bindFramebuffer gl_FRAMEBUFFER fb
+                      DrawT . modify $ \s -> s { targetFrameBuffer = Nothing }
+
 drawToTextures :: (GLES, MonadScreen m, MonadGL m)
                => Bool
                -> [(GL.Texture, GLEnum)]
-               -> Int
-               -> Int
-               -> FrameBuffer
+               -> Maybe FrameBuffer
                -> (FrameBuffer -> m a)
                -> m a
-drawToTextures useDrawBuffers atts w h oldFb draw =
+drawToTextures useDrawBuffers atts moldFb draw =
         do fb <- gl createFramebuffer 
            gl $ bindFramebuffer gl_FRAMEBUFFER fb
 
@@ -714,87 +720,89 @@ drawToTextures useDrawBuffers atts w h oldFb draw =
                               return drawAttachment
 
            when useDrawBuffers $
-                   liftIO (encodeInts buffersToDraw) >>= gl . GL.drawBuffers
-
-           (sp, ss) <- currentViewport
-           resizeViewport (0, 0) (fromIntegral w, fromIntegral h)
+                   liftBase (encodeInts buffersToDraw) >>= gl . GL.drawBuffers
 
            ret <- draw fb
 
-           resizeViewport sp ss
-           gl $ do deleteFramebuffer fb
-                   bindFramebuffer gl_FRAMEBUFFER oldFb
+           case moldFb of
+                Just oldFb -> gl $ do deleteFramebuffer fb
+                                      bindFramebuffer gl_FRAMEBUFFER oldFb
+                Nothing -> return ()
 
            return ret
+
+newTexture :: (GLES, MonadBaseControl IO m)
+           => Int
+           -> Int
+           -> TextureParameters
+           -> Int
+           -> (GL.Texture -> GL ())
+           -> DrawT o m LoadedTexture
+newTexture w h params i initialize =
+        gl $ do t <- emptyTexture params
+                initialize t
+                return $ LoadedTexture (fromIntegral w) (fromIntegral h) i t
 
 class ReadPixels r where
         readPixels :: MonadGL m => (Int, Int, Int, Int) -> GLEnum -> m r
 
 instance GLES => ReadPixels [Color] where
         readPixels (x, y, rw, rh) format =
-                        do arr <- liftIO . newUInt8Array $
+                        do arr <- liftBase . newUInt8Array $
                                         fromIntegral rw * fromIntegral rh * 4
                            gl $ readPixelsUInt8 (fromIntegral x)
                                                 (fromIntegral y)
                                                 (fromIntegral rw)
                                                 (fromIntegral rh)
                                                 format gl_UNSIGNED_BYTE arr
-                           liftIO $ fmap wordsToColors (decodeUInt8s arr)
+                           liftBase $ fmap wordsToColors (decodeUInt8s arr)
                 where wordsToColors (r : g : b : a : xs) =
                                 Color r g b a : wordsToColors xs
                       wordsToColors _ = []
 
 instance GLES => ReadPixels [Vec4] where
         readPixels (x, y, rw, rh) format =
-                        do arr <- liftIO . newFloat32Array $
+                        do arr <- liftBase . newFloat32Array $
                                         fromIntegral rw * fromIntegral rh * 4
                            gl $ readPixelsFloat (fromIntegral x)
                                                 (fromIntegral y)
                                                 (fromIntegral rw)
                                                 (fromIntegral rh)
                                                 format gl_FLOAT arr
-                           liftIO $ fmap floatsToVecs (decodeFloat32s arr)
+                           liftBase $ fmap floatsToVecs (decodeFloat32s arr)
                 where floatsToVecs (r : g : b : a : xs) =
                                 Vec4 r g b a : floatsToVecs xs
                       floatsToVecs _ = []
 
 instance GLES => ReadPixels [Word8] where
         readPixels (x, y, rw, rh) format =
-                        do arr <- liftIO . newUInt8Array $
+                        do arr <- liftBase . newUInt8Array $
                                         fromIntegral rw * fromIntegral rh
                            gl $ readPixelsUInt8 (fromIntegral x)
                                                 (fromIntegral y)
                                                 (fromIntegral rw)
                                                 (fromIntegral rh)
                                                 format gl_UNSIGNED_BYTE arr
-                           liftIO $ decodeUInt8s arr
+                           liftBase $ decodeUInt8s arr
 
 instance GLES => ReadPixels [Word16] where
         readPixels (x, y, rw, rh) format =
-                        do arr <- liftIO . newUInt16Array $
+                        do arr <- liftBase . newUInt16Array $
                                         fromIntegral rw * fromIntegral rh
                            gl $ readPixelsUInt16 (fromIntegral x)
                                                  (fromIntegral y)
                                                  (fromIntegral rw)
                                                  (fromIntegral rh)
                                                  format gl_UNSIGNED_SHORT arr
-                           liftIO $ decodeUInt16s arr
+                           liftBase $ decodeUInt16s arr
 
 instance GLES => ReadPixels [Float] where
         readPixels (x, y, rw, rh) format =
-                        do arr <- liftIO . newFloat32Array $
+                        do arr <- liftBase . newFloat32Array $
                                         fromIntegral rw * fromIntegral rh
                            gl $ readPixelsFloat (fromIntegral x)
                                                 (fromIntegral y)
                                                 (fromIntegral rw)
                                                 (fromIntegral rh)
                                                 format gl_FLOAT arr
-                           liftIO $ decodeFloat32s arr
-
-castDraw :: Draw o a -> Draw o' a
-castDraw (Draw x) = Draw x
-
-
--- | Get the 'DrawState'.
-drawGet :: Draw o DrawState
-drawGet = Draw get
+                           liftBase $ decodeFloat32s arr

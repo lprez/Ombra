@@ -10,8 +10,9 @@ module Graphics.Rendering.Ombra.Shader.CPU (
         toGPUBool
 ) where
 
+import Data.Hashable (Hashable)
 import Data.Int
-import Data.Typeable
+import Data.Proxy
 import Graphics.Rendering.Ombra.Shader.Language.Types
 import Graphics.Rendering.Ombra.Internal.GL
 import Graphics.Rendering.Ombra.Vector
@@ -27,7 +28,7 @@ type family CPUBase g
 -- type CPUAuto g = CPU (CPUAutoSetter g) g
 
 -- | CPU types convertible to GPU types (as uniforms).
-class ShaderType g => BaseUniform g where
+class (ShaderType g, Hashable (CPUBase g)) => BaseUniform g where
         setBaseUniform :: UniformLocation -> proxy g -> CPUBase g -> GL ()
 
 -- | CPU types convertible to GPU types (as attributes).

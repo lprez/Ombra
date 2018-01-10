@@ -17,13 +17,15 @@ data Mode = Mode {
         alphaOperator :: Operator,
         -- | Multipliers of the source alpha and destination alpha.
         alphaParameters :: Maybe (Parameter, Parameter)
-} deriving Eq
+} deriving (Eq, Ord)
 
 -- | Blend operator.
-data Operator = Add | Subtract | ReverseSubtract {- Min | Max -} deriving Eq
+data Operator = Add | Subtract | ReverseSubtract {- Min | Max -}
+        deriving (Eq, Ord)
 
 -- | Blend function parameters.
 data Parameter = Zero | One | SourceColor | DestinationColor | ConstantColor
                | SourceAlpha | DestinationAlpha | ConstantAlpha
-               | OneMinus Parameter deriving Eq
+               | OneMinus Parameter
+               deriving (Eq, Ord)
 

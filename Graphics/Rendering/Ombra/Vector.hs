@@ -33,16 +33,16 @@ import GHC.Generics
 
 data Vec2 = Vec2 {-# UNPACK #-} !Float
                  {-# UNPACK #-} !Float
-                 deriving (Generic, Show, Eq)
+                 deriving (Generic, Show, Eq, Ord)
 data Vec3 = Vec3 {-# UNPACK #-} !Float
                  {-# UNPACK #-} !Float
                  {-# UNPACK #-} !Float
-                 deriving (Generic, Show, Eq)
+                 deriving (Generic, Show, Eq, Ord)
 data Vec4 = Vec4 {-# UNPACK #-} !Float
                  {-# UNPACK #-} !Float
                  {-# UNPACK #-} !Float
                  {-# UNPACK #-} !Float
-                 deriving (Generic, Show, Eq)
+                 deriving (Generic, Show, Eq, Ord)
 
 data Mat2 = Mat2 !Vec2 !Vec2 deriving (Generic, Show, Eq)
 data Mat3 = Mat3 !Vec3 !Vec3 !Vec3 deriving (Generic, Show, Eq)

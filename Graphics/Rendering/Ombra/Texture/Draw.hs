@@ -1,12 +1,9 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 
 module Graphics.Rendering.Ombra.Texture.Draw (
-        MonadTexture(..),
         Texture(..),
         TextureImage,
         LoadedTexture(..),
-        defaultWithActiveTextures,
-        textureSize,
         emptyTexture
 ) where
 
@@ -20,57 +17,9 @@ import Graphics.Rendering.Ombra.Internal.GL hiding (Texture)
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Texture.Types
 
-class (Monad m, GLES) => MonadTexture m where
-        getTexture :: Texture -> m (Either String LoadedTexture)
-        withActiveTextures :: [Texture]
-                           -> (String -> m a)
-                           -> ([Sampler2D] -> m a)
-                           -> m a
-        newTexture :: Int
-                   -> Int
-                   -> TextureParameters
-                   -> Int
-                   -> (GL.Texture -> GL ())
-                   -> m LoadedTexture
-        -- unusedTextures :: [LoadedTexture] -> m ()
-
-instance GLES => Resource TextureImage LoadedTexture GL where
-        loadResource i = Right <$> loadTextureImage i
-        unloadResource _ (LoadedTexture _ _ _ t) = deleteTexture t
-
-defaultWithActiveTextures :: (MonadTexture m, MonadGL m)
-                          => m Int
-                          -> (Int -> m ())
-                          -> [Texture]
-                          -> (String -> m a)
-                          -> ([Sampler2D] -> m a)
-                          -> m a
-defaultWithActiveTextures getActiveCount setActiveCount textures fail f =
-        do let n = length textures
-           eloadedTextures <- runExceptT $ mapM (ExceptT . getTexture) textures
-           atn <- getActiveCount
-           setActiveCount $ atn + n
-           let units = [atn .. atn + n - 1]
-           ret <- case eloadedTextures of
-                       Left err -> fail err
-                       Right loadedTextures ->
-                        do mapM_ (\(i, (LoadedTexture _ _ _ tex)) ->
-                                        gl $ do activeTexture $
-                                                    gl_TEXTURE0 + fromIntegral i
-                                                bindTexture gl_TEXTURE_2D tex
-                                 )
-                                 (zip units loadedTextures)
-                           f $ map (Sampler2D . fromIntegral) units
-           setActiveCount $ atn
-           return ret
-
--- | Get the dimensions of a 'Texture'.
-textureSize :: (MonadTexture m, Num a) => Texture -> m (a, a)
-textureSize tex = do etex <- getTexture tex
-                     case etex of
-                          Left _ -> return (0, 0)
-                          Right (LoadedTexture w h _ _) ->
-                                  return (fromIntegral w, fromIntegral h)
+instance (GLES, MonadGL m) => MonadLoad TextureImage LoadedTexture m where
+        loadResource i = Right <$> gl (loadTextureImage i)
+        unloadResource _ (LoadedTexture _ _ _ t) = gl $ deleteTexture t
 
 loadTextureImage :: GLES => TextureImage -> GL LoadedTexture
 loadTextureImage (TexturePixels pss params w h hash) =

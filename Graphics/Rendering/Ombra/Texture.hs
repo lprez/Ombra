@@ -6,7 +6,6 @@
 -- Portability: portable
 
 module Graphics.Rendering.Ombra.Texture (
-        MonadTexture,
         Texture,
         mkTexture,
         mkTextureFloat,

@@ -1,4 +1,5 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, CPP, UndecidableInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, CPP, UndecidableInstances,
+             FlexibleContexts, DefaultSignatures, GADTs #-}
 
 #if __GLASGOW_HASKELL__ < 802
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies #-}
@@ -13,7 +14,7 @@
 
 module Graphics.Rendering.Ombra.Internal.GL (
         MonadGL(..),
-        GL,
+        GL(..),
         Sampler2D(..),
         module Graphics.Rendering.Ombra.Backend,
         liftIO,
@@ -151,11 +152,14 @@ module Graphics.Rendering.Ombra.Internal.GL (
 
 import Control.Monad.Base
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Reader
+import Data.Hashable (Hashable)
 import Data.Int (Int32)
 
 import Graphics.Rendering.Ombra.Backend
+import Graphics.Rendering.Ombra.Internal.Resource
         
 newtype GL a = GL { unGL :: ReaderT Ctx IO a }
         deriving ( Functor
@@ -175,14 +179,19 @@ instance MonadBaseControl IO GL where
         restoreM = GL . restoreM
 #endif
 
-class MonadIO m => MonadGL m where
+class MonadBase IO m => MonadGL m where
         gl :: GL a -> m a
+        default gl :: (MonadGL m', MonadTrans t, m ~ t m') => GL a -> m a
+        gl = lift . gl
 
 instance MonadGL GL where
         gl = id
 
+instance MonadGL m => MonadGL (ResourceT r m)
+instance MonadGL m => MonadGL (Resource3T r1 r2 r3 m)
+
 -- | A Texture ready to be passed as an uniform.
-newtype Sampler2D = Sampler2D Word
+newtype Sampler2D = Sampler2D Word deriving (Eq, Hashable)
 
 evalGL :: GL a -> Ctx -> IO a
 evalGL (GL m) = runReaderT m

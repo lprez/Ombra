@@ -76,6 +76,12 @@ instance Eq TagTexture where
 
 instance Eq TagProgram where
         TagProgram t _ == TagProgram t' _ = t == t'
+
+instance Ord TagTexture where
+        compare (TagTexture t _) (TagTexture t' _) = compare t t'
+
+instance Hashable TagTexture where
+        hashWithSalt salt (TagTexture t _) = hashWithSalt salt t
         
 instance Hashable TagProgram where
         hashWithSalt salt (TagProgram t _) = hashWithSalt salt t

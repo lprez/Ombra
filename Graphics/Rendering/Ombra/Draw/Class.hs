@@ -1,8 +1,9 @@
-{-# LANGUAGE MultiParamTypeClasses, RankNTypes, DefaultSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilies,
+             FunctionalDependencies, FlexibleContexts #-}
+
 
 module Graphics.Rendering.Ombra.Draw.Class (
         MonadDraw(..),
-        MonadDrawBuffers(..),
         MonadRead(..)
 ) where
 
@@ -13,88 +14,81 @@ import Graphics.Rendering.Ombra.OutBuffer.Types
 import Graphics.Rendering.Ombra.Geometry.Draw
 import Graphics.Rendering.Ombra.Geometry.Types
 import Graphics.Rendering.Ombra.Internal.GL (MonadGL)
+import Graphics.Rendering.Ombra.Draw.State
 import Graphics.Rendering.Ombra.Texture.Draw
 import Graphics.Rendering.Ombra.Shader.Program
 import Graphics.Rendering.Ombra.Shader.Types
 import Graphics.Rendering.Ombra.Screen
 import Graphics.Rendering.Ombra.Vector
 
--- | Monads that can be used to draw 'Image's.
-class ( MonadGeometry (m o)
-      , MonadProgram (m o)
-      , MonadTexture (m o)
-      , MonadScreen (m o)
-      ) => MonadDraw o m where
-        drawGeometry :: (GeometryVertex g, ElementType e)
-                     => Geometry e g
-                     -> m o ()
-        default drawGeometry :: (MonadGL (m o), GeometryVertex g, ElementType e)
-                             => Geometry e g
-                             -> m o ()
-        drawGeometry = defaultDrawGeometry
-        -- | Enable/disable writing to one or more color channels.
-        withColorMask :: (Bool, Bool, Bool, Bool) -> m o a -> m o a
-        -- | Enable/disable depth testing.
-        withDepthTest :: Bool -> m o a -> m o a
-        -- | Enable/disable writing to the depth buffer.
-        withDepthMask :: Bool -> m o a -> m o a
+class MonadScreen m => MonadDraw o m | m -> o where
+        type BufferDraw o' m :: * -> *
+        foldDraw :: Foldable f => f (DrawState o) -> m ()
         -- | Clear the color buffer.
-        clearColor :: m o ()
+        clearColor :: m ()
         clearColor = clearColorWith $ Vec4 0 0 0 1
         -- | Clear the color buffer filling it with the given color.
-        clearColorWith :: Vec4 -> m o ()
+        clearColorWith :: Vec4 -> m ()
         -- | Clear the depth buffer.
-        clearDepth :: m o ()
+        clearDepth :: m ()
         clearDepth = clearDepthWith 1
         -- | Clear the depth buffer filling it with the given value.
-        clearDepthWith :: Double -> m o ()
+        clearDepthWith :: Double -> m ()
         -- | Clear the stencil buffer.
-        clearStencil :: m o ()
+        clearStencil :: m ()
         clearStencil = clearStencilWith 0
         -- | Clear the stencil buffer filling it with the given value.
-        clearStencilWith :: Int -> m o ()
-
--- | Monads that support drawing to 'GBuffer's and 'DepthBuffer's.
-class MonadDrawBuffers m where
-        -- | Create a 'GBuffer' and a 'DepthBuffer' and draw something to them.
-        createBuffers :: FragmentShaderOutput o
+        clearStencilWith :: Int -> m ()
+        -- | Create a 'GBuffer' and a 'DepthBuffer' and perform a draw action
+        -- with them.
+        createBuffers :: ( FragmentShaderOutput o'
+                         , MonadDraw o' (BufferDraw o' m)
+                         )
                       => Int                    -- ^ Width.
                       -> Int                    -- ^ Height.
-                      -> GBufferInfo o          -- ^ The buffer that will
+                      -> GBufferInfo o'         -- ^ The buffer that will
                                                 -- contain the output of the
                                                 -- fragment shader.
                       -> DepthBufferInfo        -- ^ The buffer that contains
                                                 -- the depth (and stencil)
                                                 -- values.
-                      -> m o a                  -- ^ Initializer.
-                      -> m o' (a, BufferPair o)
-        createGBuffer :: FragmentShaderOutput o
-                      => GBufferInfo o
+                      -> BufferDraw o' m a      -- ^ Initializer.
+                      -> m (a, BufferPair o')
+        -- | Like 'createBuffers' but uses an already existing 'DepthBuffer'.
+        createGBuffer :: ( FragmentShaderOutput o'
+                         , MonadDraw o' (BufferDraw o' m)
+                         )
+                      => GBufferInfo o'
                       -> DepthBuffer
-                      -> m o a
-                      -> m o' (a, BufferPair o)
-        createDepthBuffer :: FragmentShaderOutput o
-                          => GBuffer o
+                      -> BufferDraw o' m a
+                      -> m (a, BufferPair o')
+        -- | Like 'createBuffers' but uses an already existing 'GBuffer'.
+        createDepthBuffer :: ( FragmentShaderOutput o'
+                             , MonadDraw o' (BufferDraw o' m)
+                             )
+                          => GBuffer o'
                           -> DepthBufferInfo
-                          -> m o a
-                          -> m o' (a, BufferPair o)
-        -- | Draw an image to some buffers.
-        drawBuffers :: FragmentShaderOutput o
-                    => BufferPair o
-                    -> m o a                    -- ^ Image to draw to the
-                                                -- buffers.
-                    -> m o' a
+                          -> BufferDraw o' m a
+                          -> m (a, BufferPair o')
+        -- | Draw something to a 'BufferPair'. This does NOT clear the color,
+        -- depth or stencil buffer automatically.
+        drawBuffers :: ( FragmentShaderOutput o'
+                       , MonadDraw o' (BufferDraw o' m)
+                       )
+                    => BufferPair o'
+                    -> BufferDraw o' m a
+                    -> m a
 
-class MonadDraw o m => MonadRead o m where
+class MonadDraw o m => MonadRead o m | m -> o where
         -- | Read a rectangle of pixel colors from the screen (or texture).
-        readColor :: (Int, Int, Int, Int) -> m o [Color]
+        readColor :: (Int, Int, Int, Int) -> m [Color]
         -- | 'readColor' variant that read color vectors.
-        readColorFloat :: (Int, Int, Int, Int) -> m o [Vec4]
+        readColorFloat :: (Int, Int, Int, Int) -> m [Vec4]
         -- | Read a rectangle of pixel depths from the screen (or texture).
         -- Not supported on WebGL!
-        readDepth :: (Int, Int, Int, Int) -> m o [Word16]
-        -- | 'readDepth' variants that read floats. Not supported on WebGL as well.
-        readDepthFloat :: (Int, Int, Int, Int) -> m o [Float]
+        readDepth :: (Int, Int, Int, Int) -> m [Word16]
+        -- | 'readDepth' variant that read floats. Not supported on WebGL as well.
+        readDepthFloat :: (Int, Int, Int, Int) -> m [Float]
         -- | Read a rectangle of stencil values from the screen (or texture).
         -- Not supported on WebGL!
-        readStencil :: (Int, Int, Int, Int) -> m o [Word8]
+        readStencil :: (Int, Int, Int, Int) -> m [Word8]

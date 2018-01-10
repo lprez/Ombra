@@ -7,27 +7,27 @@
 
 module Graphics.Rendering.Ombra.Draw (
         module Graphics.Rendering.Ombra.OutBuffer,
+        DrawT,
         Draw,
         Ctx,
         -- * Running the Draw monad
-        runDraw,
+        runDrawT,
         -- * Draw actions
-        MonadDraw( withColorMask
-                 , withDepthTest
-                 , withDepthMask
+        MonadDraw( BufferDraw
                  , clearColor
                  , clearColorWith
                  , clearDepth
                  , clearDepthWith
                  , clearStencil
                  , clearStencilWith
+                 , createBuffers
+                 , createGBuffer
+                 , createDepthBuffer
+                 , drawBuffers
                  ),
-        MonadDrawBuffers(..),
         MonadRead(..),
         MonadScreen(resizeViewport),
-        -- ** Culling
-        CullFace(..),
-        MonadCulling(withCulling),
+        {-
         -- ** Resources
         -- $resources
         ResStatus(..),
@@ -37,26 +37,15 @@ module Graphics.Rendering.Ombra.Draw (
         removeTexture,
         checkGeometry,
         checkTexture,
+        -}
 ) where
 
 import Graphics.Rendering.Ombra.Backend
-import Graphics.Rendering.Ombra.Culling.Draw
-import Graphics.Rendering.Ombra.Culling.Types
 import Graphics.Rendering.Ombra.Draw.Class
 import Graphics.Rendering.Ombra.Draw.Monad
-import Graphics.Rendering.Ombra.Internal.GL (evalGL)
+import Graphics.Rendering.Ombra.Internal.SM 
 import Graphics.Rendering.Ombra.OutBuffer
-import Graphics.Rendering.Ombra.Shader.Language.Types (GVec4)
 import Graphics.Rendering.Ombra.Screen
-
--- | Run a 'Draw' program.
-runDraw :: GLES
-        => Int          -- ^ Viewport width
-        -> Int          -- ^ Viewport height
-        -> Ctx
-        -> Draw GVec4 a
-        -> IO a
-runDraw w h ctx a = flip evalGL ctx . evalDraw (drawInit >> a) $ drawState w h
 
 -- $resources
 -- In Ombra, GPU resources are allocated when they're needed, and they're kept
