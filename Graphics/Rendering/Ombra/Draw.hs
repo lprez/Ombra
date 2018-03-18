@@ -6,6 +6,8 @@
 -- Portability: GHC only
 
 module Graphics.Rendering.Ombra.Draw (
+        module Graphics.Rendering.Ombra.Draw.Set,
+        module Graphics.Rendering.Ombra.Draw.Mode,
         module Graphics.Rendering.Ombra.OutBuffer,
         DrawT,
         Draw,
@@ -27,6 +29,7 @@ module Graphics.Rendering.Ombra.Draw (
                  ),
         MonadRead(..),
         MonadScreen(resizeViewport),
+        drawGeometry
         {-
         -- ** Resources
         -- $resources
@@ -43,9 +46,26 @@ module Graphics.Rendering.Ombra.Draw (
 import Graphics.Rendering.Ombra.Backend
 import Graphics.Rendering.Ombra.Draw.Class
 import Graphics.Rendering.Ombra.Draw.Monad
-import Graphics.Rendering.Ombra.Internal.SM 
+import Graphics.Rendering.Ombra.Draw.Mode (modeToState)
+import Graphics.Rendering.Ombra.Draw.Set
+import Graphics.Rendering.Ombra.Geometry
 import Graphics.Rendering.Ombra.OutBuffer
 import Graphics.Rendering.Ombra.Screen
+import Graphics.Rendering.Ombra.Shader
+
+-- | Draw a 'Geometry'. Equivalent to @'drawSimple' . flip 'singleton'@.
+drawGeometry :: ( GLES
+                , GeometryVertex g
+                , ElementType e
+                , ShaderInput g
+                , ShaderInput v
+                , FragmentShaderOutput o
+                , MonadDraw o m
+                )
+             => DrawMode g v v o
+             -> Geometry e g
+             -> m ()
+drawGeometry mode geom = switchStateAuto True $ modeToState geom mode
 
 -- $resources
 -- In Ombra, GPU resources are allocated when they're needed, and they're kept

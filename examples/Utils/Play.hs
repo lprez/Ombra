@@ -17,6 +17,7 @@ import Control.Monad.Base
 import Control.Monad.Trans.Control
 import Data.IORef
 import System.Exit (exitFailure)
+import System.Random
 
 import Utils.Input
 
@@ -178,13 +179,24 @@ checkExtensions requireAllExtensions ctx =
                          [] -> Nothing
                          errs -> Just $ "ERROR:" ++ concat errs
 
-animation :: Draw GVec4 a -> (a -> Float -> Draw GVec4 ()) -> IO ()
+animation :: Draw GVec4 a -> (a -> Float -> DrawSet GVec4) -> IO ()
 animation init f = play 512 512
                         False
-                        init
-                        (\x t _ -> f x t)
+                        ((,,) <$> init
+                              <*> liftBase (newStdGen >>= newIORef)
+                              <*> liftBase (newIORef Nothing)
+                        )
+                        (\(i, sgRef, fbRef) t _ ->
+                                do fb <- liftBase $ readIORef fbRef
+                                   stdGen <- liftBase $ readIORef sgRef
+                                   let (draw, (fb', stdGen')) =
+                                           drawACS fb stdGen $ f i t
+                                   draw
+                                   liftBase $ do writeIORef fbRef $ Just fb'
+                                                 writeIORef sgRef stdGen'
+                        )
                         (const (return ()))
                         (const (return ()))
 
-static :: Draw GVec4 () -> IO ()
-static = flip animation $ \_ _ -> return ()
+static :: DrawSet GVec4 -> IO ()
+static = animation (return ()) . const . const

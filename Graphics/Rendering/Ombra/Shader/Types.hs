@@ -144,6 +144,13 @@ instance GLES => Eq UniformValue where
         UniformValue _ c == UniformValue _ c' = hash c == hash c'
         UniformTexture t == UniformTexture t' = t == t'
 
+instance GLES => Ord UniformValue where
+        compare (UniformValue _ _) (UniformTexture _) = LT
+        compare (UniformValue _ x) (UniformValue _ y) = compare (hash x)
+                                                                (hash y)
+        compare (UniformTexture t) (UniformTexture t') = compare t t'
+        compare (UniformTexture _) (UniformValue _ _) = GT
+
 instance GLES => Hashable UniformValue where
         hashWithSalt salt (UniformValue _ c) = hash c
         hashWithSalt salt (UniformTexture t) = hash t

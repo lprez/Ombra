@@ -23,6 +23,7 @@ module Graphics.Rendering.Ombra.Draw.Monad (
         -}
 ) where
 
+import qualified Data.List.NonEmpty as L
 import Data.Hashable
 import qualified Data.HashMap.Lazy as H
 import qualified Data.HashSet as HS
@@ -65,7 +66,6 @@ import Graphics.Rendering.Ombra.Internal.GL hiding (Texture, Program, Buffer,
                                                     drawBuffers, clearColor,
                                                     clearDepth, clearStencil)
 import qualified Graphics.Rendering.Ombra.Internal.GL as GL
-import Graphics.Rendering.Ombra.Internal.SM (initial)
 import Graphics.Rendering.Ombra.Internal.Resource
 import Graphics.Rendering.Ombra.Screen
 import Graphics.Rendering.Ombra.Shader (TextureSampler)
@@ -86,10 +86,6 @@ data ExtDrawState o = ExtDrawState { ctx :: Ctx
                                    , targetViewport :: ((Int, Int), (Int, Int))
                                    , drawState :: DrawState o
                                    }
-
-data Buffer = ColorBuffer
-            | DepthBuffer
-            | StencilBuffer
 
 type Draw o = DrawT o IO
 
@@ -152,7 +148,8 @@ instance MonadBase IO m => MonadGL (DrawT o m) where
 instance (FragmentShaderOutput o, MonadBaseControl IO m, GLES) =>
         MonadDraw o (DrawT o m) where
         type BufferDraw o' (DrawT o m) = DrawT o' m
-        foldDraw = mapM_ (switchState True)
+        currentState = drawState <$> DrawT get
+        switchState = switchStateDiff
         {-
         withColorMask m a = stateReset colorMask setColorMask m a
         withDepthTest d a = stateReset depthTest setDepthTest d a
@@ -281,7 +278,7 @@ initExtState ctx vp = ExtDrawState { ctx = ctx
                                    , defaultFrameBuffer = noFramebuffer
                                    , defaultViewport = ((0, 0), vp)
                                    , targetViewport = ((0, 0), vp)
-                                   , drawState = initial
+                                   , drawState = initialState
                                    }
 
 initialize :: (GLES, MonadBaseControl IO m) => (Int, Int) -> DrawT GVec4 m ()
@@ -290,62 +287,47 @@ initialize vp = do gl $ do GL.clearColor 0.0 0.0 0.0 1.0
                            GL.clearStencil 0
                            depthFunc gl_LESS
                    resizeViewport (0, 0) vp
-                   switchStateDiff False
-                                   (DrawDiff { changedShader = False
-                                             , changedGeometry = True
-                                             , changedTarget = True
-                                             , changedUniforms = H.empty
-                                             , addedTextures = HS.empty
-                                             , removedTextures = HS.empty
-                                             , changedBlendEnabled = True
-                                             , changedBlendConstantColor = True
-                                             , changedBlendEquation = True
-                                             , changedBlendFunction = True
-                                             , changedStencilEnabled = True
-                                             , changedStencilFunction = True
-                                             , changedStencilOperation = True
-                                             , changedCullEnabled = True
-                                             , changedCullFace = True
-                                             , changedDepthTest = True
-                                             , changedDepthMask = True
-                                             , changedColorMask = True
-                                             })
-                                   initial
-
-switchState :: (GLES, MonadBaseControl IO m, FragmentShaderOutput o)
-            => Bool
-            -> DrawState o
-            -> DrawT o m ()
-switchState draw state' = do state <- drawState <$> DrawT get
-                             switchStateDiff draw (diff state state') state'
+                   switchStateDiff False initialState . L.toList $
+                           rootChanges (initialState :: DrawState GVec4)
 
 switchStateDiff :: (GLES, MonadBaseControl IO m, FragmentShaderOutput o)
                 => Bool
-                -> DrawDiff
                 -> DrawState o
+                -> [DrawChange]
                 -> DrawT o m ()
-switchStateDiff draw diff state' =
-        do setBuffer diff state'
-           setProgram diff state'
-           setTextures diff state'
-           setUniforms diff state'
-           setBlendMode diff state'
-           setStencilMode diff state'
-           setCulling diff state'
-           setDepthTest diff state'
-           setDepthMask diff state'
-           setColorMask diff state'
-           setGeometry draw diff state'
-           DrawT . modify $ \s -> s { drawState = state' }
+switchStateDiff draw state@(DrawState { stateGeometry = mGeom }) chgs =
+        do flip mapM (reverse chgs) $ \chg -> setFun chg state chg
+           case (draw, mGeom) of
+                (True, Just geom) -> drawGeometry False geom
+                _ -> return ()
+           DrawT . modify $ \s -> s { drawState = state }
+        where setFun (ChangeTarget _) = setBuffer
+              setFun (ClearBuffers _) = const setClear
+              setFun (ChangeShaders _) = setProgram
+              setFun (ChangeTextures _ _) = const setTextures
+              setFun (ChangeBlendEnabled _) = const setBlendMode
+              setFun (ChangeBlendConstantColor _) = const setBlendMode
+              setFun (ChangeBlendEquation _) = const setBlendMode
+              setFun (ChangeBlendFunction _) = const setBlendMode
+              setFun (ChangeStencilEnabled _) = const setStencilMode
+              setFun (ChangeStencilFunction _) = const setStencilMode
+              setFun (ChangeStencilOperation _) = const setStencilMode
+              setFun (ChangeCullEnabled _) = const setCulling
+              setFun (ChangeCullFace _) = const setCulling
+              setFun (ChangeDepthTest _) = const setDepthTest
+              setFun (ChangeDepthMask _) = const setDepthMask
+              setFun (ChangeColorMask _) = const setColorMask
+              setFun (ChangeGeometry _) = setGeometry
+              setFun (ChangeUniforms _) = const setUniforms
 
 -- TODO: spostare la parte centrale su Shader.Program
 setProgram :: (GLES, MonadBaseControl IO m, FragmentShaderOutput o)
-           => DrawDiff
-           -> DrawState o
+           => DrawState o
+           -> DrawChange
            -> DrawT o m ()
-setProgram (DrawDiff { changedShader = False }) _ = return ()
-setProgram diff (DrawState { stateVertexShader = Just vs
-                           , stateFragmentShader = Just fs}) =
+setProgram (DrawState { stateVertexShader = Just vs
+                      , stateFragmentShader = Just fs})
+           (ChangeShaders _) =
         getResource' Nothing (program vs fs) >>= \elp ->
                 case elp of
                      Right lp@(LoadedProgram glp _ _) ->
@@ -355,44 +337,49 @@ setProgram diff (DrawState { stateVertexShader = Just vs
                                    }
                                 gl $ useProgram glp
                      Left err -> error err
-setProgram _ _ = DrawT . modify $ \s -> s { loadedProgram = Nothing }
+setProgram _ (ChangeShaders _) =
+        DrawT . modify $ \s -> s { loadedProgram = Nothing }
+setProgram _ _ = return ()
 
 setGeometry :: (GLES, MonadBaseControl IO m)
-            => Bool
-            -> DrawDiff
-            -> DrawState o
+            => DrawState o
+            -> DrawChange
             -> DrawT o m ()
-setGeometry draw diff (DrawState { stateGeometry = Just geometry }) =
-        drawGeometry (changedGeometry diff) draw geometry
-setGeometry _ diff _ | changedGeometry diff = gl $ bindVertexArray noVAO
-setGeometry _ _ _ = return ()
+setGeometry (DrawState { stateGeometry = geometry })
+            (ChangeGeometry _) = setVAO geometry
+setGeometry _ _ = return ()
 
 setBuffer :: (GLES, MonadBaseControl IO m)
-          => DrawDiff
-          -> DrawState o
+          => DrawState o
+          -> DrawChange
           -> DrawT o m ()
-setBuffer (DrawDiff { changedTarget = False }) _ = return ()
-setBuffer diff (DrawState { stateTarget = BufferTarget bp }) =
+setBuffer (DrawState { stateTarget = BufferTarget bp }) (ChangeTarget _) =
         do deleteCurrentFrameBuffer
            oldFb <- targetFrameBuffer <$> DrawT get
            let (w, h) = bufferSize $ gBuffer bp
            drawUsedBuffers w h (gBuffer bp) (depthBuffer bp) Nothing
            return ()
-setBuffer diff (DrawState { stateTarget = DefaultTarget }) =
+setBuffer (DrawState { stateTarget = DefaultTarget }) (ChangeTarget _) =
         do deleteCurrentFrameBuffer
            resetFrameBuffer
-setBuffer diff _ = return ()
+setBuffer _ _ = return ()
 
-setUniforms :: (GLES, MonadBaseControl IO m)
-            => DrawDiff
-            -> DrawState o
-            -> DrawT o m ()
-setUniforms diff _ =
+setClear :: (GLES, MonadBaseControl IO m, FragmentShaderOutput o)
+         => DrawChange
+         -> DrawT o m ()
+setClear (ClearBuffers (color, depth, stencil)) =
+        do when color $ clearColor
+           when depth $ clearDepth
+           when stencil $ clearStencil
+setClear _ = return ()
+
+setUniforms :: (GLES, MonadBaseControl IO m) => DrawChange -> DrawT o m ()
+setUniforms (ChangeUniforms changedUniforms) =
         do texs <- activeTextures <$> DrawT get
            mprg <- loadedProgram <$> DrawT get
            case mprg of
                 Just prg -> do H.traverseWithKey (setUniform' prg texs)
-                                                 (changedUniforms diff)
+                                                 changedUniforms
                                return ()
                 Nothing -> return ()
         where setUniform' prg _ uid (UniformValue proxy value) =
@@ -401,12 +388,10 @@ setUniforms diff _ =
                       setUniform prg uid
                                  (Proxy :: Proxy TextureSampler)
                                  (Sampler2D . fromIntegral $ texs H.! tex) 
+setUniforms _ = return ()
 
-setTextures :: (GLES, MonadBaseControl IO m)
-            => DrawDiff
-            -> DrawState o
-            -> DrawT o m ()
-setTextures (DrawDiff { addedTextures = added, removedTextures = removed }) _ = 
+setTextures :: (GLES, MonadBaseControl IO m) => DrawChange -> DrawT o m ()
+setTextures (ChangeTextures added removed) = 
         do oldActives <- activeTextures <$> DrawT get
            oldHoles <- activeTexturesHoles <$> DrawT get
            let removedActives = HS.foldr (\t -> S.insert (oldActives H.! t))
@@ -421,8 +406,7 @@ setTextures (DrawDiff { addedTextures = added, removedTextures = removed }) _ =
                (holes', addedActives) = foldr accHelper
                                               (holes, H.empty)
                                               (HS.toList added)
-                                        -- TODO: con le IntMap si può
-                                        -- usare mapAccumL
+                                        -- TODO: mapAccumL
                actives' = H.union actives addedActives
            flip mapM_ (S.intersection removedActives holes') $ \i ->
                    gl $ do activeTexture $ gl_TEXTURE0 + fromIntegral i
@@ -440,88 +424,62 @@ setTextures (DrawDiff { addedTextures = added, removedTextures = removed }) _ =
            DrawT . modify $ \s -> s { activeTextures = actives'
                                     , activeTexturesHoles = holes'
                                     }
+setTextures _ = return ()
 
-setBlendMode :: (GLES, MonadBase IO m)
-             => DrawDiff
-             -> DrawState o
-             -> DrawT o m ()
-setBlendMode diff state' =
-        do when (changedBlendEnabled diff) $
-                   case stateBlendEnabled state' of
-                        False -> gl $ disable gl_BLEND
-                        True -> gl $ enable gl_BLEND
-           when (changedBlendConstantColor diff) $
-                 case constantColor of
-                      Just (Vec4 r g b a) -> gl $ blendColor r g b a
-                      Nothing -> return ()
-           when (changedBlendEquation diff) $
-                 gl $ blendEquationSeparate rgbEq alphaEq
-           when (changedBlendFunction diff) $
-                 gl $ blendFuncSeparate rgbs rgbd alphas alphad
-   
-        where newMode = stateBlendMode state'
-              constantColor = Blend.constantColor newMode
-              equation@(rgbEq, alphaEq) = Blend.equation newMode
-              function@(rgbs, rgbd, alphas, alphad) = Blend.function newMode
+setBlendMode :: (GLES, MonadBase IO m) => DrawChange -> DrawT o m ()
+setBlendMode (ChangeBlendEnabled False) = gl $ disable gl_BLEND
+setBlendMode (ChangeBlendEnabled True) = gl $ enable gl_BLEND
+setBlendMode (ChangeBlendConstantColor (Just (Vec4 r g b a))) =
+        gl $ blendColor r g b a
+setBlendMode (ChangeBlendEquation (rgbEq, alphaEq)) =
+        gl $ blendEquationSeparate rgbEq alphaEq
+setBlendMode (ChangeBlendFunction (rgbs, rgbd, alphas, alphad)) =
+        gl $ blendFuncSeparate rgbs rgbd alphas alphad
+setBlendMode _ = return ()
 
-setStencilMode :: (GLES, MonadBase IO m)
-               => DrawDiff
-               -> DrawState o
-               -> DrawT o m ()
-setStencilMode diff state' =
-        do when (changedStencilEnabled diff) $
-                   case stateStencilEnabled state' of
-                        False -> gl $ disable gl_STENCIL_TEST
-                        True -> gl $ enable gl_STENCIL_TEST
-           when (changedStencilFunction diff) $
-                   sides (Stencil.sideFunction $ stateStencilMode state') $
-                           \face fun -> let (t, v, m) = Stencil.function fun
-                                        in gl $ stencilFuncSeparate face t v m
-           when (changedStencilOperation diff) $
-                   sides (Stencil.sideOperation $ stateStencilMode state') $
-                           \face op -> let (s, d, n) = Stencil.operation op
-                                       in gl $ stencilOpSeparate face s d n
-
+setStencilMode :: (GLES, MonadBase IO m) => DrawChange -> DrawT o m ()
+setStencilMode chg =
+        case chg of
+             ChangeStencilEnabled False -> gl $ disable gl_STENCIL_TEST
+             ChangeStencilEnabled True -> gl $ enable gl_STENCIL_TEST
+             ChangeStencilFunction funs ->
+                     sides funs $
+                        \face (t, v, m) -> gl $ stencilFuncSeparate face t v m
+             ChangeStencilOperation ops ->
+                     sides ops $
+                        \face (s, d, n) -> gl $ stencilOpSeparate face s d n
+             _ -> return ()
         where sides (Stencil.FrontBack x) f = f gl_FRONT_AND_BACK x
               sides (Stencil.Separate x y) f = f gl_FRONT x >> f gl_BACK y
 
-setCulling :: (GLES, MonadBase IO m) => DrawDiff -> DrawState o -> DrawT o m ()
-setCulling diff state' =
-        do when (changedCullEnabled diff) $
-                   case stateCullEnabled state' of
-                        False -> gl $ disable gl_CULL_FACE
-                        True -> gl $ enable gl_CULL_FACE
-           when (changedCullFace diff) $
-                   gl . GL.cullFace $ case stateCullFace state' of
-                                           CullFront -> gl_FRONT
-                                           CullBack -> gl_BACK
-                                           CullFrontBack -> gl_FRONT_AND_BACK
+setCulling :: (GLES, MonadBase IO m) => DrawChange -> DrawT o m ()
+setCulling (ChangeCullEnabled False) = gl $ disable gl_CULL_FACE
+setCulling (ChangeCullEnabled True) = gl $ enable gl_CULL_FACE
+setCulling (ChangeCullFace face) =
+        gl . GL.cullFace $ case face of
+                                CullFront -> gl_FRONT
+                                CullBack -> gl_BACK
+                                CullFrontBack -> gl_FRONT_AND_BACK
+setCulling _ = return ()
 
-setDepthTest :: (GLES, MonadBase IO m)
-             => DrawDiff
-             -> DrawState o
-             -> DrawT o m ()
-setDepthTest (DrawDiff { changedDepthTest = False }) _ = return ()
-setDepthTest _ (DrawState { stateDepthTest = True }) = gl $ enable gl_DEPTH_TEST
-setDepthTest _ _ = gl $ disable gl_DEPTH_TEST
+setDepthTest :: (GLES, MonadBase IO m) => DrawChange -> DrawT o m ()
+setDepthTest (ChangeDepthTest True) = gl $ enable gl_DEPTH_TEST
+setDepthTest (ChangeDepthTest False) = gl $ disable gl_DEPTH_TEST
+setDepthTest _ = return ()
 
-setDepthMask :: (GLES, MonadBase IO m)
-             => DrawDiff
-             -> DrawState o
-             -> DrawT o m ()
-setDepthMask (DrawDiff { changedDepthMask = False }) _ = return ()
-setDepthMask _ (DrawState { stateDepthMask = True }) = gl $ GL.depthMask true
-setDepthMask _ _ = gl $ GL.depthMask false
+setDepthMask :: (GLES, MonadBase IO m) => DrawChange -> DrawT o m ()
+setDepthMask (ChangeDepthMask True) = gl $ GL.depthMask true
+setDepthMask (ChangeDepthMask False) = gl $ GL.depthMask false
+setDepthMask _ = return ()
 
-setColorMask :: (GLES, MonadBase IO m)
-             => DrawDiff
-             -> DrawState o
-             -> DrawT o m ()
-setColorMask (DrawDiff { changedColorMask = False }) _ = return ()
-setColorMask _ (DrawState { stateColorMask = (r, g, b, a) }) =
+setColorMask :: (GLES, MonadBase IO m) => DrawChange -> DrawT o m ()
+setColorMask (ChangeColorMask (r, g, b, a)) =
         gl $ GL.colorMask (bool r) (bool g) (bool b) (bool a)
         where bool True = true
               bool False = false
+setColorMask _ = return ()
+
+data Buffer = ColorBuffer | DepthBuffer | StencilBuffer deriving (Eq, Ord)
 
 clearBuffers :: (GLES, MonadGL m) => [Buffer] -> m ()
 clearBuffers = mapM_ $ gl . GL.clear . buffer
@@ -641,9 +599,9 @@ drawUsedBuffers w h gBuffer depthBuffer mdraw =
                       | otherwise = Nothing
            ret <- drawToTextures useDrawBuffers attachments oldFb' $ \fb -> 
                 case mdraw of
-                     Nothing -> do resizeViewport (0, 0) (w, h)
-                                   DrawT . modify $
+                     Nothing -> do DrawT . modify $
                                         \s -> s { targetFrameBuffer = Just fb }
+                                   resizeViewport (0, 0) (w, h)
                                    return Nothing
                      Just (DrawT draw) ->
                         do resizeViewport (0, 0) (w, h)

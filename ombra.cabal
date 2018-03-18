@@ -36,16 +36,16 @@ library
                        Graphics.Rendering.Ombra.Shader,
                        Graphics.Rendering.Ombra.Shader.Language,
                        Graphics.Rendering.Ombra.Draw,
-                       Graphics.Rendering.Ombra.Draw.Mode,
+                       Graphics.Rendering.Ombra.Draw.Set,
                        Graphics.Rendering.Ombra.Geometry,
                        Graphics.Rendering.Ombra.Color,
                        Graphics.Rendering.Ombra.Backend,
                        Graphics.Rendering.Ombra.Vector
 
-  other-modules:       Graphics.Rendering.Ombra.Internal.Resource,
+  other-modules:       Data.Ant,
+                       Graphics.Rendering.Ombra.Internal.Resource,
                        Graphics.Rendering.Ombra.Internal.GL,
                        Graphics.Rendering.Ombra.Internal.TList,
-                       Graphics.Rendering.Ombra.Internal.SM,
                        Graphics.Rendering.Ombra.Screen,
                        Graphics.Rendering.Ombra.Shader.GLSL,
                        Graphics.Rendering.Ombra.Shader.Program,
@@ -58,6 +58,7 @@ library
                        Graphics.Rendering.Ombra.Stencil.Draw,
                        Graphics.Rendering.Ombra.Stencil.Types,
                        Graphics.Rendering.Ombra.Draw.Class,
+                       Graphics.Rendering.Ombra.Draw.Mode,
                        Graphics.Rendering.Ombra.Draw.Monad,
                        Graphics.Rendering.Ombra.Draw.State,
                        Graphics.Rendering.Ombra.OutBuffer.Types

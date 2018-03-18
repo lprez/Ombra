@@ -4,7 +4,8 @@
 
 module Graphics.Rendering.Ombra.Draw.Class (
         MonadDraw(..),
-        MonadRead(..)
+        MonadRead(..),
+        switchStateAuto
 ) where
 
 import Data.Word
@@ -23,7 +24,8 @@ import Graphics.Rendering.Ombra.Vector
 
 class MonadScreen m => MonadDraw o m | m -> o where
         type BufferDraw o' m :: * -> *
-        foldDraw :: Foldable f => f (DrawState o) -> m ()
+        currentState :: m (DrawState o)
+        switchState :: Bool -> DrawState o -> [DrawChange] -> m ()
         -- | Clear the color buffer.
         clearColor :: m ()
         clearColor = clearColorWith $ Vec4 0 0 0 1
@@ -79,6 +81,7 @@ class MonadScreen m => MonadDraw o m | m -> o where
                     -> BufferDraw o' m a
                     -> m a
 
+
 class MonadDraw o m => MonadRead o m | m -> o where
         -- | Read a rectangle of pixel colors from the screen (or texture).
         readColor :: (Int, Int, Int, Int) -> m [Color]
@@ -92,3 +95,9 @@ class MonadDraw o m => MonadRead o m | m -> o where
         -- | Read a rectangle of stencil values from the screen (or texture).
         -- Not supported on WebGL!
         readStencil :: (Int, Int, Int, Int) -> m [Word8]
+
+switchStateAuto :: MonadDraw o m => Bool -> DrawState o -> m ()
+switchStateAuto draw s' = do s <- currentState
+                             let chgs = rootChanges s'
+                                 chgs' = concatMap (diffState True s s') chgs
+                             switchState draw s' chgs'

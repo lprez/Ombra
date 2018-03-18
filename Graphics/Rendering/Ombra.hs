@@ -2,7 +2,6 @@ module Graphics.Rendering.Ombra (
         module Graphics.Rendering.Ombra.Color,
         module Graphics.Rendering.Ombra.Culling,
         module Graphics.Rendering.Ombra.Draw,
-        module Graphics.Rendering.Ombra.Draw.Mode,
         module Graphics.Rendering.Ombra.Geometry,
         module Graphics.Rendering.Ombra.Shader,
         module Graphics.Rendering.Ombra.Texture,

@@ -2,7 +2,7 @@
 
 module Graphics.Rendering.Ombra.Draw.State where
 
--- import Data.Ord
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Hashable
 import Data.HashMap.Lazy (HashMap)
 import Data.HashSet (HashSet)
@@ -10,7 +10,7 @@ import qualified Data.HashMap.Lazy as H
 import qualified Data.HashSet as HS
 import Data.Maybe
 import Data.Semigroup ((<>))
-import Graphics.Rendering.Ombra.Backend (GLES)
+import Graphics.Rendering.Ombra.Backend (GLES, GLEnum, GLInt, GLUInt)
 import Graphics.Rendering.Ombra.Culling
 import Graphics.Rendering.Ombra.Blend (transparency)
 import qualified Graphics.Rendering.Ombra.Blend.Draw as Blend
@@ -25,12 +25,35 @@ import Graphics.Rendering.Ombra.Shader.Language.Types (GVec4)
 import qualified Graphics.Rendering.Ombra.Stencil.Draw as Stencil
 import qualified Graphics.Rendering.Ombra.Stencil.Types as Stencil
 import Graphics.Rendering.Ombra.Texture
-import Graphics.Rendering.Ombra.Internal.SM
+import Graphics.Rendering.Ombra.Vector (Vec4)
 
 data Target bo o where
         BufferTarget :: BufferPair bo -> Target bo o
         DefaultTarget :: Target o o
         NoTarget :: (forall bo o. Target bo o -> Ordering) -> Target bo o
+
+data DrawChange where
+        ChangeTarget :: Maybe Int -> DrawChange
+        ClearBuffers :: (Bool, Bool, Bool) -> DrawChange
+        ChangeShaders :: Maybe Int -> DrawChange
+        ChangeTextures :: HashSet Texture -> HashSet Texture -> DrawChange
+        ChangeBlendEnabled :: Bool -> DrawChange
+        ChangeBlendConstantColor :: Maybe Vec4 -> DrawChange
+        ChangeBlendEquation :: (GLEnum, GLEnum) -> DrawChange
+        ChangeBlendFunction :: (GLEnum, GLEnum, GLEnum, GLEnum) -> DrawChange
+        ChangeStencilEnabled :: Bool -> DrawChange
+        ChangeStencilFunction :: Stencil.Side (GLEnum, GLInt, GLUInt)
+                              -> DrawChange
+        ChangeStencilOperation :: Stencil.Side (GLEnum, GLEnum, GLEnum)
+                               -> DrawChange
+        ChangeCullEnabled :: Bool -> DrawChange
+        ChangeCullFace :: CullFace -> DrawChange
+        ChangeDepthTest :: Bool -> DrawChange
+        ChangeDepthMask :: Bool -> DrawChange
+        ChangeColorMask :: (Bool, Bool, Bool, Bool) -> DrawChange
+        ChangeGeometry :: Maybe Int -> DrawChange
+        ChangeUniforms :: HashMap UniformID UniformValue -> DrawChange
+        deriving (Eq, Ord)
 
 data DrawState o where
         DrawState :: ( GeometryVertex g
@@ -61,21 +84,9 @@ data DrawState o where
 instance GLES => Eq (DrawState o) where
         s == s' = compare s s' == EQ
 
--- TODO: hashare tutto e implementare eq e ord sulla base dell'hash
-
 instance GLES => Ord (DrawState o) where
-        compare s s' =    compareStateGeometry s s'
-                        -- si potrebbe aggiungere un intero agli stati che
-                        -- normalmente è 0 ma viene incrementato nelle unioni
-                        -- uguali
-                        -- potrebbe anche risolvere il problema degli uniform
-                        -- esterni
-                        -- XXX
-                       <> compare (map hash . H.elems $ stateUniforms s)
-                                  (map hash . H.elems $ stateUniforms s')
-                       <> compare (hash $ stateTextures s)
-                                  (hash $ stateTextures s')
-                       <> compareStateTarget s s'
+        compare s s' =    compareStateTarget s s'
+                       <> compare (stateHashShaders s) (stateHashShaders s')
                        <> compare (stateBlendEnabled s) (stateBlendEnabled s')
                        <> compare (stateBlendMode s) (stateBlendMode s')
                        <> compare (stateStencilEnabled s)
@@ -86,75 +97,106 @@ instance GLES => Ord (DrawState o) where
                        <> compare (stateDepthTest s) (stateDepthTest s')
                        <> compare (stateDepthMask s) (stateDepthMask s')
                        <> compare (stateColorMask s) (stateColorMask s')
-                       <> compare (stateHashShaders s) (stateHashShaders s')
+                       <> compare (hash $ stateTextures s)
+                                  (hash $ stateTextures s')
+                       <> compareStateGeometry s s'
+                       <> compare (map hash . H.elems $ stateUniforms s)
+                                  (map hash . H.elems $ stateUniforms s')
 
-data DrawDiff = DrawDiff { changedShader :: Bool
-                         , changedGeometry :: Bool
-                         , changedTarget :: Bool
-                         , changedUniforms :: HashMap UniformID UniformValue
-                         , addedTextures :: HashSet Texture
-                         , removedTextures :: HashSet Texture
-                         , changedBlendEnabled :: Bool
-                         , changedBlendConstantColor :: Bool
-                         , changedBlendEquation :: Bool
-                         , changedBlendFunction :: Bool
-                         , changedStencilEnabled :: Bool
-                         , changedStencilFunction :: Bool
-                         , changedStencilOperation :: Bool
-                         , changedCullEnabled :: Bool
-                         , changedCullFace :: Bool
-                         , changedDepthTest :: Bool
-                         , changedDepthMask :: Bool
-                         , changedColorMask :: Bool
-                         }
+rootChanges :: GLES => DrawState o -> NonEmpty DrawChange
+rootChanges s@(DrawState { stateTarget = target, stateGeometry = geometry }) =
+           rootTarget target
+        :| [ ChangeShaders . stateHashShaders $ s
+           , ChangeTextures (stateTextures $ s) HS.empty
+           , ChangeBlendEnabled . stateBlendEnabled $ s
+           , ChangeBlendConstantColor . Blend.constantColor $ blendMode
+           , ChangeBlendEquation . Blend.equation $ blendMode
+           , ChangeBlendFunction . Blend.function $ blendMode
+           , ChangeStencilEnabled . stateStencilEnabled $ s
+           , ChangeStencilFunction . fmap Stencil.function $
+                   Stencil.sideFunction stencilMode
+           , ChangeStencilOperation . fmap Stencil.operation $
+                   Stencil.sideOperation stencilMode
+           , ChangeCullEnabled . stateCullEnabled $ s
+           , ChangeCullFace . stateCullFace $ s
+           , ChangeDepthTest . stateDepthTest $ s
+           , ChangeDepthMask . stateDepthMask $ s
+           , ChangeColorMask . stateColorMask $ s
+           , ChangeGeometry . fmap hash $ geometry
+           ]
+        where blendMode = stateBlendMode s
+              stencilMode = stateStencilMode s
 
-diff :: GLES => DrawState o -> DrawState o -> DrawDiff
-diff s s' = DrawDiff { changedShader = stateHashShaders s /= stateHashShaders s'
-                     , changedGeometry = not $ sameStateGeometry s s'
-                     , changedTarget = not $ sameStateTarget s s'
-                     , changedUniforms =
-                             if stateHashShaders s /= stateHashShaders s'
-                             then stateUniforms s'
-                             else H.differenceWith (\u' u -> if u == u'
-                                                             then Nothing
-                                                             else Just u'
-                                                   )
-                                                   (stateUniforms s')
-                                                   (stateUniforms s)
-                     , addedTextures =
-                             HS.difference (stateTextures s') (stateTextures s)
-                     , removedTextures =
-                             HS.difference (stateTextures s) (stateTextures s')
-                     , changedBlendEnabled =
-                             stateBlendEnabled s /= stateBlendEnabled s'
-                     , changedBlendConstantColor =
-                                Blend.constantColor (stateBlendMode s)
-                             /= Blend.constantColor (stateBlendMode s')
-                     , changedBlendEquation =
-                                Blend.equation (stateBlendMode s)
-                             /= Blend.equation (stateBlendMode s')
-                     , changedBlendFunction =
-                                Blend.function (stateBlendMode s)
-                             /= Blend.function (stateBlendMode s')
-                     , changedStencilEnabled =
-                             stateStencilEnabled s /= stateStencilEnabled s'
-                     , changedStencilFunction =
-                                Stencil.sideFunction (stateStencilMode s)
-                             /= Stencil.sideFunction (stateStencilMode s')
-                     , changedStencilOperation =
-                                Stencil.sideOperation (stateStencilMode s)
-                             /= Stencil.sideOperation (stateStencilMode s')
-                     , changedCullEnabled =
-                             stateCullEnabled s /= stateCullEnabled s'
-                     , changedCullFace =
-                             stateCullFace s /= stateCullFace s'
-                     , changedDepthTest =
-                             stateDepthTest s /= stateDepthTest s'
-                     , changedDepthMask =
-                             stateDepthMask s /= stateDepthMask s'
-                     , changedColorMask =
-                             stateColorMask s /= stateColorMask s'
-                     }
+diffChange :: GLES => DrawChange -> DrawChange -> Maybe DrawChange
+diffChange (ChangeTextures s _) (ChangeTextures s' _) =
+        Just $ changedTextures s s'
+diffChange c c' = if c == c' then Nothing else Just c'
+
+-- | Minimize the number of changes.
+diffState :: GLES
+          => Bool              -- ^ Filter every type of change.
+          -> DrawState o
+          -> DrawState o
+          -> DrawChange
+          -> [DrawChange]
+diffState _ s s' (ChangeTextures _ _) = [changedTextures (stateTextures s)
+                                                         (stateTextures s')
+                                        ]
+diffState _ s s' (ChangeUniforms _) = [changedUniforms s s']
+diffState False _ _ c = [c]
+diffState True s s' (ChangeTarget _) | sameStateTarget s s' = []
+diffState True s s' (ChangeShaders _) | stateHashShaders s ==
+                                        stateHashShaders s' = []
+diffState True s s' (ChangeBlendEnabled _) | stateBlendEnabled s ==
+                                             stateBlendEnabled s' = []
+diffState True s s' (ChangeBlendConstantColor _)
+        | Blend.constantColor (stateBlendMode s) ==
+          Blend.constantColor (stateBlendMode s') = []
+diffState True s s' (ChangeBlendEquation _)
+        | Blend.equation (stateBlendMode s) ==
+          Blend.equation (stateBlendMode s') = []
+diffState True s s' (ChangeBlendFunction _)
+        | Blend.function (stateBlendMode s) ==
+          Blend.function (stateBlendMode s') = []
+diffState True s s' (ChangeStencilEnabled _) | stateStencilEnabled s ==
+                                               stateStencilEnabled s' = []
+diffState True s s' (ChangeStencilFunction _)
+        | Stencil.sideFunction (stateStencilMode s) ==
+          Stencil.sideFunction (stateStencilMode s') = []
+diffState True s s' (ChangeStencilOperation _)
+        | Stencil.sideOperation (stateStencilMode s) ==
+          Stencil.sideOperation (stateStencilMode s') = []
+diffState True s s' (ChangeCullEnabled _) | stateCullEnabled s ==
+                                            stateCullEnabled s' = []
+diffState True s s' (ChangeCullFace _) | stateCullFace s ==
+                                         stateCullFace s' = []
+diffState True s s' (ChangeDepthTest _) | stateDepthTest s ==
+                                          stateDepthTest s' = []
+diffState True s s' (ChangeDepthMask _) | stateDepthMask s ==
+                                          stateDepthMask s' = []
+diffState True s s' (ChangeColorMask _) | stateColorMask s ==
+                                          stateColorMask s' = []
+diffState True s s' (ChangeGeometry _) | sameStateGeometry s s' = []
+diffState True _ _ c = [c]
+
+rootTarget :: GLES => Target bo o -> DrawChange
+rootTarget (BufferTarget (BufferPair g d)) =
+        ChangeTarget . Just $ hash (textures g, textures d)
+rootTarget _ = ChangeTarget Nothing
+
+changedUniforms :: GLES => DrawState o -> DrawState o -> DrawChange
+changedUniforms s s' | stateHashShaders s /= stateHashShaders s' =
+        ChangeUniforms $ stateUniforms s'
+changedUniforms s s' =
+        ChangeUniforms $ H.differenceWith (\u' u -> if u == u'
+                                                    then Nothing
+                                                    else Just u'
+                                          )
+                                          (stateUniforms s')
+                                          (stateUniforms s)
+
+changedTextures :: GLES => HashSet Texture -> HashSet Texture -> DrawChange
+changedTextures s s' = ChangeTextures (HS.difference s' s) (HS.difference s s')
 
 sameStateTarget :: GLES => DrawState o -> DrawState o -> Bool
 sameStateTarget s s' = compareStateTarget s s' == EQ
@@ -163,6 +205,7 @@ compareStateTarget :: GLES => DrawState o -> DrawState o -> Ordering
 compareStateTarget (DrawState {stateTarget = t})
                    (DrawState {stateTarget = t'}) = compareTarget t t'
 
+-- | TODO: generate ID from createBuffers and use it for comparison
 compareTarget :: GLES => Target bo o -> Target bo' o' -> Ordering
 compareTarget DefaultTarget DefaultTarget = EQ
 compareTarget DefaultTarget _ = LT
@@ -186,51 +229,6 @@ compareStateGeometry (DrawState {stateGeometry = Just g})
                      (DrawState {stateGeometry = Just g'}) =
              compare (geometryHash g) (geometryHash g')
 compareStateGeometry (DrawState {stateGeometry = Just _}) _ = GT
-
-instance (GLES, FragmentShaderOutput o) => State (DrawState o) where
-        type Cost (DrawState o) = Int
-        cost s s' = sum [ changeCost changedShader 100
-                        , changeCost changedGeometry 5
-                        , changeCost changedTarget 500
-                        , changeCost changedBlendEnabled 10
-                        , changeCost changedBlendConstantColor 10
-                        , changeCost changedBlendEquation 10
-                        , changeCost changedBlendFunction 10
-                        , changeCost changedStencilEnabled 10
-                        , changeCost changedStencilFunction 10
-                        , changeCost changedStencilOperation 10
-                        , changeCost changedCullEnabled 10
-                        , changeCost changedCullFace 10
-                        , changeCost changedDepthTest 10
-                        , changeCost changedDepthMask 10
-                        , changeCost changedColorMask 10
-                        , HS.size (addedTextures dif) * 10
-                        , HS.size (removedTextures dif) * 10
-                        , H.size (changedUniforms dif) * 1
-                        ]
-                where dif = diff s s'
-                      changeCost f n = if f dif then n else 0
-        initial = DrawState { stateVertexShader =
-                                Nothing :: Maybe (VertexShader GVec4 (GVec4, ()))
-                            , stateFragmentShader = Nothing
-                            , stateGeometry =
-                                Nothing :: Maybe (Geometry Triangle GVec4)
-                            , stateUniforms = H.empty
-                            , stateTextures = HS.empty
-                            , stateTarget = DefaultTarget
-                            , stateBlendEnabled = False
-                            , stateBlendMode = transparency
-                            , stateStencilEnabled = False
-                            , stateStencilMode = initialStencilMode
-                            , stateCullEnabled = False
-                            , stateCullFace = CullBack
-                            , stateDepthTest = True
-                            , stateDepthMask = True
-                            , stateColorMask = (True, True, True, True)
-                            , stateHashShaders = Nothing
-                            }
-        symmetric _ = True
-        short _ c n = c < (quot n 10) ^ 3 + 1
 
 mkState :: ( GeometryVertex g
            , ShaderInput g
@@ -271,6 +269,27 @@ mkState vs fs geom buffers blend stencil cull depthTest depthMask colorMask =
         where (uid, unisv, texsv) = uniformList vs 0
               (_, unisf, texsf) = uniformList fs uid
 
+initialState :: (GLES, FragmentShaderOutput o) => DrawState o
+initialState = DrawState { stateVertexShader =
+                             Nothing :: Maybe (VertexShader GVec4 (GVec4, ()))
+                         , stateFragmentShader = Nothing
+                         , stateGeometry =
+                             Nothing :: Maybe (Geometry Triangle GVec4)
+                         , stateUniforms = H.empty
+                         , stateTextures = HS.empty
+                         , stateTarget = DefaultTarget
+                         , stateBlendEnabled = False
+                         , stateBlendMode = transparency
+                         , stateStencilEnabled = False
+                         , stateStencilMode = initialStencilMode
+                         , stateCullEnabled = False
+                         , stateCullFace = CullBack
+                         , stateDepthTest = True
+                         , stateDepthMask = True
+                         , stateColorMask = (True, True, True, True)
+                         , stateHashShaders = Nothing
+                         }
+
 setTarget :: GLES
           => (forall bo. Target bo o')
           -> DrawState o
@@ -288,18 +307,3 @@ initialStencilMode =
                      (Stencil.FrontBack (Stencil.Operation Stencil.Keep
                                                            Stencil.Keep
                                                            Stencil.Keep))
-
-data ApDrawState f o = ApDrawState (DrawState o) (f (DrawState o))
-
-instance GLES => Eq (ApDrawState f o) where
-        (ApDrawState s _) == (ApDrawState s' _) = s == s'
-
-instance GLES => Ord (ApDrawState f o) where
-        compare (ApDrawState s _) (ApDrawState s' _) = compare s s'
-
-instance (GLES, FragmentShaderOutput o) => State (ApDrawState f o) where
-        type Cost (ApDrawState f o) = Int
-        cost (ApDrawState s _) (ApDrawState s' _) = cost s s'
-        initial = ApDrawState initial $ error "ApDrawState initial"
-        symmetric (ApDrawState s _) = symmetric s
-        short (ApDrawState s _, ApDrawState s' _) = short (s, s')

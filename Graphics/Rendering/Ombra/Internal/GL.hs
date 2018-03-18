@@ -191,7 +191,7 @@ instance MonadGL m => MonadGL (ResourceT r m)
 instance MonadGL m => MonadGL (Resource3T r1 r2 r3 m)
 
 -- | A Texture ready to be passed as an uniform.
-newtype Sampler2D = Sampler2D Word deriving (Eq, Hashable)
+newtype Sampler2D = Sampler2D Word deriving (Eq, Ord, Hashable)
 
 evalGL :: GL a -> Ctx -> IO a
 evalGL (GL m) = runReaderT m

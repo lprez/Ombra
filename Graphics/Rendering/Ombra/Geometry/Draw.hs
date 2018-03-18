@@ -7,7 +7,8 @@ module Graphics.Rendering.Ombra.Geometry.Draw (
         LoadedAttribute,
         LoadedGeometry(..),
         AttributeData,
-        drawGeometry
+        drawGeometry,
+        setVAO
 ) where
 
 import Control.Monad
@@ -146,6 +147,24 @@ loadBuffer ty bufData =
            bindBuffer ty noBuffer
            return buffer
 
+setVAO :: forall e m g.
+          ( MonadResource (Elements e (AttributeTypes g))
+                          LoadedBuffer m
+          , MonadResource AttributeData LoadedAttribute m
+          , MonadResource (Geometry e g) LoadedGeometry m
+          , MonadGL m
+          , GeometryVertex g
+          , ElementType e
+          , GLES
+          )
+       => Maybe (Geometry e g)
+       -> m ()
+setVAO Nothing = gl $ bindVertexArray noVAO
+setVAO (Just g) = getResource g >>= \eg ->
+        case eg of
+             Left _ -> return ()
+             Right (LoadedGeometry ec vao) -> gl $ bindVertexArray vao
+
 drawGeometry :: forall e m g.
                 ( MonadResource (Elements e (AttributeTypes g))
                                 LoadedBuffer m
@@ -157,17 +176,14 @@ drawGeometry :: forall e m g.
                 , GLES
                 )
              => Bool
-             -> Bool
              -> Geometry e g
              -> m ()
-drawGeometry changed draw g = getResource g >>= \eg ->
+drawGeometry changed g = getResource g >>= \eg ->
         case eg of
              Left _ -> return ()
              Right (LoadedGeometry ec vao) ->
                      gl $ do when changed $ bindVertexArray vao
-                             when draw $
-                                drawElements (elementType (Proxy :: Proxy e))
-                                             (fromIntegral ec)
-                                             gl_UNSIGNED_SHORT
+                             drawElements (elementType (Proxy :: Proxy e))
+                                          (fromIntegral ec)
+                                          gl_UNSIGNED_SHORT
                                           nullGLPtr
-                             -- bindVertexArray noVAO

@@ -10,6 +10,10 @@ data Side a = FrontBack a       -- ^ Use the same value for both sides.
                                 -- and back).
             deriving (Eq, Ord)
 
+instance Functor Side where
+        fmap f (FrontBack a) = FrontBack (f a)
+        fmap f (Separate a b) = Separate (f a) (f b)
+
 -- | Function type, fragment stencil value and mask.
 data Function = Function FunctionType Int Word deriving (Eq, Ord)
 

@@ -4,11 +4,14 @@ module Main where
 
 import Control.Arrow
 import Control.Applicative
+import Control.Monad.IO.Class
+import Data.IORef
 import Data.Semigroup
 import Graphics.Rendering.Ombra
 import Graphics.Rendering.Ombra.Blend (transparency, withBlendMode)
-import Graphics.Rendering.Ombra.Draw.Mode
+import Graphics.Rendering.Ombra.Draw.Set
 import Graphics.Rendering.Ombra.Vector
+import System.Random
 
 import Utils.Play (animation)
 import Utils.Lighting
@@ -22,19 +25,22 @@ main = animation init render
               gInfo = byteGBufferInfo $ potLinear False
               depthInfo = depthBufferInfo $ parameters Nearest Nearest
 
-render :: BufferPair GVec4 -> Float -> Draw GVec4 ()
+render :: BufferPair GVec4 -> Float -> DrawSet GVec4
 render reflectionBuffers time =
-        do let mode = commonMode False time
-               reflectionMode = commonMode True time
-           drawRoute $ sceneWithoutWater mode
-           drawBuffers reflectionBuffers $
-                   do clearColor >> clearDepth
-                      drawRoute $ sceneWithoutWater reflectionMode
-           drawRoute $ water (gBuffer reflectionBuffers) time mode
-        where sceneWithoutWater mode =    walls mode
-                                       <> rotatingCube time 0 mode
-                                       <> rotatingCube time 2.09 mode
-                                       <> rotatingCube time 4.19 mode
+        let mode = commonMode Nothing time
+            reflectionMode = commonMode (Just reflectionBuffers) time
+            sceneWithoutWater mode =    walls mode
+                                     <> rotatingCube time 0 mode
+                                     <> rotatingCube time 2.09 mode
+                                     <> rotatingCube time 4.19 mode
+            reflectedSceneWithoutWater =    sceneWithoutWater reflectionMode
+                                         <> clear True True False
+                                                  (Just reflectionBuffers)
+            fullSceneWithoutWater =    sceneWithoutWater mode
+                                    <> reflectedSceneWithoutWater
+            waterWithReflection = water (gBuffer reflectionBuffers) time mode
+        in fullSceneWithoutWater `before` waterWithReflection
+              
 
 -- | This is the type of root of all the other DrawModes.
 type CommonMode = DrawMode GHVertex3D   -- ^ The vertex shader output of the
@@ -57,11 +63,11 @@ type CommonMode = DrawMode GHVertex3D   -- ^ The vertex shader output of the
                                         -- In this case, it's the output of
                                         -- the fragment shader.
 
-commonMode :: Bool -> Float -> CommonMode
+commonMode :: Maybe (BufferPair GVec4) -> Float -> CommonMode
 commonMode reflection time =
-        if reflection
-        then mode (vertexShader mirrorViewMat) fragmentShader
-        else mode (vertexShader viewMat) fragmentShader
+        case reflection of
+             Nothing -> mode (vertexShader viewMat) fragmentShader
+             Just b -> bufferMode (vertexShader mirrorViewMat) fragmentShader b
 
         where viewMat =     rotYMat4 (sin (time / 2) / 4)
                         .*. transMat4 (Vec3 0 0.5 (- 1.8))
@@ -77,10 +83,11 @@ commonMode reflection time =
               fragmentShader = applyLight ~< light
 
 
-rotatingCube :: Float -> Float -> CommonMode -> DrawRoute GVec4
-rotatingCube time off = routeShader cube
-                                    (extendGVertex3D >>> transform ~< transMat)
-                                    (arr $ id &&& const (color, specular))
+rotatingCube :: Float -> Float -> CommonMode -> DrawSet GVec4
+rotatingCube time off = singletonShader cube
+                                        (    extendGVertex3D
+                                         >>> transform ~< transMat)
+                                        (arr $ id &&& const (color, specular))
         where angle = time + off
               scale = scaleMat4 (Vec3 0.2 0.2 0.2)
               rot = rotYMat4 (time * 3)
@@ -89,14 +96,16 @@ rotatingCube time off = routeShader cube
               color = GVec4 0.8 0.2 0 1
               specular = GSpecular 4 1
 
-walls :: CommonMode -> DrawRoute GVec4
-walls = routeShader cube
-                    (extendGVertex3D >>> transform ~< scaleMat4 (Vec3 2 2 2))
-                    (arr id &&& (applyTexture ~< tex &&& arr (const specular)))
+walls :: CommonMode -> DrawSet GVec4
+walls = singletonShader cube
+                        (    extendGVertex3D
+                         >>> transform ~< scaleMat4 (Vec3 2 2 2))
+                        (    arr id
+                         &&& (applyTexture ~< tex &&& arr (const specular)))
         where specular = GSpecular 30 1
 
-water :: GBuffer GVec4 -> Float -> CommonMode -> DrawRoute GVec4
-water buffer time =   route cube
+water :: GBuffer GVec4 -> Float -> CommonMode -> DrawSet GVec4
+water buffer time =   singleton cube
                     . blend (const transparency)
                     . preVertex vertexShader 
                     . preFragment fragmentShader

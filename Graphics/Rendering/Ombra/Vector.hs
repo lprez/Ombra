@@ -44,22 +44,22 @@ data Vec4 = Vec4 {-# UNPACK #-} !Float
                  {-# UNPACK #-} !Float
                  deriving (Generic, Show, Eq, Ord)
 
-data Mat2 = Mat2 !Vec2 !Vec2 deriving (Generic, Show, Eq)
-data Mat3 = Mat3 !Vec3 !Vec3 !Vec3 deriving (Generic, Show, Eq)
-data Mat4 = Mat4 !Vec4 !Vec4 !Vec4 !Vec4 deriving (Generic, Show, Eq)
+data Mat2 = Mat2 !Vec2 !Vec2 deriving (Generic, Show, Eq, Ord)
+data Mat3 = Mat3 !Vec3 !Vec3 !Vec3 deriving (Generic, Show, Eq, Ord)
+data Mat4 = Mat4 !Vec4 !Vec4 !Vec4 !Vec4 deriving (Generic, Show, Eq, Ord)
 
 data IVec2 = IVec2 {-# UNPACK #-} !Int32
                    {-# UNPACK #-} !Int32
-                   deriving (Generic, Show, Eq)
+                   deriving (Generic, Show, Eq, Ord)
 data IVec3 = IVec3 {-# UNPACK #-} !Int32
                    {-# UNPACK #-} !Int32
                    {-# UNPACK #-} !Int32
-                   deriving (Generic, Show, Eq)
+                   deriving (Generic, Show, Eq, Ord)
 data IVec4 = IVec4 {-# UNPACK #-} !Int32
                    {-# UNPACK #-} !Int32
                    {-# UNPACK #-} !Int32
                    {-# UNPACK #-} !Int32
-                   deriving (Generic, Show, Eq)
+                   deriving (Generic, Show, Eq, Ord)
 
 infixl 5 ^|
 infixl 5 ^|^
